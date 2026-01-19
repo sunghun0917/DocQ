@@ -1,8 +1,10 @@
+// src/main.ts 수정
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-
 import App from './App.vue'
 import router from './router'
+import '@/styles/reset.css'
+import '@/styles/variables.css'
 
 const app = createApp(App)
 
