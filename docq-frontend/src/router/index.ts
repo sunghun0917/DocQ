@@ -6,6 +6,8 @@ const routes = [
   { path: '/', component: () => import('@/views/MainView.vue') },
   { path: '/waiting/:roomId', component: () => import('@/views/WaitingView.vue') },
   { path: '/game', component: () => import('@/views/GameView.vue') },
+  // test
+  { path: '/test', name: 'test', component: () => import('@/views/GameTestView.vue') },
 ]
 
 const router = createRouter({
