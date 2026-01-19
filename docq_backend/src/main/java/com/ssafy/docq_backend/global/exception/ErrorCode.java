@@ -21,7 +21,9 @@ public enum ErrorCode {
     PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "R006", "비밀번호를 입력해주세요."),
 
     /* U001 : 사용자 (User) */
-    DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "U001", "닉네임 중복"),
+    /* U001 : 사용자 (User) */
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "존재하지 않는 사용자"),
+    DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "U002", "닉네임 중복"),
 
     /* G001 : 게임 로직 (Game) */
     NOT_YOUR_TURN(HttpStatus.BAD_REQUEST, "G001", "턴 오류"),
