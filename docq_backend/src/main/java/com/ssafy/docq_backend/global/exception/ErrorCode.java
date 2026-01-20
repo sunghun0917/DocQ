@@ -19,11 +19,13 @@ public enum ErrorCode {
     GAME_NOT_FOUND(HttpStatus.NOT_FOUND, "R004", "게임 정보 없음"),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "R005", "비밀번호가 일치하지 않음"),
     PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "R006", "비밀번호를 입력해주세요."),
+    NOT_ENOUGH_PLAYERS(HttpStatus.BAD_REQUEST, "R007", "인원이 부족합니다. (최소 2명)"),
+    NOT_ALL_READY(HttpStatus.BAD_REQUEST, "R008", "모든 플레이어가 준비되지 않았습니다."),
 
-    /* U001 : 사용자 (User) */
     /* U001 : 사용자 (User) */
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "존재하지 않는 사용자"),
     DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "U002", "닉네임 중복"),
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "U003", "권한이 없습니다."),
 
     /* G001 : 게임 로직 (Game) */
     NOT_YOUR_TURN(HttpStatus.BAD_REQUEST, "G001", "턴 오류"),
