@@ -1,10 +1,11 @@
-package com.ssafy.docq_backend.user.service;
+package com.ssafy.docq_backend.domain.user.service;
 
+import com.ssafy.docq_backend.domain.user.dto.UserDto;
+import com.ssafy.docq_backend.domain.user.entity.User;
+import com.ssafy.docq_backend.domain.user.repository.UserRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
-import com.ssafy.docq_backend.user.domain.User;
-import com.ssafy.docq_backend.user.dto.UserDto;
-import com.ssafy.docq_backend.user.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

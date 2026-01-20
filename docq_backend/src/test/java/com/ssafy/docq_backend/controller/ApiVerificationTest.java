@@ -1,8 +1,9 @@
 package com.ssafy.docq_backend.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ssafy.docq_backend.room.dto.RoomDto;
-import com.ssafy.docq_backend.user.dto.UserDto;
+import com.ssafy.docq_backend.domain.room.dto.RoomDto;
+import com.ssafy.docq_backend.domain.user.dto.UserDto;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend.user.dto;
+package com.ssafy.docq_backend.domain.user.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;

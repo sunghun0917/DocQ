@@ -1,13 +1,14 @@
-package com.ssafy.docq_backend.game.controller;
+package com.ssafy.docq_backend.domain.game.controller;
 
-import com.ssafy.docq_backend.game.dto.GameDto;
+import com.ssafy.docq_backend.domain.game.dto.GameDto;
+import com.ssafy.docq_backend.domain.room.entity.Room;
+import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
+import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
+import com.ssafy.docq_backend.domain.user.entity.User;
+import com.ssafy.docq_backend.domain.user.repository.UserRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
-import com.ssafy.docq_backend.room.domain.Room;
-import com.ssafy.docq_backend.room.domain.RoomStatus;
-import com.ssafy.docq_backend.room.repository.RoomRepository;
-import com.ssafy.docq_backend.user.domain.User;
-import com.ssafy.docq_backend.user.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;

@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend.room.dto;
+package com.ssafy.docq_backend.domain.room.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

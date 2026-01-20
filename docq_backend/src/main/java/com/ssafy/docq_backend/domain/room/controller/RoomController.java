@@ -1,12 +1,13 @@
-package com.ssafy.docq_backend.room.controller;
+package com.ssafy.docq_backend.domain.room.controller;
 
-import com.ssafy.docq_backend.room.dto.RoomDto;
-import com.ssafy.docq_backend.room.service.RoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.ssafy.docq_backend.domain.room.dto.RoomDto;
+import com.ssafy.docq_backend.domain.room.service.RoomService;
 
 @RestController
 @RequestMapping("/rooms")

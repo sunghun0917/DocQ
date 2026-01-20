@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend.user.domain;
+package com.ssafy.docq_backend.domain.user.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

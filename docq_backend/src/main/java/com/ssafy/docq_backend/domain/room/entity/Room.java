@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend.room.domain;
+package com.ssafy.docq_backend.domain.room.entity;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;

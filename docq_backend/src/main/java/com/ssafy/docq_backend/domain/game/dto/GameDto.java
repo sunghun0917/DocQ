@@ -1,12 +1,13 @@
-package com.ssafy.docq_backend.game.dto;
+package com.ssafy.docq_backend.domain.game.dto;
 
-import com.ssafy.docq_backend.room.domain.RoomStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+
+import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 
 public class GameDto {
 

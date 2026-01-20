@@ -1,7 +1,8 @@
-package com.ssafy.docq_backend.user.repository;
+package com.ssafy.docq_backend.domain.user.repository;
 
-import com.ssafy.docq_backend.user.domain.User;
 import org.springframework.stereotype.Repository;
+
+import com.ssafy.docq_backend.domain.user.entity.User;
 
 import java.util.Map;
 import java.util.Optional;

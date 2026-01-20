@@ -1,13 +1,14 @@
-package com.ssafy.docq_backend.room.service;
+package com.ssafy.docq_backend.domain.room.service;
 
+import com.ssafy.docq_backend.domain.room.dto.RoomDto;
+import com.ssafy.docq_backend.domain.room.dto.RoomDto.RoomJoinResponse;
+import com.ssafy.docq_backend.domain.room.entity.Room;
+import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
+import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
+import com.ssafy.docq_backend.domain.user.repository.UserRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
-import com.ssafy.docq_backend.room.domain.Room;
-import com.ssafy.docq_backend.room.domain.RoomStatus;
-import com.ssafy.docq_backend.room.dto.RoomDto;
-import com.ssafy.docq_backend.room.dto.RoomDto.RoomJoinResponse;
-import com.ssafy.docq_backend.room.repository.RoomRepository;
-import com.ssafy.docq_backend.user.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

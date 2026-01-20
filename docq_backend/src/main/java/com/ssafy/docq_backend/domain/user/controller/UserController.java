@@ -1,7 +1,5 @@
-package com.ssafy.docq_backend.user.controller;
+package com.ssafy.docq_backend.domain.user.controller;
 
-import com.ssafy.docq_backend.user.dto.UserDto;
-import com.ssafy.docq_backend.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -9,6 +7,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.ssafy.docq_backend.domain.user.dto.UserDto;
+import com.ssafy.docq_backend.domain.user.service.UserService;
 
 @RestController
 @RequestMapping("/users")

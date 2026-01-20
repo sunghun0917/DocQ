@@ -1,7 +1,8 @@
-package com.ssafy.docq_backend.room.repository;
+package com.ssafy.docq_backend.domain.room.repository;
 
-import com.ssafy.docq_backend.room.domain.Room;
 import org.springframework.stereotype.Repository;
+
+import com.ssafy.docq_backend.domain.room.entity.Room;
 
 import java.util.Map;
 import java.util.Optional;
