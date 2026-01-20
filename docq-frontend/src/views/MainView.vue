@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+
+// userStore 사용
+import { useUserStore } from '@/stores/userStore'
+const userStore = useUserStore()
+
 // 모달들 임포트
 import CreateRoomModal from '@/components/lobby/CreateRoomModal.vue'; 
 import JoinRoomModal from '@/components/lobby/JoinRoomModal.vue'; 
@@ -13,17 +18,29 @@ const isNicknameSet = ref(false);
 const showCreateModal = ref(false);
 const showJoinModal = ref(false);
 
+// 저장된 사용자 정보 복원
+onMounted(() => {
+  if (userStore.restoreUser()) {
+    nickname.value = userStore.username
+    isNicknameSet.value = true
+  }
+})
+
 const confirmNickname = () => {
   if (nickname.value.trim().length < 2) {
     alert("닉네임을 2자 이상 입력해주세요.");
     return;
   }
+  
+  // 게스트로 로그인
+  userStore.loginAsGuest(nickname.value.trim())
   isNicknameSet.value = true;
 };
 
 // 버튼 클릭 핸들러 (모달 열기)
 const handleCreateRoom = () => { showCreateModal.value = true; };
 const handleJoinRoom = () => { showJoinModal.value = true; };
+
 </script>
 
 <template>
