@@ -1,6 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue'; // 방금 만든 모달 임포트
+
+import { useRoomStore } from '@/stores/roomtStore'
+const roomStore = useRoomStore()
+
+// 방 정보 가져오기
+const roomInfo = computed(() => roomStore.roomInfo)
+const users = computed(() => roomStore.users)
+const myUser = computed(() => roomStore.myUser)
+const myUserId = computed(() => myUser.value?.id || '')
+const isReady = computed(() => myUser.value?.isReady || false)
+
+// 준비 상태 토글
+const toggleReady = () => {
+  if (myUserId.value) {
+    roomStore.updateUser(myUserId.value, { isReady: !isReady.value })
+  }
+}
 
 // 게임 종료 상태 (테스트용: true로 두면 들어가자마자 모달 뜸)
 const isGameEnded = ref(true); 
