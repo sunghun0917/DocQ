@@ -12,13 +12,16 @@ const isSecret = ref(false); // 비밀방 여부
 const password = ref('');
 
 // PDF 업로드 상태: 'idle'(대기) | 'parsing'(분석중) | 'done'(완료)
+// 초기값은 idle이다.
 const uploadStatus = ref<'idle' | 'parsing' | 'done'>('idle');
 const fileName = ref('');
 
 // 파일 선택 핸들러 (숨겨진 input 트리거)
+// HTMLInputElement: 타입의 한 종류 (input 요소)
 const fileInput = ref<HTMLInputElement | null>(null);
 const triggerFileUpload = () => {
   if (uploadStatus.value === 'idle') {
+    // 옵셔널 체이닝: 값이 있으면 실행하고 없으면 넘어가기
     fileInput.value?.click();
   }
 };
@@ -34,6 +37,7 @@ const handleFileChange = (event: Event) => {
       // 1. 분석 시작 (로딩 상태)
       uploadStatus.value = 'parsing';
       
+      // << 실제 구현 시 서버 통신 처리 필요 >>
       // 2. 3초 뒤 분석 완료 처리 (Mocking)
       setTimeout(() => {
         uploadStatus.value = 'done';
@@ -52,7 +56,9 @@ const createRoom = () => {
   
   // 실제로는 여기서 file과 roomInfo를 서버로 전송
   const newRoomId = 'R' + Math.floor(Math.random() * 1000);
+  // router.push: Vue router로 페이지 이동
   router.push(`/waiting/${newRoomId}`);
+  // modal 닫기
   emit('close');
 };
 </script>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import UserCard from '@/components/lobby/UserCard.vue';
-import FileUploadModal from '@/components/lobby/FileUploadModal.vue';
 import { useRouter } from 'vue-router'; 
 
 const router = useRouter(); 
@@ -23,7 +22,6 @@ const roomInfo = ref({
 const characters = ['🐱', '🐶', '🦊', '🐰', '🐯', '🐸', '🐨', '🐷'];
 const selectedChar = ref(roomInfo.value.users.find(u => u.isMe)?.avatar || '🐱');
 const isHost = ref(true); 
-const showUploadModal = ref(false);
 
 const currentCount = computed(() => roomInfo.value.users.filter(u => u.nickname).length);
 
@@ -196,7 +194,6 @@ const leaveRoom = () => {
         </div>
       </footer>
       
-      <FileUploadModal v-if="showUploadModal" @close="showUploadModal = false" />
     </div>
   </div>
 </template>

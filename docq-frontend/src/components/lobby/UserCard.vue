@@ -1,3 +1,5 @@
+<!--isHost?에서 ?란 -> 선택적 속성을 의미-->
+<!--빈 슬롯을 고려해야하기 때문에-->
 <script setup lang="ts">
 defineProps<{
   user: {

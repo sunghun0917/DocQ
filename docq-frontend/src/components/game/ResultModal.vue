@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 // [추가] 폭죽 라이브러리 임포트
+// canvas-confetti란?
+// 폭죽 효과를 화면에 띄워주는 라이브러리
 import confetti from 'canvas-confetti';
 
 const router = useRouter();
