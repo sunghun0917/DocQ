@@ -28,7 +28,7 @@ const { get3DPos } = useIsometric()
 const idleFbx = await useFBX('/assets/character/Walking.fbx')
 
 // 로드된 FBX 객체에서 상태, 씬, 애니메이션 클립 추출
-const idleState = idleFbx.state?.value || idleFbx
+const idleState = (idleFbx as any).state?.value || idleFbx
 const idleSceneRaw = idleState.scene || idleState
 const idleClips = idleState.animations || []
 
@@ -43,12 +43,19 @@ if (idleSceneRaw) {
 /* ===== 색상 적용 (Material Clone) ===== */
 // 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
 if (scene) {
-  scene.traverse((child: THREE.Object3D) => {
+  scene.traverse((child: any) => {
     // Mesh인 경우에만 재질 변경
     if (child.isMesh && child.material) {
+      const mesh = child as THREE.Mesh
       // 재질을 복제하여 독립적인 색상 적용 가능하게 함
-      child.material = child.material.clone()
-      child.material.color.setStyle(props.color)
+      if (Array.isArray(mesh.material)) {
+        mesh.material = mesh.material.map(m => m.clone())
+      } else {
+        mesh.material = mesh.material.clone()
+        if ('color' in mesh.material) {
+            (mesh.material as THREE.MeshStandardMaterial).color.setStyle(props.color)
+        }
+      }
     }
   })
 }
@@ -78,7 +85,8 @@ if (scene) {
 }
 
 /* ===== 애니메이션 액션 설정 ===== */
-const { actions } = useAnimations(allClips, scene)
+// scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
+const { actions } = useAnimations(allClips, scene || new THREE.Object3D())
 
 // 상수로 관리하는 설정값들
 const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
