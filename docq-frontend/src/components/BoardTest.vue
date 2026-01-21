@@ -51,7 +51,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue';
 
 // 1. 이미지
@@ -61,11 +61,25 @@ import end from '@/assets/tile/end.png';
 import man from '@/assets/character/man.png';
 
 // 2. 타일 타입
-const TILE_TYPES = {
+const TILE_TYPES: Record<number, string> = {
   0: base, // 배경
   1: path, // 일반 길
   2: end   // 시작/끝
 };
+
+interface PathCoord {
+  x: number;
+  y: number;
+}
+
+interface Tile {
+  gridX: number;
+  gridY: number;
+  isoX: number;
+  isoY: number;
+  zIndex: number;
+  type: number;
+}
 
 // 3. 그리드/타일 설정
 const TILE_WIDTH = 38;
@@ -74,20 +88,20 @@ const GRID_WIDTH = 12;
 const GRID_HEIGHT = 16;
 
 // 등각 좌표/깊이 공통 함수
-const toIso = (gridX, gridY) => {
+const toIso = (gridX: number, gridY: number) => {
   return {
     isoX: (gridX - gridY) * TILE_WIDTH,
     isoY: (gridX + gridY) * TILE_HEIGHT
   };
 };
 
-const computeDepth = (gridX, gridY) => {
+const computeDepth = (gridX: number, gridY: number) => {
   // 기본적으로 x + y 기준으로 정렬[web:16]
   return gridX + gridY;
 };
 
 // 4. 경로 좌표 (grid 기준)
-const pathCoords = [
+const pathCoords: PathCoord[] = [
   { x: 11, y: 15 }, { x: 10, y: 15 }, { x: 9, y: 15 }, { x: 8, y: 15 },
   { x: 8, y: 14 }, { x: 8, y: 13 }, { x: 8, y: 12 },
   { x: 7, y: 12 }, { x: 6, y: 12 }, { x: 5, y: 12 },
@@ -109,7 +123,9 @@ const rotation = ref(0);
 
 // 6. 캐릭터 위치 스타일 (transform 충돌 방지)
 const characterWrapperStyle = computed(() => {
-  const currentPos = pathCoords[currentIndex.value] ?? pathCoords[0];
+  const currentPos = pathCoords[currentIndex.value] || pathCoords[0];
+  if (!currentPos) return {};
+
   const { isoX, isoY } = toIso(currentPos.x, currentPos.y);
   const depth = computeDepth(currentPos.x, currentPos.y);
 
@@ -117,7 +133,7 @@ const characterWrapperStyle = computed(() => {
     left: `${isoX}px`,
     top: `${isoY}px`,
     zIndex: depth * 10 + 5, // 타일보다 살짝 위
-    position: 'absolute',
+    position: 'absolute' as const,
     transform: 'translate(-50%, -100%)',
     transition: 'left 0.4s ease, top 0.4s ease, z-index 0s'
   };
@@ -126,7 +142,7 @@ const characterWrapperStyle = computed(() => {
 // 7. 룰렛 스타일
 const labelByIndex = [2, 3, 4, 5, 6, 1]; // 예시: 위·오른위·오른아래·아래·왼아래·왼위
 
-const indexByLabel = {
+const indexByLabel: Record<number, number> = {
   2: 0, 3: 1, 4: 2, 5: 3, 6: 4, 1: 5
 };
 
@@ -138,7 +154,7 @@ const wheelStyle = computed(() => ({
 }));
 
 // 섹션 스타일: 6조각, pointer 위쪽(0deg)이 1번
-const sectionStyle = (n) => {
+const sectionStyle = (n: number) => {
   const sectionAngle = 360 / 6; // 60deg
   const startAngle = -90;       // 위쪽을 기준 0으로 두고 싶을 때[web:8]
   const angle = startAngle + (n - 1) * sectionAngle;
@@ -148,7 +164,7 @@ const sectionStyle = (n) => {
 };
 
 // 8. 룰렛 돌리기
-const lastResult = ref(null); // script setup 상단에 추가
+const lastResult = ref<number | null>(null); // script setup 상단에 추가
 
 const spinRoulette = () => {
   if (isMoving.value || isSpinning.value) return;
@@ -204,7 +220,7 @@ const spinRoulette = () => {
 // };
 
 // 9. 지정 숫자만큼 이동
-const moveStep = async (steps) => {
+const moveStep = async (steps: number) => {
   console.log('[moveStep] start, steps =', steps, 'currentIndex =', currentIndex.value);
   isMoving.value = true;
 
@@ -234,7 +250,7 @@ const moveStep = async (steps) => {
 
 // 10. 한 칸 점프
 const jumpStep = () => {
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     if (currentIndex.value >= pathCoords.length - 1) {
       console.log('[jumpStep] already at end, skip');
       resolve();
@@ -273,7 +289,7 @@ const jumpStep = () => {
 
 // 11. 맵 오프셋 (타일 실제 범위 기반으로 화면 중앙 정렬)
 const createRawTiles = () => {
-  const tiles = [];
+  const tiles: Tile[] = [];
 
   for (let i = 0; i < GRID_WIDTH; i++) {
     for (let j = 0; j < GRID_HEIGHT; j++) {
@@ -305,7 +321,7 @@ const createRawTiles = () => {
   return tiles;
 };
 
-const mapData = ref(createRawTiles());
+const mapData = ref<Tile[]>(createRawTiles());
 
 const gridOffset = computed(() => {
   if (!mapData.value.length) return { transform: 'translate(0, 0)' };

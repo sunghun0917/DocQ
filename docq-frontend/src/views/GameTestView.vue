@@ -8,8 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import BoardTest from '@/components/BoardTest.vue'
-</script>
+import BoardTest from '@/components/BoardTest.vue';</script>
 
 <style scoped>
 .game-page {
