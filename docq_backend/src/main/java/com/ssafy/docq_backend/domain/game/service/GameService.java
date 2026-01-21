@@ -15,7 +15,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @Slf4j
 @Service
@@ -25,6 +29,8 @@ public class GameService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    // Simple Scheduler for Quiz Timer
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public void joinGame(GameDto.JoinRequest request) {
         log.info("Join Request: roomId={}, userId={}, nickname={}", request.getRoomId(), request.getUserId(),
@@ -47,6 +53,7 @@ public class GameService {
                     return;
                 }
                 room.addPlayer(request.getUserId());
+                roomRepository.save(room); // Persistence Fix
             }
             broadcastGameState(room);
         } catch (DocqException e) {
@@ -73,7 +80,9 @@ public class GameService {
                 return;
             }
             log.info("Setting ready state for user {} to {}", request.getUserId(), request.isReady());
+
             room.setReady(request.getUserId(), request.isReady());
+            roomRepository.save(room); // Persistence Fix
 
             log.info("Broadcasting game state after ready update");
             broadcastGameState(room);
@@ -121,9 +130,14 @@ public class GameService {
 
             // 상태 변경
             room.setStatus(RoomStatus.STARTING);
+            roomRepository.save(room); // Persistence Fix
 
             // 브로드캐스트
             broadcastGameState(room);
+
+            // 바로 퀴즈 시작 (또는 일정 딜레이 후 시작하도록 스케줄링 가능)
+            // 여기서는 간단히 바로 첫 퀴즈 출제
+            startQuiz(room.getId());
 
         } catch (DocqException e) {
             sendError(userId, e.getErrorCode());
@@ -188,7 +202,9 @@ public class GameService {
                     PlayerState ps = room.getPlayerStates().get(userId);
                     Integer score = ps != null ? ps.getScore() : null;
                     Integer position = ps != null ? ps.getPosition() : null;
+
                     String buff = ps != null ? ps.getHasBuff() : null;
+                    Integer avatarId = room.getPlayerAvatars().get(userId);
 
                     return GameDto.PlayerInfo.builder()
                             .userId(u.getId())
@@ -199,6 +215,7 @@ public class GameService {
                             .score(score)
                             .position(position)
                             .hasBuff(buff)
+                            .avatarId(avatarId)
                             .build();
                 })
                 .filter(Objects::nonNull)
@@ -228,5 +245,213 @@ public class GameService {
                 .build();
         messagingTemplate.convertAndSend("/queue/errors/" + userId, errorResponse);
         log.info("Sent error to user {}: {}", userId, errorCode.getMessage());
+    }
+
+    public void selectAvatar(GameDto.AvatarSelectRequest request) {
+        try {
+            Room room = roomRepository.findById(request.getRoomId())
+                    .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+            // Update Avatar
+            room.getPlayerAvatars().put(request.getUserId(), request.getAvatarId());
+            log.info("User {} selected avatar {}", request.getUserId(), request.getAvatarId());
+
+            // Broadcast Update (Lightweight)
+            GameDto.AvatarUpdateResponse response = GameDto.AvatarUpdateResponse.builder()
+                    .userId(request.getUserId())
+                    .avatarId(request.getAvatarId())
+                    .build();
+
+            messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/avatar", response);
+
+        } catch (Exception e) {
+            log.error("Error selecting avatar", e);
+        }
+    }
+
+    // --- Quiz Logic ---
+
+    public void startQuiz(String roomId) {
+        try {
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+            // Mock Quiz Data
+            long quizId = 101L + room.getRound(); // Simple ID generation
+            GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
+                    .quizId(quizId)
+                    .question("Round " + room.getRound() + ": 다음 중 Java의 기본형이 아닌 것은?")
+                    .options(Arrays.asList("int", "double", "boolean", "String"))
+                    .timeLimit(5000L)
+                    .build();
+
+            // Set Room State
+            room.setCurrentQuizId(quizId);
+            room.getQuizAnswers().clear();
+            room.setQuizStartTime(LocalDateTime.now());
+
+            log.info("Starting Quiz {} for Room {}", quizId, roomId);
+
+            // Broadcast Quiz
+            messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quiz);
+
+            // Schedule Quiz End
+            scheduler.schedule(() -> {
+                processRoundResult(roomId, quizId);
+            }, quiz.getTimeLimit(), TimeUnit.MILLISECONDS);
+
+        } catch (Exception e) {
+            log.error("Error starting quiz", e);
+        }
+    }
+
+    public void submitAnswer(GameDto.SubmitAnswer request) {
+        try {
+            Room room = roomRepository.findById(request.getRoomId())
+                    .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+            // Validate Quiz ID
+            if (room.getCurrentQuizId() == null || !room.getCurrentQuizId().equals(request.getQuizId())) {
+                log.warn("Invalid quiz submission: {} vs current {}", request.getQuizId(), room.getCurrentQuizId());
+                return;
+            }
+
+            // Validate Duplicates
+            if (room.getQuizAnswers().containsKey(request.getUserId())) {
+                sendError(request.getUserId(), ErrorCode.ALREADY_SUBMITTED);
+                return;
+            }
+            // Save Answer with Timestamp
+            request.setSubmitTime(LocalDateTime.now());
+            room.getQuizAnswers().put(request.getUserId(), request);
+            roomRepository.save(room); // Persistence Fix
+            log.info("User {} submitted answer: {} at {}", request.getUserId(), request.getAnswer(),
+                    request.getSubmitTime());
+
+            // Check if all players submitted
+            // User Request update: "Wait for time limit even if all submitted"
+            // So we do NOT call processRoundResult here anymore.
+            // Just log.
+            if (room.getQuizAnswers().size() >= room.getPlayers().size()) {
+                log.info("All users submitted for room {}. Waiting for timer.", room.getId());
+            }
+
+        } catch (Exception e) {
+            log.error("Error submitting answer", e);
+        }
+    }
+
+    private void processRoundResult(String roomId, Long quizId) {
+        try {
+            Room room = roomRepository.findById(roomId).orElse(null);
+            if (room == null)
+                return;
+
+            // Validate if this is still the current quiz (avoid stale tasks)
+            if (!quizId.equals(room.getCurrentQuizId())) {
+                log.warn("Skipping stale quiz result processing. Current: {}, Task: {}", room.getCurrentQuizId(),
+                        quizId);
+                return;
+            }
+
+            log.info("Processing Round Result for Room {}, Quiz {}", roomId, quizId);
+
+            String turnUser = room.getCurrentTurnUserId();
+            String correctAnswer = "String"; // Mock Correct Answer
+
+            boolean isTurnUserCorrect = false;
+            GameDto.SubmitAnswer turnUserSubmit = room.getQuizAnswers().get(turnUser);
+
+            if (turnUserSubmit != null && correctAnswer.equals(turnUserSubmit.getAnswer())) {
+                isTurnUserCorrect = true;
+            }
+
+            String winnerUserId = null;
+            String rouletteType = "NONE"; // MOVE or BUFF or NONE
+            int moveValue = 0;
+
+            // 판정 로직
+            if (isTurnUserCorrect) {
+                // 턴 주인 정답 -> 턴 주인 승리, 이동 룰렛(1~4)
+                winnerUserId = turnUser;
+                rouletteType = "MOVE"; // Assuming MOVE is the standard roulette for correct turn
+                moveValue = new Random().nextInt(4) + 1; // 1~4
+            } else {
+                // 턴 주인 오답 -> 고스트 중 가장 빨리 맞춘 사람
+                // Find fastest correct ghost
+                Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
+                        .filter(entry -> !entry.getKey().equals(turnUser)) // Exclude turn user
+                        .filter(entry -> correctAnswer.equals(entry.getValue().getAnswer())) // Correct answers only
+                        .sorted(Comparator.comparing(entry -> entry.getValue().getSubmitTime())) // Sort by time
+                                                                                                 // ascending
+                                                                                                 // (fastest first)
+                        .map(Map.Entry::getKey)
+                        .findFirst();
+
+                if (fastestGhost.isPresent()) {
+                    winnerUserId = fastestGhost.get();
+                    rouletteType = "MOVE";
+                    // 절반 룰렛 (-2 ~ +2)
+                    int[] range = { -2, -1, 1, 2 };
+                    moveValue = range[new Random().nextInt(range.length)];
+                } else {
+                    // 아무도 못 맞춤 -> 아무 일도 안 일어남?
+                    winnerUserId = null;
+                    rouletteType = "NONE";
+                }
+            }
+
+            // 결과 전송
+            GameDto.RoundResult result = GameDto.RoundResult.builder()
+                    .quizId(room.getCurrentQuizId())
+                    .correctAnswer(correctAnswer)
+                    .isTurnUserCorrect(isTurnUserCorrect)
+                    .winnerUserId(winnerUserId)
+                    .rouletteType(rouletteType)
+                    .build();
+
+            messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/result", result);
+
+            // 이동 처리 및 전송 (if winner exists)
+            if (winnerUserId != null && moveValue != 0) {
+                PlayerState winnerState = room.getPlayerStates().get(winnerUserId);
+                int currentPos = winnerState.getPosition();
+                int nextPos = currentPos + moveValue;
+
+                // 단순 맵 크기 제한 (e.g. 20칸)
+                if (nextPos < 0)
+                    nextPos = 0;
+                // if (nextPos >= MAX) ...
+
+                // Update State
+                winnerState.setPosition(nextPos);
+
+                // Create Move Info
+                List<GameDto.MoveAction> actions = new ArrayList<>();
+                actions.add(GameDto.MoveAction.builder()
+                        .type("ROULETTE")
+                        .value(moveValue)
+                        .before(currentPos)
+                        .after(nextPos)
+                        .build());
+
+                GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                        .userId(winnerUserId)
+                        .startPosition(currentPos)
+                        .endPosition(nextPos)
+                        .moveProcess(actions)
+                        .build();
+
+                messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/move", moveInfo);
+
+                // Broadcast full state update as well
+                broadcastGameState(room);
+            }
+
+            // Prepare Next Round / Turn (Next logic, maybe wait and then next turn)
+            // For now, logic ends here.
+        } catch (Exception e) {
+            log.error("Error in processRoundResult", e);
+        }
     }
 }
