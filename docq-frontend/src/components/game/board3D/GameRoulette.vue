@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps({
-  rotation: { type: Number, required: true },    // 현재 회전 각도 (Board.vue가 계산해줌)
-  isMoving: { type: Boolean, required: true },   // 말이 이동 중인지 (버튼 비활성화용)
-  isSpinning: { type: Boolean, required: true }, // 룰렛이 도는 중인지 (애니메이션 트리거용)
-  labelByIndex: { type: Array, required: true }, // 룰렛 칸에 표시할 라벨 배열 (예: [1,2,3...])
-});
+const props = defineProps<{
+  rotation: number
+  isMoving: boolean
+  isSpinning: boolean
+  labelByIndex: number[]
+}>()
 
 // 부모에게 알릴 이벤트 정의
 defineEmits(['spin']);

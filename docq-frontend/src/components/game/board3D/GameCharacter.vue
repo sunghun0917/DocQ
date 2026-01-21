@@ -3,6 +3,7 @@
 import { shallowRef, watch, onMounted } from 'vue'
 import { useFBX, useAnimations } from '@tresjs/cientos'
 import { useIsometric } from '@/composables/useIsometric'
+// @ts-ignore
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import * as THREE from 'three' // THREE 타입 사용을 위해 임포트
 import gsap from 'gsap'
@@ -24,7 +25,7 @@ const { get3DPos } = useIsometric()
 
 /* ===== FBX 모델 로드 (단일 애니메이션: Walking.fbx 사용) ===== */
 // public/assets/characters/Walking.fbx 파일을 비동기로 로드
-const idleFbx = await useFBX('/assets/characters/Walking.fbx')
+const idleFbx = await useFBX('/assets/character/Walking.fbx')
 
 // 로드된 FBX 객체에서 상태, 씬, 애니메이션 클립 추출
 const idleState = idleFbx.state?.value || idleFbx

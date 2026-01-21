@@ -17,7 +17,7 @@ export function useIsometric() {
    * @param {number} gridY - 그리드 상의 Y 인덱스 (0 ~ 11)
    * @returns {Array} [x, y, z] - Three.js 월드 좌표
    */
-  const get3DPos = (gridX: number, gridY: number) => {
+  const get3DPos = (gridX: number, gridY: number): [number, number, number] => {
     // (현재 인덱스 - 중간값) * 타일 크기 = 중앙 기준 상대 좌표
     const x = (gridX - half) * TILE_SIZE
     const z = (gridY - half) * TILE_SIZE
