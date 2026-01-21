@@ -7,7 +7,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import BoardTest from '@/components/BoardTest.vue'
 </script>
 

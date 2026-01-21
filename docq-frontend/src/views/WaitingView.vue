@@ -3,18 +3,6 @@ import { ref, computed } from 'vue';
 import UserCard from '@/components/lobby/UserCard.vue';
 import { useRouter } from 'vue-router'; 
 
-import { useRoomStore } from '@/stores/roomStore'
-const roomStore = useRoomStore()
-
-// 방 정보 가져오기
-const roomInfo = computed(() => roomStore.roomInfo)
-const users = computed(() => roomStore.users)
-
-// 준비 상태 토글
-const toggleReady = () => {
-  roomStore.updateUser(myUserId, { isReady: !isReady })
-}
-
 const router = useRouter(); 
 // [R&R] 창민: 대기실 및 콘텐츠 흐름 담당
 const roomInfo = ref({
