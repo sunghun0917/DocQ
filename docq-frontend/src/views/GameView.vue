@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
-import GameTimer from '@/components/game/GameTimer.vue';
+import QuizOverlay from '@/components/game/QuizOverlay.vue';
 import { useRoomStore } from '@/stores/roomtStore'
 import { useGameStore } from '@/stores/gameStore'
 
@@ -16,15 +16,8 @@ const myUser = computed(() => roomStore.myUser)
 const myUserId = computed(() => myUser.value?.id || '')
 const isReady = computed(() => myUser.value?.isReady || false)
 
-// 준비 상태 토글
-const toggleReady = () => {
-  if (myUserId.value) {
-    roomStore.updateUser(myUserId.value, { isReady: !isReady.value })
-  }
-}
-
 // 게임 종료 상태 (테스트용: true로 두면 들어가자마자 모달 뜸)
-const isGameEnded = ref(false); // 기본값 false로 변경 (게임 진행 중 확인용)
+const isGameEnded = ref(false); 
 
 // 컴포넌트 마운트 시 게임 시작 (타이머 작동 확인용)
 onMounted(() => {
@@ -39,17 +32,8 @@ onMounted(() => {
 
     <!-- UI 오버레이: 3D 캔버스 위에 텍스트나 모달 등을 띄움 -->
     <div class="ui-overlay">
-      <!-- 타이머 (상단 중앙) -->
-      <GameTimer class="timer-pos" />
-
-      <h1 class="text-white text-center pt-32 text-4xl font-bold drop-shadow-md">게임 진행 중...</h1>
-      
-      <button 
-        @click="isGameEnded = !isGameEnded" 
-        class="absolute bottom-10 left-10 bg-white text-black p-4 rounded shadow-lg hover:bg-gray-100 pointer-events-auto"
-      >
-        결과창 토글 (테스트)
-      </button>
+      <!-- 퀴즈 오버레이 (타이머 + 문제 + 보기) -->
+      <QuizOverlay class="quiz-contents" />
 
       <!-- 결과 모달 -->
       <ResultModal v-if="isGameEnded" class="pointer-events-auto" />
@@ -76,15 +60,16 @@ onMounted(() => {
   height: 100%;
   z-index: 10;     /* 3D 캔버스보다 위에 표시 */
   pointer-events: none; /* 클릭 이벤트를 3D 쪽으로 통과시킴 (버튼 등은 pointer-events-auto 필요) */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-/* 타이머 위치 지정 */
-.timer-pos {
-  position: absolute;
-  top: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: auto;
+/* 퀴즈 콘텐츠 영역 */
+.quiz-contents {
+  width: 100%;
+  height: 100%;
+  pointer-events: auto; /* 내부 버튼 클릭 가능하도록 */
 }
 
 /* 유틸리티 클래스 (Tailwind가 적용 안 될 경우를 대비해 pointer-events 명시) */
