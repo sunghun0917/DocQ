@@ -6,6 +6,7 @@ import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
 import com.ssafy.docq_backend.domain.user.entity.User;
+import com.ssafy.docq_backend.domain.game.entity.Quiz;
 import com.ssafy.docq_backend.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +18,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
-import java.util.Optional;
+import java.time.LocalDateTime;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,6 +56,13 @@ class GameServiceTest {
                 .title("Test Room")
                 .capacity(4)
                 .build();
+        
+        // Mock Quizzes
+        List<Quiz> quizzes = new ArrayList<>();
+        quizzes.add(Quiz.builder().quizId(1L).build()); // Minimal
+        room.setQuizList(quizzes);
+
+        // Init Player States
 
         // Init Player States
         room.getPlayerStates().put(hostId, PlayerState.builder().userId(hostId).position(0).score(0).build());
@@ -189,6 +198,16 @@ class GameServiceTest {
                 .playerStates(new java.util.concurrent.ConcurrentHashMap<>())
                 .mapEvents(new HashMap<>())
                 .build();
+
+        // Add Mock Quiz for ID 100L
+        Quiz mockQuiz = Quiz.builder()
+                .quizId(100L)
+                .question("Q")
+                .options(Arrays.asList("A", "B"))
+                .answerIndex(0)
+                .answerText("String")
+                .build();
+        room.setQuizList(Collections.singletonList(mockQuiz));
 
         // Setup: Player at 0, TILE_X2 at 2
         room.getPlayerStates().put(userId, PlayerState.builder().userId(userId).position(0).score(0).build());

@@ -29,7 +29,7 @@ public class QuizDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Response {
-        private String quizId;
+        private Long quizId;
         private String question;
         private List<String> options;
         // 답안은 클라이언트로 보낼 때 숨겨야 할 수도 있지만, 일단 포함
