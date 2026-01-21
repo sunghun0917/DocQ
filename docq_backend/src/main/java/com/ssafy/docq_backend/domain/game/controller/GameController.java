@@ -33,4 +33,14 @@ public class GameController {
         String userId = payload.get("userId");
         gameService.startGame(roomId, userId);
     }
+
+    @MessageMapping("/game/submit")
+    public void submitAnswer(GameDto.SubmitAnswer request) {
+        gameService.submitAnswer(request);
+    }
+
+    @MessageMapping("/game/avatar")
+    public void selectAvatar(GameDto.AvatarSelectRequest request) {
+        gameService.selectAvatar(request);
+    }
 }
