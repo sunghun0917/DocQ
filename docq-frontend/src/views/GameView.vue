@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
 import QuizOverlay from '@/components/game/QuizOverlay.vue';
+import AnswerFeedback from '@/components/game/AnswerFeedback.vue'; // [NEW]
 import { useRoomStore } from '@/stores/roomtStore'
 import { useGameStore } from '@/stores/gameStore'
 
@@ -40,6 +41,9 @@ onMounted(() => {
         <button @click="gameStore.startQuiz(myUserId)">내 턴으로 설정</button>
         <button @click="gameStore.startQuiz('other-id')">남의 턴으로 설정</button>
       </div>
+
+      <!-- 정답/오답 피드백 오버레이 -->
+      <AnswerFeedback />
 
       <!-- 결과 모달 -->
       <ResultModal v-if="isGameEnded" class="pointer-events-auto" />
