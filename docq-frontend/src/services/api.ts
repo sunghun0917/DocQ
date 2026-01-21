@@ -8,7 +8,7 @@ import axios, { type AxiosInstance } from 'axios'
 이 axios 인스턴스를 사용하는 모든 요청이
 “나는 JSON으로 말할게”라고 서버에 선언하는 것 */
 const apiClient: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json'
