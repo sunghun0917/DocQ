@@ -124,31 +124,43 @@ const isSpinning = ref(false)
 const rotation = ref(0)         
 const labelByIndex: number[] = [1, 2, 3, 4, 5, 6] 
 
-// 룰렛 표시 여부: Store에서 winnerId가 설정되었을 때만
+// 룰렛 표시 여부
 const showRoulette = computed(() => !!gameStore.rouletteTargetId)
-const canSpin = computed(() => showRoulette.value && gameStore.rouletteTargetId === myUserId.value)
+
+// [NEW] 룰렛 자동 시작 Watcher
+watch(
+  () => gameStore.rouletteTargetId,
+  (newVal) => {
+    if (newVal) {
+      // 룰렛이 나타나면 잠시 후 자동 스핀 (즉시 or 1초 딜레이)
+      setTimeout(() => {
+        spinRoulette()
+      }, 500)
+    }
+  }
+)
 
 /**
  * 룰렛 돌리기 함수
  */
 const spinRoulette = () => {
   if (isMoving.value || isSpinning.value) return 
-  // 권한 체크
-  if (!canSpin.value) return 
 
   isSpinning.value = true
 
-  // 1~6 랜덤값 생성 (나중에 서버 동기화 필요)
+  // 1~6 랜덤값 생성
   const result = Math.floor(Math.random() * 6) + 1
   const targetIndex = labelByIndex.indexOf(result)
-
-  // 회전 애니메이션
+  
+  // 회전 애니메이션 각도 계산
   const sectionAngle = 360 / 6
-  const totalSpins = 360 * 5
+  const totalSpins = 360 * 5 // 최소 5바퀴 회전
+
   const currentDegrees = ((rotation.value % 360) + 360) % 360
   const extraToZero = (360 - currentDegrees) % 360
   const targetRotation = -(targetIndex * sectionAngle)
 
+  // 실제 회전 값 적용 (Vue가 감지하여 CSS 애니메이션 발생)
   rotation.value += totalSpins + extraToZero + targetRotation
 
   // 회전 종료 후 이동

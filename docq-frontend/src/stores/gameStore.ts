@@ -81,6 +81,15 @@ export const useGameStore = defineStore('game', () => {
             answer,
             timestamp: Date.now()
         }
+
+        // [NEW] 턴 주인이 정답을 맞추면 즉시 종료
+        if (userId === currentTurnUserId.value && currentQuiz.value) {
+            const isCorrect = currentQuiz.value.answer === answer
+            if (isCorrect) {
+                stopTimer()
+                concludeQuiz()
+            }
+        }
     }
 
     // 결과 판정 (타이머 종료 시 호출)
