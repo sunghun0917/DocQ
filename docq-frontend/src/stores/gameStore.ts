@@ -28,6 +28,7 @@ export const useGameStore = defineStore('game', () => {
     const currentTurnUserId = ref<string | null>(null)
     const quizSubmissions = ref<Record<string, QuizSubmission>>({})
     const rouletteTargetId = ref<string | null>(null) // 룰렛 돌릴 사람 ID
+    const rouletteResult = ref<number | null>(null) // [NEW] 룰렛 결과 (1~6)
 
     // Getters
     const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
@@ -67,6 +68,7 @@ export const useGameStore = defineStore('game', () => {
         quizSubmissions.value = {}
         lastAnswerResult.value = null
         rouletteTargetId.value = null
+        rouletteResult.value = null // [NEW]
 
         startTimer()
     }
@@ -137,9 +139,15 @@ export const useGameStore = defineStore('game', () => {
         }
     }
 
+    // [New helper, strictly just sets value, handled by watchers]
+    const setRouletteResult = (result: number) => {
+        rouletteResult.value = result
+    }
+
     // [NEW] 룰렛 종료 처리 (GameBoard에서 호출)
     const handleRouletteComplete = () => {
         rouletteTargetId.value = null
+        rouletteResult.value = null // Reset
         nextQuiz()
     }
 
@@ -152,6 +160,7 @@ export const useGameStore = defineStore('game', () => {
             quizSubmissions.value = {}
             lastAnswerResult.value = null
             rouletteTargetId.value = null
+            rouletteResult.value = null // [NEW]
 
             // TODO: Rotate Turn User
             // currentTurnUserId.value = getNextUser(...)
@@ -207,6 +216,7 @@ export const useGameStore = defineStore('game', () => {
         quizSubmissions,
         lastAnswerResult,
         rouletteTargetId, // [Export]
+        rouletteResult, // [Export]
 
         startGame,
         startQuiz,
@@ -217,6 +227,7 @@ export const useGameStore = defineStore('game', () => {
         stopTimer,
         resetTimer,
         concludeQuiz,
-        handleRouletteComplete // [Export]
+        handleRouletteComplete, // [Export]
+        setRouletteResult // [Export]
     }
 })

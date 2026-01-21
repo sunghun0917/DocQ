@@ -73,15 +73,7 @@
       </div>
     </div>
 
-    <!-- UI: 룰렛 컴포넌트 -->
-    <GameRoulette
-      v-if="gameStarted"
-      :rotation="rotation"
-      :isMoving="isMoving"
-      :isSpinning="isSpinning"
-      :labelByIndex="labelByIndex"
-      @spin="spinRoulette"
-    />
+
   </div>
 </template>
 
@@ -118,57 +110,20 @@ const gameStarted = computed(() => !gameStore.isGameEnded) // Store 연동
 
 // ...
 
-/* ========== 룰렛 및 이동 로직 ========== */
+/* ========== 이동 로직 (룰렛 결과 반영) ========== */
 const isMoving = ref(false)     
-const isSpinning = ref(false)   
-const rotation = ref(0)         
-const labelByIndex: number[] = [1, 2, 3, 4, 5, 6] 
 
-// 룰렛 표시 여부
-const showRoulette = computed(() => !!gameStore.rouletteTargetId)
-
-// [NEW] 룰렛 자동 시작 Watcher
+// [NEW] 룰렛 결과 감지 Watcher
+// RouletteOverlay에서 결과가 세팅되면 캐릭터 이동 시작
 watch(
-  () => gameStore.rouletteTargetId,
-  (newVal) => {
-    if (newVal) {
-      // 룰렛이 나타나면 잠시 후 자동 스핀 (즉시 or 1초 딜레이)
-      setTimeout(() => {
-        spinRoulette()
-      }, 500)
+  () => gameStore.rouletteResult,
+  (result) => {
+    if (result !== null && !isMoving.value) {
+      console.log('Roulette Result received:', result)
+      moveStep(result)
     }
   }
 )
-
-/**
- * 룰렛 돌리기 함수
- */
-const spinRoulette = () => {
-  if (isMoving.value || isSpinning.value) return 
-
-  isSpinning.value = true
-
-  // 1~6 랜덤값 생성
-  const result = Math.floor(Math.random() * 6) + 1
-  const targetIndex = labelByIndex.indexOf(result)
-  
-  // 회전 애니메이션 각도 계산
-  const sectionAngle = 360 / 6
-  const totalSpins = 360 * 5 // 최소 5바퀴 회전
-
-  const currentDegrees = ((rotation.value % 360) + 360) % 360
-  const extraToZero = (360 - currentDegrees) % 360
-  const targetRotation = -(targetIndex * sectionAngle)
-
-  // 실제 회전 값 적용 (Vue가 감지하여 CSS 애니메이션 발생)
-  rotation.value += totalSpins + extraToZero + targetRotation
-
-  // 회전 종료 후 이동
-  setTimeout(() => {
-    isSpinning.value = false
-    moveStep(result)
-  }, 3200)
-}
 
 /**
  * 말 이동 로직 (한 칸씩 점프) -> 종료 후 Store에 알림

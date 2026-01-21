@@ -39,6 +39,9 @@ onMounted(() => {
       <!-- 정답/오답 피드백 오버레이 -->
       <AnswerFeedback />
 
+      <!-- 룰렛 오버레이 -->
+      <RouletteOverlay />
+
       <!-- 결과 모달 -->
       <ResultModal v-if="isGameEnded" class="pointer-events-auto" />
     </div>
