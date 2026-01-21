@@ -4,9 +4,14 @@ import SockJS from 'sockjs-client'
 
 export interface WebSocketConfig {
     url: string
+    connectHeaders?: Record<string, string> // [ADD] 연결 헤더 추가
     onConnect?: () => void
     onDisconnect?: () => void
     onError?: (error: any) => void
+    debug?: (str: string) => void           // [ADD] 디버그 콜백 추가
+    reconnectDelay?: number
+    heartbeatIncoming?: number
+    heartbeatOutgoing?: number
 }
 
 export class WebSocketService {
@@ -24,15 +29,18 @@ export class WebSocketService {
                 // SockJS를 사용한 WebSocket 연결
                 webSocketFactory: () => new SockJS(this.config.url) as any,
 
+                // 연결 헤더 설정 (userId 등)
+                connectHeaders: this.config.connectHeaders,
+
                 // 디버그 로그
-                debug: (str) => {
+                debug: this.config.debug || ((str) => {
                     console.log('[STOMP Debug]', str)
-                },
+                }),
 
                 // 재연결 설정
-                reconnectDelay: 5000,
-                heartbeatIncoming: 4000,
-                heartbeatOutgoing: 4000,
+                reconnectDelay: this.config.reconnectDelay || 5000,
+                heartbeatIncoming: this.config.heartbeatIncoming || 4000,
+                heartbeatOutgoing: this.config.heartbeatOutgoing || 4000,
 
                 // 연결 성공
                 onConnect: () => {

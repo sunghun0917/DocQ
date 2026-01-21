@@ -102,10 +102,11 @@ const handleStartGame = () => {
   wsStore.startGame(roomId.value, userStore.userId)
 };
 
-// 방 상태가 PLAYING으로 변하면 게임 화면으로 이동
+// 방 상태가 STARTING 또는 PLAYING으로 변하면 게임 화면으로 이동
 watchEffect(() => {
-  if (roomInfo.value.status === 'PLAYING') {
-    console.log('🎮 Game Started! redirecting to /game...')
+  const status = roomInfo.value.status
+  if (status === 'STARTING' || status === 'PLAYING') {
+    console.log(`🎮 Game Started! (${status}) redirecting to /game...`)
     router.push('/game')
   }
 })
