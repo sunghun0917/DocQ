@@ -15,8 +15,10 @@ export interface PlayerInfo {
     userId: string
     nickname: string
     isHost: boolean
+    host?: boolean // 서버에서 오는 필드명 대응
     connected: boolean
     isReady: boolean
+    ready?: boolean // 서버에서 오는 필드명 대응
 }
 
 export interface ErrorResponse {
@@ -108,26 +110,31 @@ export const useWebSocketStore = defineStore('websocket', () => {
         const roomStore = useRoomStore()
         const userStore = useUserStore()
 
-        wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: GameStateResponse) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: any) => {
             console.log('📨 Game State Update:', data)
 
-            const nextUsers = data.players.map(player => {
+            const players = Array.isArray(data.players) ? data.players : []
+            const nextUsers = players.map((player: any) => {
                 const existingUser = roomStore.users.find(u => u.id === player.userId)
                 const isMe = player.userId === userStore.userId
+
+                // 백엔드 naming 이슈(isReady vs ready, isHost vs host)를 방어적으로 처리
+                const isReady = player.isReady !== undefined ? player.isReady : (player.ready !== undefined ? player.ready : false)
+                const isHost = player.isHost !== undefined ? player.isHost : (player.host !== undefined ? player.host : false)
 
                 return {
                     id: player.userId,
                     nickname: player.nickname,
                     avatar: existingUser?.avatar || (isMe ? userStore.avatar : '🎮'),
-                    isReady: player.isReady,
-                    isHost: player.isHost,
+                    isReady: !!isReady,
+                    isHost: !!isHost,
                     isMe
                 }
             })
 
             roomStore.setUsers(nextUsers)
             roomStore.setRoomInfo({
-                status: data.state,
+                status: data.state || data.status || 'WAITING',
                 currentCount: nextUsers.length
             })
         })
@@ -177,10 +184,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
             return
         }
 
+        // 서버의 Jackson 매핑 이슈를 고려하여 둘 다 전송
         wsService.value.publish('/app/game/ready', {
             roomId,
             userId,
-            isReady
+            isReady: isReady, // Java 필드명
+            ready: isReady   // Jackson 기본 매핑용 키
         })
     }
 
