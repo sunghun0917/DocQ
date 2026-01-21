@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.time.LocalDateTime;
 
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 
@@ -66,6 +66,7 @@ public class GameDto {
         private Integer avatarId;
     }
 
+
     @Getter
     @Builder
     @AllArgsConstructor
@@ -73,6 +74,7 @@ public class GameDto {
         private String userId;
         private Integer avatarId;
     }
+
 
     @Getter
     @Builder
@@ -99,8 +101,6 @@ public class GameDto {
         private String code;
         private String message;
     }
-
-    // --- Quiz & Game Logic DTOs ---
 
     @Getter
     @Builder
@@ -161,4 +161,5 @@ public class GameDto {
         private Integer after;
         private String targetUserId; // For CATCH effect
     }
+
 }

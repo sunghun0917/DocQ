@@ -1,17 +1,17 @@
 package com.ssafy.docq_backend.domain.room.entity;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.game.entity.PlayerState;
+import com.ssafy.docq_backend.domain.game.entity.Quiz;
 
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
-import java.time.LocalDateTime;
-
-import com.ssafy.docq_backend.domain.game.dto.GameDto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -72,6 +72,10 @@ public class Room {
     // userId -> PlayerState
     @Builder.Default
     private Map<String, PlayerState> playerStates = new ConcurrentHashMap<>();
+
+    // 퀴즈 목록
+    @Builder.Default
+    private List<Quiz> quizList = new ArrayList<>();
 
     public void addPlayer(String userId) {
         players.add(userId);

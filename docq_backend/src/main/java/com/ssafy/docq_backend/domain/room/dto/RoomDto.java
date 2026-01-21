@@ -46,6 +46,7 @@ public class RoomDto {
         private String status;
         private int currentCount;
         private int capacity;
+        private int quizCount; // 퀴즈 개수 확인용
     }
 
     @Getter

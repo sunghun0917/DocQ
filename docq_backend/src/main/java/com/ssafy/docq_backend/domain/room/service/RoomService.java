@@ -97,6 +97,7 @@ public class RoomService {
                 .status(room.getStatus().name())
                 .currentCount(room.getCurrentCount())
                 .capacity(room.getCapacity())
+                .quizCount(room.getQuizList() != null ? room.getQuizList().size() : 0)
                 .build();
     }
 
