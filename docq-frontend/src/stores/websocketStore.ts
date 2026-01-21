@@ -19,11 +19,23 @@ export interface PlayerInfo {
     connected: boolean
     isReady: boolean
     ready?: boolean // 서버에서 오는 필드명 대응
+    avatarId?: number // 아바타 ID 추가
 }
 
 export interface ErrorResponse {
     code: string
     message: string
+}
+
+const AVATAR_MAP: Record<number, string> = {
+    0: '🐱',
+    1: '🐶',
+    2: '🦊',
+    3: '🐰',
+    4: '🐯',
+    5: '🐸',
+    6: '🐨',
+    7: '🐷'
 }
 
 export const useWebSocketStore = defineStore('websocket', () => {
@@ -97,6 +109,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
     }
 
+    // 아바타 정보 유실 방지를 위한 로컬 캐시
+    const avatarCache = ref<Record<string, string>>({})
+
     /**
      * 게임 상태 구독
      * @param roomId - 방 ID
@@ -115,17 +130,33 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
             const players = Array.isArray(data.players) ? data.players : []
             const nextUsers = players.map((player: any) => {
-                const existingUser = roomStore.users.find(u => u.id === player.userId)
                 const isMe = player.userId === userStore.userId
 
                 // 백엔드 naming 이슈(isReady vs ready, isHost vs host)를 방어적으로 처리
                 const isReady = player.isReady !== undefined ? player.isReady : (player.ready !== undefined ? player.ready : false)
                 const isHost = player.isHost !== undefined ? player.isHost : (player.host !== undefined ? player.host : false)
 
+                // 아바타 결정 로직:
+                // 1. 서버에서 준 avatarId가 있으면 최우선 적용
+                // 2. 서버 데이터가 없다면(null/undefined), 로컬 캐시에서 확인
+                // 3. 그것도 없다면 나인 경우 내 프로필 아바타, 아니면 기본 게임기(🎮)
+                let avatar = '🎮'
+                const cachedAvatar = avatarCache.value[player.userId]
+
+                if (player.avatarId !== null && player.avatarId !== undefined) {
+                    avatar = AVATAR_MAP[player.avatarId] || '🎮'
+                    avatarCache.value[player.userId] = avatar // 캐시 업데이트
+                } else if (cachedAvatar) {
+                    avatar = cachedAvatar
+                } else if (isMe) {
+                    avatar = userStore.avatar
+                    avatarCache.value[player.userId] = avatar
+                }
+
                 return {
                     id: player.userId,
                     nickname: player.nickname,
-                    avatar: existingUser?.avatar || (isMe ? userStore.avatar : '🎮'),
+                    avatar: avatar,
                     isReady: !!isReady,
                     isHost: !!isHost,
                     isMe
@@ -137,6 +168,22 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 status: data.state || data.status || 'WAITING',
                 currentCount: nextUsers.length
             })
+        })
+
+        // 아바타 전용 구독 (경량 업데이트용)
+        wsService.value.subscribe(`/topic/game/${roomId}/avatar`, (data: any) => {
+            console.log('📨 Avatar Update:', data)
+            const emoji = AVATAR_MAP[data.avatarId] || '🎮'
+
+            // 캐시 먼저 업데이트
+            avatarCache.value[data.userId] = emoji
+
+            // 스토어 업데이트
+            roomStore.updateUser(data.userId, { avatar: emoji })
+
+            if (data.userId === userStore.userId) {
+                userStore.updateAvatar(emoji)
+            }
         })
     }
 
@@ -194,6 +241,22 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 아바타 설정
+     */
+    const setAvatar = (roomId: string, userId: string, avatarId: number) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/avatar', {
+            roomId,
+            userId,
+            avatarId
+        })
+    }
+
+    /**
      * 게임 시작 (Host Only)
      */
     const startGame = (roomId: string, userId: string) => {
@@ -241,6 +304,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         subscribeErrors,
         joinGame,
         setReady,
+        setAvatar,
         startGame,
         unsubscribe,
         cleanup

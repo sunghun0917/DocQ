@@ -60,10 +60,16 @@ const isCharacterTaken = (char: string) => {
 };
 
 const selectCharacter = (char: string) => {
+  // 준비 완료 상태에서는 캐릭터 변경 불가 (방장은 예외)
+  if (myUser.value?.isReady && !myUser.value?.isHost) return;
   if (isCharacterTaken(char)) return;
   selectedChar.value = char;
-  if (myUser.value) {
-    roomStore.updateUser(myUser.value.id, { avatar: char })
+  
+  if (myUser.value && userStore.userId) {
+    const avatarId = characters.indexOf(char)
+    if (avatarId !== -1) {
+      wsStore.setAvatar(roomId.value, userStore.userId, avatarId)
+    }
   }
 };
 
@@ -194,13 +200,13 @@ onMounted(async () => {
                 v-for="char in characters" 
                 :key="char"
                 @click="selectCharacter(char)"
-                :disabled="isCharacterTaken(char)"
+                :disabled="isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost)"
                 class="aspect-square rounded-lg text-4xl flex items-center justify-center transition-all relative border-2 bg-white"
                 :class="[
                   selectedChar === char 
                     ? 'border-[#6c5ce7] shadow-[0_4px_0_0_#a29bfe] -translate-y-1' 
                     : 'border-transparent hover:bg-[#f1f2f6]',
-                  isCharacterTaken(char) 
+                  (isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost))
                     ? 'opacity-40 cursor-not-allowed grayscale bg-slate-50' 
                     : 'cursor-pointer'
                 ]"
