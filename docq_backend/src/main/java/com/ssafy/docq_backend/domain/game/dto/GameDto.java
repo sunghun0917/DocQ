@@ -66,7 +66,6 @@ public class GameDto {
         private Integer avatarId;
     }
 
-
     @Getter
     @Builder
     @AllArgsConstructor
@@ -74,7 +73,6 @@ public class GameDto {
         private String userId;
         private Integer avatarId;
     }
-
 
     @Getter
     @Builder
