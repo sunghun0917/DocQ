@@ -27,6 +27,7 @@ export const useGameStore = defineStore('game', () => {
     // [New] Turn & Interaction Logic
     const currentTurnUserId = ref<string | null>(null)
     const quizSubmissions = ref<Record<string, QuizSubmission>>({})
+    const rouletteTargetId = ref<string | null>(null) // 룰렛 돌릴 사람 ID
 
     // Getters
     const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
@@ -65,6 +66,7 @@ export const useGameStore = defineStore('game', () => {
         currentTurnUserId.value = turnUserId
         quizSubmissions.value = {}
         lastAnswerResult.value = null
+        rouletteTargetId.value = null
 
         startTimer()
     }
@@ -110,14 +112,26 @@ export const useGameStore = defineStore('game', () => {
         if (winnerId) {
             scores.value[winnerId] = (scores.value[winnerId] || 0) + 10
             lastAnswerResult.value = true
-        } else {
-            lastAnswerResult.value = false
-        }
 
-        // 잠시 대기 후 다음으로
-        setTimeout(() => {
-            nextQuiz()
-        }, 2000)
+            // [NEW] 룰렛 단계로 전환 (타이머 멈춘 상태 유지)
+            setTimeout(() => {
+                rouletteTargetId.value = winnerId
+                lastAnswerResult.value = null // 피드백 끄기 (선택사항, 룰렛이랑 겹치면 끄는 게 좋음)
+            }, 2000) // 피드백 보여주고 룰렛으로
+
+        } else {
+            // 아무도 못 맞춤 -> 바로 다음 퀴즈
+            lastAnswerResult.value = false
+            setTimeout(() => {
+                nextQuiz()
+            }, 2000)
+        }
+    }
+
+    // [NEW] 룰렛 종료 처리 (GameBoard에서 호출)
+    const handleRouletteComplete = () => {
+        rouletteTargetId.value = null
+        nextQuiz()
     }
 
     // 다음 퀴즈 준비
@@ -128,6 +142,7 @@ export const useGameStore = defineStore('game', () => {
             timeRemaining.value = 5
             quizSubmissions.value = {}
             lastAnswerResult.value = null
+            rouletteTargetId.value = null
 
             // TODO: Rotate Turn User
             // currentTurnUserId.value = getNextUser(...)
@@ -182,6 +197,7 @@ export const useGameStore = defineStore('game', () => {
         currentTurnUserId,
         quizSubmissions,
         lastAnswerResult,
+        rouletteTargetId, // [Export]
 
         startGame,
         startQuiz,
@@ -191,6 +207,7 @@ export const useGameStore = defineStore('game', () => {
         startTimer,
         stopTimer,
         resetTimer,
-        concludeQuiz
+        concludeQuiz,
+        handleRouletteComplete // [Export]
     }
 })
