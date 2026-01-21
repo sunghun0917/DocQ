@@ -35,6 +35,12 @@ onMounted(() => {
       <!-- 퀴즈 오버레이 (타이머 + 문제 + 보기) -->
       <QuizOverlay class="quiz-contents" />
 
+      <!-- [DEBUG] 역할 테스트 버튼 -->
+      <div class="debug-controls pointer-events-auto">
+        <button @click="gameStore.startQuiz(myUserId)">내 턴으로 설정</button>
+        <button @click="gameStore.startQuiz('other-id')">남의 턴으로 설정</button>
+      </div>
+
       <!-- 결과 모달 -->
       <ResultModal v-if="isGameEnded" class="pointer-events-auto" />
     </div>

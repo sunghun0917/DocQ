@@ -53,10 +53,16 @@ export const useGameStore = defineStore('game', () => {
             scores.value[user.id] = 0
         })
 
-        currentQuizIndex.value = 0
+        const firstUser = roomStore.users[0]?.id || null
+        startQuiz(firstUser || '')
+    }
+
+    // 퀴즈 시작 (라운드) - 턴 주인 설정 및 초기화
+    const startQuiz = (turnUserId: string) => {
+        currentQuizIndex.value = 0 // 실제론 nextQuiz에서 처리하지만 테스트용
         isGameEnded.value = false
         timeRemaining.value = 5
-        currentTurnUserId.value = roomStore.users[0]?.id || null
+        currentTurnUserId.value = turnUserId
         quizSubmissions.value = {}
         lastAnswerResult.value = null
 
@@ -178,6 +184,7 @@ export const useGameStore = defineStore('game', () => {
         lastAnswerResult,
 
         startGame,
+        startQuiz,
         submitAnswer,
         nextQuiz,
         endGame,
