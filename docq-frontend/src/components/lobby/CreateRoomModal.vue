@@ -20,33 +20,24 @@ const isSecret = ref(false); // 비밀방 여부
 const password = ref('');
 
 // PDF 업로드 상태: 'idle'(대기) | 'parsing'(분석중) | 'done'(완료)
-// 초기값은 idle이다.
 const uploadStatus = ref<'idle' | 'parsing' | 'done'>('idle');
 const fileName = ref('');
 
-// 파일 선택 핸들러 (숨겨진 input 트리거)
-// HTMLInputElement: 타입의 한 종류 (input 요소)
 const fileInput = ref<HTMLInputElement | null>(null);
 const triggerFileUpload = () => {
   if (uploadStatus.value === 'idle') {
-    // 옵셔널 체이닝: 값이 있으면 실행하고 없으면 넘어가기
     fileInput.value?.click();
   }
 };
 
-// 실제 파일이 선택되었을 때 (파싱 시뮬레이션)
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files.length > 0) {
     const file = target.files[0];
     if (file) {
       fileName.value = file.name;
-      
-      // 1. 분석 시작 (로딩 상태)
       uploadStatus.value = 'parsing';
-      
-      // << 실제 구현 시 서버 통신 처리 필요 >>
-      // 2. 3초 뒤 분석 완료 처리 (Mocking)
+      // Mocking
       setTimeout(() => {
         uploadStatus.value = 'done';
       }, 3000);
@@ -54,7 +45,6 @@ const handleFileChange = (event: Event) => {
   }
 };
 
-// 생성하기 버튼 활성화 조건: 방제목 입력됨 AND PDF 분석 완료됨
 const isReadyToCreate = computed(() => {
   return roomName.value.trim().length > 0 && uploadStatus.value === 'done';
 });
@@ -110,27 +100,117 @@ const createRoom = async () => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-[#881337]/20 backdrop-blur-sm p-4 animate-fade-in font-display">
     
-    <div class="w-full max-w-4xl bg-white rounded-[32px] shadow-2xl p-8 border-4 border-white/20 animate-slide-up relative flex flex-col">
+    <div class="w-full max-w-4xl bg-white/90 backdrop-blur-xl rounded-[18px] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] p-10 border border-white animate-slide-up relative flex flex-col">
       
-      <button @click="$emit('close')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-600 font-bold text-xl z-10">
-        ✕
+      <button @click="$emit('close')" class="absolute top-8 right-8 text-[#fda4af] hover:text-[#e11d48] transition-colors rounded-full p-1 hover:bg-[#fff1f2]">
+        <span class="material-symbols-outlined text-3xl font-bold">close</span>
       </button>
 
-      <h2 class="text-3xl font-black text-[#2d3436] mb-8 text-center">방 만들기 🛠️</h2>
+      <h2 class="text-3xl font-extrabold text-[#881337] mb-8 text-center flex items-center justify-center gap-3">
+        <span class="material-symbols-outlined text-4xl text-[#e11d48]">add_circle</span>
+        방 만들기
+      </h2>
 
-      <div class="flex flex-col md:flex-row gap-8 mb-8">
+      <div class="flex flex-col md:flex-row gap-10 mb-8 items-stretch">
         
-        <div class="flex-1">
-          <label class="block text-[#636e72] font-bold mb-2 ml-1">퀴즈 생성용 PDF</label>
+        <div class="flex-1 flex flex-col gap-6">
+          
+          <div>
+            <label class="block text-[#9f1239] font-bold mb-3 ml-1 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[18px]">edit</span>
+              방 제목
+            </label>
+            <input 
+              v-model="roomName"
+              type="text" 
+              placeholder="예: 다 드루와" 
+              class="w-full h-14 px-5 rounded-2xl border-2 border-[#fecdd3] bg-white focus:border-[#e11d48] focus:ring-4 focus:ring-[#e11d48]/10 outline-none font-bold text-lg text-[#881337] placeholder:text-[#fda4af] placeholder:font-normal transition-all"
+            />
+          </div>
+
+          <div>
+            <label class="block text-[#9f1239] font-bold mb-3 ml-1 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[18px]">group_add</span>
+              최대 인원
+            </label>
+
+            <div class="flex gap-3">
+              <button 
+                v-for="num in [2, 3, 4]" 
+                :key="num"
+                @click="maxUsers = num"
+                class="flex-1 h-14 rounded-2xl font-bold border-2 transition-all flex items-center justify-center"
+                :class="maxUsers === num 
+                  ? 'bg-gradient-to-r from-[#e11d48] to-[#be123c] text-white border-transparent shadow-lg shadow-rose-500/30' 
+                  : 'bg-white text-[#fda4af] border-[#fecdd3] hover:bg-[#fff1f2] hover:border-[#e11d48]'"
+              >
+                <div class="flex items-center" :class="num === 4 ? '-space-x-1.5' : '-space-x-1'">
+                  <span 
+                    v-for="i in num" 
+                    :key="i" 
+                    class="material-symbols-outlined text-[26px] transition-transform group-hover:scale-110"
+                  >
+                    person
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-[#fff1f2] p-6 rounded-3xl border border-[#fecdd3]">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[#9f1239] font-bold flex items-center gap-2">
+                <span class="material-symbols-outlined text-[#e11d48]">
+                  {{ isSecret ? 'lock' : 'lock_open' }}
+                </span>
+                비밀방 설정
+              </span>
+            
+              <button 
+                @click="isSecret = !isSecret"
+                class="w-14 h-8 rounded-full transition-colors relative shadow-inner"
+                :class="isSecret ? 'bg-[#e11d48]' : 'bg-[#e2e8f0]'"
+              >
+                <div 
+                  class="w-6 h-6 bg-white rounded-full absolute top-1 transition-all shadow-sm flex items-center justify-center"
+                  :class="isSecret ? 'left-7' : 'left-1'"
+                >
+                  <span v-if="isSecret" class="material-symbols-outlined text-[#e11d48] text-[14px] font-bold">check</span>
+                </div>
+              </button>
+            </div>
+            
+            <div v-if="isSecret" class="animate-fade-in mt-4">
+              <input 
+                v-model="password"
+                type="password" 
+                placeholder="비밀번호 4자리" 
+                class="w-full h-12 px-4 rounded-xl border-2 border-[#fecdd3] focus:border-[#e11d48] focus:ring-2 focus:ring-[#e11d48]/10 outline-none font-bold text-[#881337] text-center tracking-widest bg-white placeholder:text-[#fda4af] placeholder:tracking-normal"
+                maxlength="4"
+              />
+            </div>
+          </div>
+          <p class="text-xs text-[#fda4af] mt-3 text-center font-medium flex items-center justify-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">info</span>
+            PDF 크기 및 페이지 수를 고려해주세요.
+          </p>
+          
+        </div>
+
+        <div class="flex-1 flex flex-col">
+          <label class="block text-[#9f1239] font-bold mb-3 ml-1 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px]">description</span>
+            퀴즈 생성용 PDF
+          </label>
           
           <div 
             @click="triggerFileUpload"
-            class="w-full aspect-square rounded-[24px] border-4 border-dashed transition-all flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer"
+            class="w-full h-full min-h-[300px] rounded-[32px] border-4 border-dashed transition-all duration-300 flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer"
             :class="[
-              uploadStatus === 'idle' ? 'border-[#dfe6e9] bg-[#f1f2f6] hover:bg-[#dfe6e9] hover:border-[#b2bec3]' : '',
-              uploadStatus === 'parsing' ? 'border-[#6c5ce7] bg-[#f1f2f6]' : '',
+              uploadStatus === 'idle' ? 'border-[#fecdd3] bg-[#fff1f2]/50 hover:bg-[#fff1f2] hover:border-[#e11d48]' : '',
+              uploadStatus === 'parsing' ? 'border-[#e11d48] bg-[#fff1f2]' : '',
               uploadStatus === 'done' ? 'border-[#00b894] bg-[#f0fff4]' : ''
             ]"
           >
@@ -142,91 +222,32 @@ const createRoom = async () => {
               @change="handleFileChange" 
             />
 
-            <div v-if="uploadStatus === 'idle'" class="text-center group-hover:scale-105 transition-transform">
-              <div class="text-6xl mb-4 text-[#b2bec3]">📂</div>
-              <p class="text-[#636e72] font-bold text-lg">PDF를 업로드해주세요</p>
-              <p class="text-[#b2bec3] text-sm mt-2 font-medium">클릭하여 파일 선택</p>
+            <div v-if="uploadStatus === 'idle'" class="text-center group-hover:scale-105 transition-transform duration-300">
+              <span class="material-symbols-outlined text-7xl mb-4 text-[#e11d48]/40 group-hover:text-[#e11d48] transition-colors">cloud_upload</span>
+              <p class="text-[#9f1239] font-bold text-lg">PDF를 업로드해주세요</p>
+              <p class="text-[#fda4af] text-sm mt-2 font-medium">클릭하여 파일 선택</p>
             </div>
 
             <div v-if="uploadStatus === 'parsing'" class="text-center flex flex-col items-center">
-              <div class="w-16 h-16 border-4 border-[#a29bfe] border-t-[#6c5ce7] rounded-full animate-spin mb-6"></div>
-              <p class="text-[#6c5ce7] font-black text-lg animate-pulse">퀴즈 생성 중...</p>
-              <p class="text-[#a29bfe] text-sm mt-1 font-bold">{{ fileName }}</p>
+              <div class="w-16 h-16 border-4 border-[#fda4af] border-t-[#e11d48] rounded-full animate-spin mb-6"></div>
+              <p class="text-[#e11d48] font-black text-lg animate-pulse">퀴즈 생성 중...</p>
+              <p class="text-[#9f1239]/70 text-sm mt-1 font-bold truncate max-w-[200px]">{{ fileName }}</p>
             </div>
 
             <div v-if="uploadStatus === 'done'" class="text-center animate-bounce-up">
-              <div class="text-6xl mb-4 text-[#00b894]">✅</div>
+              <span class="material-symbols-outlined text-7xl mb-4 text-[#00b894]">check_circle</span>
               <p class="text-[#00b894] font-black text-lg">준비가 완료되었습니다!</p>
-              <p class="text-[#00b894] text-sm mt-1 font-bold opacity-70">{{ fileName }}</p>
+              <p class="text-[#00b894] text-sm mt-1 font-bold opacity-70 truncate max-w-[200px]">{{ fileName }}</p>
             </div>
           </div>
-          <p class="text-xs text-[#b2bec3] mt-2 text-center font-medium">* PDF 크기 및 페이지 수를 고려해주세요.</p>
         </div>
 
-        <div class="flex-1 flex flex-col gap-6">
-          
-          <div>
-            <label class="block text-[#636e72] font-bold mb-2 ml-1">방 제목</label>
-            <input 
-              v-model="roomName"
-              type="text" 
-              placeholder="예: 싸피 공통 프로젝트 퀴즈!" 
-              class="w-full h-14 px-5 rounded-2xl border-2 border-[#dfe6e9] focus:border-[#6c5ce7] outline-none font-bold text-lg transition-colors placeholder:font-normal"
-            />
-          </div>
-
-          <div>
-            <label class="block text-[#636e72] font-bold mb-2 ml-1">최대 인원</label>
-            <div class="flex gap-3">
-              <button 
-                v-for="num in [2, 3, 4]" 
-                :key="num"
-                @click="maxUsers = num"
-                class="flex-1 h-12 rounded-xl font-bold border-2 transition-all"
-                :class="maxUsers === num 
-                  ? 'bg-[#6c5ce7] text-white border-[#6c5ce7] shadow-md' 
-                  : 'bg-white text-[#b2bec3] border-[#dfe6e9] hover:bg-[#f1f2f6]'"
-              >
-                {{ num }}명
-              </button>
-            </div>
-          </div>
-
-          <div class="bg-[#f8f9fa] p-5 rounded-2xl border-2 border-[#dfe6e9]">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-[#636e72] font-bold flex items-center gap-2">
-                🔒 비밀방 설정
-              </span>
-              <button 
-                @click="isSecret = !isSecret"
-                class="w-12 h-7 rounded-full transition-colors relative"
-                :class="isSecret ? 'bg-[#6c5ce7]' : 'bg-[#dfe6e9]'"
-              >
-                <div 
-                  class="w-5 h-5 bg-white rounded-full absolute top-1 transition-all shadow-sm"
-                  :class="isSecret ? 'left-6' : 'left-1'"
-                ></div>
-              </button>
-            </div>
-
-            <div v-if="isSecret" class="animate-fade-in mt-3">
-              <input 
-                v-model="password"
-                type="password" 
-                placeholder="비밀번호 4자리" 
-                class="w-full h-12 px-4 rounded-xl border-2 border-[#dfe6e9] focus:border-[#6c5ce7] outline-none font-bold text-center tracking-widest"
-                maxlength="4"
-              />
-            </div>
-          </div>
-
-        </div>
       </div>
 
-      <div class="flex gap-3 mt-auto">
+   <div class="flex gap-4 mt-auto">
         <button 
           @click="$emit('close')"
-          class="flex-1 h-16 rounded-2xl font-bold text-lg text-[#636e72] bg-[#f1f2f6] hover:bg-[#dfe6e9] transition-colors"
+          class="flex-1 h-16 rounded-2xl font-bold text-lg text-[#e11d48] bg-white border-2 border-[#fecdd3] hover:bg-[#fff1f2] transition-colors"
         >
           취소
         </button>
@@ -234,13 +255,19 @@ const createRoom = async () => {
         <button 
           @click="createRoom"
           :disabled="!isReadyToCreate"
-          class="flex-[2] h-16 rounded-2xl font-black text-xl transition-all flex items-center justify-center gap-2"
+          class="flex-1 h-16 rounded-2xl font-black text-xl transition-all flex items-center justify-center gap-2 shadow-lg"
           :class="isReadyToCreate 
-            ? 'text-white bg-[#00b894] shadow-[0_6px_0_0_#00896f] hover:bg-[#00a383] active:translate-y-1 active:shadow-none cursor-pointer' 
-            : 'text-[#b2bec3] bg-[#dfe6e9] border-2 border-transparent cursor-not-allowed'"
+            ? 'text-white bg-gradient-to-r from-[#e11d48] to-[#be123c] shadow-rose-500/30 hover:shadow-[0_0_25px_rgba(225,29,72,0.4)] active:scale-[0.98] cursor-pointer' 
+            : 'text-[#cbd5e1] bg-[#f1f5f9] border-2 border-transparent cursor-not-allowed shadow-none'"
         >
-          <span v-if="uploadStatus === 'parsing'">⏳ 분석 중...</span>
-          <span v-else>방 생성하기 🚀</span>
+          <span v-if="uploadStatus === 'parsing'" class="flex items-center gap-2">
+            <span class="material-symbols-outlined animate-spin">progress_activity</span>
+            분석 중...
+          </span>
+          <span v-else class="flex items-center gap-2">
+            방 생성하기
+            <span class="material-symbols-outlined">rocket_launch</span>
+          </span>
         </button>
       </div>
 
@@ -249,6 +276,8 @@ const createRoom = async () => {
 </template>
 
 <style scoped>
+.font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
+
 .animate-fade-in { animation: fadeIn 0.3s ease-out; }
 .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .animate-bounce-up { animation: bounceUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
