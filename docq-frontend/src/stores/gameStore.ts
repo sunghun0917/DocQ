@@ -21,7 +21,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useRoomStore } from './roomtStore'
+import { useRoomStore } from './roomStore'
 import { mockQuizzes } from '@/mocks/quizzes'
 
 // 게임 진행 상태 및 퀴즈 관리
@@ -55,7 +55,7 @@ export const useGameStore = defineStore('game', () => {
         const userScores = Object.entries(scores.value).map(([userId, score]) => ({
             userId,
             score: score as number,
-            username: roomStore.users.find((u: any) => u.id === userId)?.username || 'Unknown'
+            nickname: roomStore.users.find((u: any) => u.id === userId)?.nickname || 'Unknown'
         }));
         return userScores.sort((a, b) => b.score - a.score);
     })

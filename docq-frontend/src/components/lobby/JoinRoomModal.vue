@@ -1,46 +1,93 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/userStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { useWebSocketStore } from '@/stores/websocketStore'
+import { getRoomByInviteCode, verifyJoinRoom, getErrorMessage, type RoomResponse } from '@/services/api'
 
 const router = useRouter();
 const emit = defineEmits(['close']);
+const userStore = useUserStore()
+const roomStore = useRoomStore()
+const wsStore = useWebSocketStore()
+const isSubmitting = ref(false)
 
 const roomCode = ref('');
 const password = ref('');
 const isPrivateRoom = ref(false); // 비밀방 여부 (실제로는 서버에서 확인)
+const resolvedRoom = ref<RoomResponse | null>(null)
+const lastCheckedCode = ref('')
 
 // 방참가 or 방취소 로직
-const joinRoom = () => {
-  if (!roomCode.value.trim()) {
+const joinRoom = async () => {
+  const inviteCode = roomCode.value.trim().toUpperCase()
+  if (!inviteCode) {
     alert("입장 코드를 입력해주세요!");
     return;
   }
-  
-  // 비밀방인데 비밀번호 미입력
-  if (isPrivateRoom.value && !password.value.trim()) {
-    alert("비밀번호를 입력해주세요!");
-    return;
+
+  if (!userStore.userId) {
+    alert('닉네임을 먼저 설정해주세요.')
+    return
   }
-  
-  // 실제 구현 시: 서버에 방 코드와 비밀번호 전송하여 검증
-  // const response = await joinRoomAPI({ roomCode: roomCode.value, password: password.value });
-  // if (response.success) { ... }
-  
-  // 입력된 코드로 대기실 이동
-  router.push(`/waiting/${roomCode.value}`);
-  emit('close');
+
+  if (isSubmitting.value) return
+  isSubmitting.value = true
+
+  try {
+    const room = await getRoomByInviteCode(inviteCode)
+    resolvedRoom.value = room
+    lastCheckedCode.value = inviteCode
+    isPrivateRoom.value = room.isPrivate
+
+    if (room.isPrivate && !password.value.trim()) {
+      alert("비밀번호를 입력해주세요!");
+      return;
+    }
+
+    await verifyJoinRoom({
+      roomId: room.roomId,
+      password: room.isPrivate ? password.value.trim() : undefined
+    })
+
+    roomStore.joinRoom({
+      roomId: room.roomId,
+      inviteCode: inviteCode,
+      title: room.title,
+      capacity: room.capacity,
+      isPrivate: room.isPrivate,
+      status: room.status,
+      currentCount: room.currentCount
+    })
+
+    await wsStore.connect()
+    wsStore.subscribeErrors(userStore.userId)
+    wsStore.subscribeGameState(room.roomId)
+    wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
+
+    router.push(`/waiting/${room.roomId}`);
+    emit('close');
+  } catch (error) {
+    alert(getErrorMessage(error))
+  } finally {
+    isSubmitting.value = false
+  }
 };
 
 // 방 코드 입력 시 비밀방 여부 확인 (실제로는 서버 API 호출)
-const checkRoomType = () => {
-  // 실제 구현 시: 서버에 방 코드 전송하여 비밀방 여부 확인
-  // const response = await checkRoomAPI(roomCode.value);
-  // isPrivateRoom.value = response.isPrivate;
-  
-  // 임시: 코드가 4자리면 비밀방으로 가정
-  if (roomCode.value.length === 4) {
-    // 실제로는 서버 응답으로 판단
-    isPrivateRoom.value = false; // 기본값
+const checkRoomType = async () => {
+  const inviteCode = roomCode.value.trim().toUpperCase()
+  if (!inviteCode || inviteCode === lastCheckedCode.value) return
+
+  try {
+    const room = await getRoomByInviteCode(inviteCode)
+    resolvedRoom.value = room
+    lastCheckedCode.value = inviteCode
+    isPrivateRoom.value = room.isPrivate
+  } catch (error) {
+    resolvedRoom.value = null
+    isPrivateRoom.value = false
   }
 };
 </script>
