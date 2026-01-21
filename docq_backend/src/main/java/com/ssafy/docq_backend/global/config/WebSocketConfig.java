@@ -13,7 +13,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // 1. 소켓 연결 엔드포인트 설정 (API 명세서: ws://{ip}:8080/ws-docq)
         registry.addEndpoint("/ws-docq")
-                .setAllowedOrigins("*")
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
         // SockJS 없이 순수 STOMP만 쓸 경우 아래 줄도 추가 (Postman 테스트용)
         registry.addEndpoint("/ws-docq")
