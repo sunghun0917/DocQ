@@ -86,7 +86,7 @@ if (scene) {
 
 /* ===== 애니메이션 액션 설정 ===== */
 // scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
-const { actions } = useAnimations(allClips, scene || new THREE.Object3D())
+const { actions } = useAnimations(allClips, (scene || new THREE.Group()) as any)
 
 // 상수로 관리하는 설정값들
 const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
@@ -110,10 +110,12 @@ const updateLookDirection = () => {
 onMounted(() => {
   if (idleClip && actions[idleClip.name]) {
     const action = actions[idleClip.name]
-    // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
-    action.setEffectiveTimeScale(2.0)
-    // 페이드인과 함께 재생
-    action.reset().fadeIn(FADE_TIME).play()
+    if (action) {
+      // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
+      action.setEffectiveTimeScale(2.0)
+      // 페이드인과 함께 재생
+      action.reset().fadeIn(FADE_TIME).play()
+    }
   }
   // 초기 시선 처리
   updateLookDirection()

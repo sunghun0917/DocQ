@@ -264,7 +264,7 @@ const startGame = (count: number) => {
     players.value.push({
       id: i,
       currentIndex: 0, // 모두 시작점에서 출발
-      color: PLAYER_COLORS[i % PLAYER_COLORS.length]
+      color: PLAYER_COLORS[i % PLAYER_COLORS.length] ?? '#ffffff'
     })
   }
 

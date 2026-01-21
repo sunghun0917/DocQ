@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
-import { useRoomStore } from '@/stores/roomtStore'
+import { useRoomStore } from '@/stores/roomStore'
 
 const roomStore = useRoomStore()
 
