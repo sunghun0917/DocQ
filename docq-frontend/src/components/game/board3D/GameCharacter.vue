@@ -1,27 +1,25 @@
-<template>
-  <primitive v-if="scene" :object="scene" cast-shadow />
-</template>
-
+<!-- src/components/game/board3d/Character.vue -->
 <script setup lang="ts">
 import { shallowRef, watch, onMounted } from 'vue'
 import { useFBX, useAnimations } from '@tresjs/cientos'
-import { useIsometric } from '../composables/useIsometric'
+import { useIsometric } from '@/composables/useIsometric'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import * as THREE from 'three' // THREE 타입 사용을 위해 임포트
 import gsap from 'gsap'
 
-// 부모 컴포넌트(Board.vue)에서 전달받는 props 정의
-const props = defineProps({
-  x: { type: Number, required: true },         // 현재 그리드 X 좌표
-  y: { type: Number, required: true },         // 현재 그리드 Y 좌표
-  isMoving: { type: Boolean, required: true }, // 현재 이동 중인지 여부 (true면 걷는 애니메이션)
-  lookTarget: {                                // 다음에 바라볼 목표 지점 (다음 타일 좌표)
-    type: Object,
-    required: true,
-  },
-  color: { type: String, default: '#ffffff' }, // 캐릭터 색상 (플레이어 구분용, 기본값 흰색)
+// [TS] Props 인터페이스 정의 (상세 주석 포함)
+// withDefaults를 사용하여 color의 기본값을 설정
+const props = withDefaults(defineProps<{
+  x: number         // 현재 그리드 X 좌표
+  y: number         // 현재 그리드 Y 좌표
+  isMoving: boolean // 이동 중 여부 (true면 애니메이션 시점 보정)
+  lookTarget: { x: number, y: number } // 다음 시선 목표 지점
+  color?: string    // 캐릭터 색상 (선택 사항, 기본값 흰색)
+}>(), {
+  color: '#ffffff'
 })
 
-// 2D 그리드 좌표를 3D 등각투영 좌표로 변환하는 훅 가져오기
+// 3D 좌표 변환 훅 가져오기
 const { get3DPos } = useIsometric()
 
 /* ===== FBX 모델 로드 (단일 애니메이션: Walking.fbx 사용) ===== */
@@ -33,119 +31,111 @@ const idleState = idleFbx.state?.value || idleFbx
 const idleSceneRaw = idleState.scene || idleState
 const idleClips = idleState.animations || []
 
-// 원본 씬을 복제하여 사용 (여러 플레이어가 동일한 모델을 쓸 때 충돌 방지)
-let scene = null
+/* ===== 씬 복제 (Independent Instances) ===== */
+// 원본 씬을 그대로 쓰면 모든 플레이어가 똑같이 움직이므로, clone()으로 복제해서 사용
+// [TS] 타입 단언(as THREE.Group)을 사용하여 타입 에러 방지
+let scene: THREE.Group | null = null
 if (idleSceneRaw) {
-  scene = typeof idleSceneRaw.clone === 'function' ? clone(idleSceneRaw) : idleSceneRaw
+  scene = (typeof idleSceneRaw.clone === 'function' ? clone(idleSceneRaw) : idleSceneRaw) as THREE.Group
 }
 
 /* ===== 색상 적용 (Material Clone) ===== */
-// 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)을 복제하여 색상 변경
+// 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
 if (scene) {
-  scene.traverse((child) => {
-    if (child.isMesh) {
-      // 재질을 복제해야 다른 캐릭터에게 영향이 안 감 (독립적인 색상 적용)
+  scene.traverse((child: THREE.Object3D) => {
+    // Mesh인 경우에만 재질 변경
+    if (child.isMesh && child.material) {
+      // 재질을 복제하여 독립적인 색상 적용 가능하게 함
       child.material = child.material.clone()
-      child.material.color.set(props.color)
+      child.material.color.setStyle(props.color)
     }
   })
 }
 
-// 추출한 애니메이션 클립 중 첫 번째를 사용 (걷기 동작)
+// 애니메이션 클립 준비 (첫 번째 클립이 걷기 동작이라고 가정)
 const idleClip = idleClips[0] || null
+const allClips = shallowRef(idleClip ? [idleClip] : [])
 
-// useAnimations 훅에 사용할 클립 목록 생성
-const allClips = shallowRef([
-  ...(idleClip ? [idleClip] : []),
-])
-
-// 모델 로드 실패 시 에러 로그
+// 로드 실패 시 에러 로그
 if (!scene) {
   console.error('Character scene is null; check FBX load.')
 }
 
 /* ===== 초기 위치 설정 ===== */
 if (scene) {
-  // 시작점 좌표 계산
+  // 시작점 3D 좌표 계산
   const startPos = get3DPos(props.x, props.y)
 
-  // 캐릭터 위치 설정
-  // Y축(높이)에 0.25를 더하는 이유: 3D 타일 위에 발이 묻히지 않고 올라가게 하기 위함
+  // Y축(높이)에 0.25를 더해 타일 위에 올라가게 함
   scene.position.set(startPos[0], startPos[1] + 0.25, startPos[2])
 
-  // 모델 크기 축소 (FBX 원본 크기에 따라 조절 필요)
+  // 모델 크기 축소 (FBX 원본 크기에 맞춰 조절)
   scene.scale.set(0.01, 0.01, 0.01)
 
-  // 기본 회전값 설정 (모델이 뒤를 보고 있다면 180도 회전)
+  // 기본 회전값 (모델이 뒷면을 보고 있다면 180도 회전)
   scene.rotation.y = Math.PI
 }
 
-/* ===== 애니메이션 세팅 ===== */
-// 모델에 대한 애니메이션 액션들을 가져옴
+/* ===== 애니메이션 액션 설정 ===== */
 const { actions } = useAnimations(allClips, scene)
 
-const FADE_TIME = 0.2       // 애니메이션 전환 시 부드럽게 섞이는 시간 (초)
-const MOVE_DURATION = 0.5   // 한 칸 이동하는 데 걸리는 시간 (0.5초 = 빠른 이동)
-const Y_OFFSET = 0.25       // 캐릭터 높이 보정값 (상수로 관리)
+// 상수로 관리하는 설정값들
+const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
+const MOVE_DURATION = 0.5   // 한 칸 이동 시간 (0.5초)
+const Y_OFFSET = 0.25       // 높이 보정값
 
 /*
  * 함수: 다음 이동할 칸을 바라보게 회전시키는 함수
- * lookAt 메소드를 사용하여 3D 공간 상의 특정 좌표를 바라보게 함
+ * lookAt 메소드를 사용해 3D 공간 상의 특정 좌표를 응시
  */
 const updateLookDirection = () => {
   if (!scene || !props.lookTarget) return
-  // 목표 지점(lookTarget)의 3D 좌표 계산
-  const target3D = get3DPos(props.lookTarget.x, props.lookTarget.y)
-  // 캐릭터가 해당 지점을 바라보도록 회전 (Y축은 캐릭터 높이에 맞춤)
+  const target3D: [number, number, number] = get3DPos(props.lookTarget.x, props.lookTarget.y)
+  // 캐릭터의 발밑이 아닌 눈높이를 바라보게 하기 위해 Y_OFFSET 더함
   scene.lookAt(target3D[0], target3D[1] + Y_OFFSET, target3D[2])
 }
 
 /*
- * 라이프사이클 훅: 컴포넌트 마운트 시 실행
- * 초기 애니메이션 재생 및 방향 설정
+ * 라이프사이클: 컴포넌트 마운트 시 애니메이션 시작
  */
 onMounted(() => {
-  if (idleClip) {
-    // 걷기 애니메이션 액션 가져오기
-    const action = actions?.[idleClip.name]
-    if (action) {
-      // 속도를 2배로 설정하여 제자리걸음을 힘차게 하도록 함
-      action.setEffectiveTimeScale(2.0)
-      // 페이드인 효과와 함께 재생 시작
-      action.reset().fadeIn(FADE_TIME).play()
-    }
+  if (idleClip && actions[idleClip.name]) {
+    const action = actions[idleClip.name]
+    // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
+    action.setEffectiveTimeScale(2.0)
+    // 페이드인과 함께 재생
+    action.reset().fadeIn(FADE_TIME).play()
   }
-  // 초기 바라보는 방향 업데이트
+  // 초기 시선 처리
   updateLookDirection()
 })
 
 /*
- * 감시자(Watch): 캐릭터 좌표(x, y)가 변경될 때마다 실행
- * GSAP를 사용하여 부드러운 이동 애니메이션 처리
+ * 감시자(Watch): 캐릭터 좌표(x, y)가 변경될 때마다 이동 애니메이션 실행
  */
 watch(
-  () => [props.x, props.y], // 감시 대상: x, y 좌표
-  ([newX, newY]) => {
+  () => [props.x, props.y] as [number, number],
+  ([newX, newY]: [number, number]) => {
     if (!scene) return
 
-    // 이동할 목적지의 3D 좌표 계산
-    const target = get3DPos(newX, newY)
+    // 목표 지점 3D 좌표
+    const target: [number, number, number] = get3DPos(newX, newY)
 
-    // GSAP 애니메이션 실행 (Tween)
+    // GSAP를 이용한 부드러운 트윈(Tween) 이동
     gsap.to(scene.position, {
-      x: target[0],             // 목표 X 좌표
-      z: target[2],             // 목표 Z 좌표
-      y: target[1] + Y_OFFSET,  // 목표 Y 좌표 (높이 보정 포함)
-      duration: MOVE_DURATION,  // 이동 시간
-      ease: 'power1.inOut',     // 가속/감속 효과 (부드럽게 출발/정지)
+      x: target[0],
+      z: target[2],
+      y: target[1] + Y_OFFSET,
+      duration: MOVE_DURATION,
+      ease: 'power1.inOut', // 부드러운 가감속
 
-      // 이동 시작 시 실행: 목적지 바라보기
+      // 이동 시작 시: 목적지 바라보기
       onStart: () => {
-        const dest3D = get3DPos(newX, newY)
+        const dest3D: [number, number, number] = get3DPos(newX, newY)
         scene.lookAt(dest3D[0], dest3D[1] + Y_OFFSET, dest3D[2])
       },
 
-      // 이동 완료 시 실행: 다음 타겟(또 이동할 곳) 바라보기
+      // 이동 완료 시: 다음 타겟(Target+1) 바라보기
       onComplete: () => {
         updateLookDirection()
       }
@@ -154,28 +144,19 @@ watch(
 )
 
 /*
- * 감시자(Watch): 이동 상태(isMoving)가 변경될 때 실행
- * 이동이 멈췄을 때 방향을 한 번 더 바로잡아줌
+ * 감시자(Watch): 이동이 멈췄을 때 시선 재정렬
  */
-watch(
-  () => props.isMoving,
-  (moving) => {
-    // 이동 멈췄을 때만 방향 재정렬 (혹시 모를 오차 보정)
-    if (!moving) {
-      updateLookDirection()
-    }
-  }
-)
+watch(() => props.isMoving, (moving) => {
+  if (!moving) updateLookDirection()
+})
 
 /*
- * 감시자(Watch): 다음 목표 지점(lookTarget) 데이터 자체가 바뀌면 실행
- * 실시간으로 시선 처리 갱신
+ * 감시자(Watch): 다음 목표(lookTarget)가 바뀌면 시선 갱신
  */
-watch(
-  () => props.lookTarget,
-  () => {
-    updateLookDirection()
-  },
-  { deep: true } // 객체 내부 값 변경까지 감지
-)
+watch(() => props.lookTarget, () => updateLookDirection(), { deep: true })
 </script>
+
+<template>
+  <!-- 씬 객체가 준비되면 렌더링 (primitive 사용) -->
+  <primitive v-if="scene" :object="scene" cast-shadow />
+</template>
