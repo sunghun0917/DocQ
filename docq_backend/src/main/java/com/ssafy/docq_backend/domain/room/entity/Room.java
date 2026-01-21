@@ -47,6 +47,10 @@ public class Room {
     @Builder.Default
     private Map<String, Integer> playerAvatars = new ConcurrentHashMap<>();
 
+    // Map Events: Index(0~29) -> EventType (e.g. "TILE_X2")
+    @Builder.Default
+    private Map<Integer, String> mapEvents = new HashMap<>();
+
     @Builder.Default
     private List<String> turnOrder = new ArrayList<>();
 

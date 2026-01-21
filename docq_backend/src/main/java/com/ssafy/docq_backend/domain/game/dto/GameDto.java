@@ -52,6 +52,7 @@ public class GameDto {
         // Keeping them for "StarGame" transition context.
         private List<String> turnOrder;
         private Map<String, Integer> cardDrawResult;
+        private Map<Integer, String> mapEvents;
     }
 
     @Getter
@@ -158,6 +159,7 @@ public class GameDto {
         private String effectType; // for TILE_EFFECT
         private Integer before;
         private Integer after;
+        private String targetUserId; // For CATCH effect
     }
 
 }
