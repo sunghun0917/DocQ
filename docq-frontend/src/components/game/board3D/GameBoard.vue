@@ -1,15 +1,13 @@
-<!-- src/components/Board.vue -->
+<!-- src/components/game/board3d/Board.vue -->
 <template>
   <div class="board-container">
-    <TresCanvas
-      shadows
-      alpha
-      clear-color="#222222"
-    >
-      <!-- 카메라 -->
-      <!-- 카메라 설정: 쿼터뷰(Orthographic) -->
-      <!-- position: 카메라 위치 (멀리서 비스듬히 내려다봄) -->
-      <!-- zoom: 화면 확대/축소 비율 -->
+    <!-- 3D 캔버스 초기화: 그림자(shadows) 활성화, 투명 배경(alpha) -->
+    <TresCanvas shadows alpha clear-color="#222222">
+      <!--
+        OrthographicCamera (직교 카메라):
+        원근감이 없는 쿼터뷰 시점을 제공하여 보드게임판처럼 보이게 함
+        zoom: 확대 배율, position: 카메라 위치
+      -->
       <TresOrthographicCamera
         :position="[10, 20, 10]"
         :look-at="[0, 0, 0]"
@@ -18,9 +16,10 @@
         :far="100"
       />
 
+      <!-- 개발용 마우스 컨트롤 (줌/회전 가능) -->
       <OrbitControls :enableZoom="true" />
 
-      <!-- 조명 -->
+      <!-- 조명 설정: 전체적으로 밝게(Ambient) + 그림자용(Directional) -->
       <TresAmbientLight :intensity="1.2" />
       <TresDirectionalLight
         :position="[10, 15, 10]"
@@ -28,7 +27,11 @@
         cast-shadow
       />
 
-      <!-- 3D 타일 -->
+      <!--
+        맵 타일 렌더링:
+        v-for를 사용해 grid 배열의 모든 타일을 3D로 그림
+        type 0: 빈칸, 1: 길, 2: 시작/끝
+      -->
       <Tile3D
         v-for="tile in grid"
         :key="`${tile.x}-${tile.y}`"
@@ -37,11 +40,12 @@
         :type="tile.type"
       />
 
-      <!-- 캐릭터 4명 렌더링 -->
-      <!-- 캐릭터 렌더링 영역 (Suspense: 3D 모델 비동기 로딩 대기) -->
+      <!--
+        플레이어 캐릭터 렌더링:
+        Suspense 컴포넌트는 비동기 모델 로딩(FBX)을 기다려줌
+      -->
       <Suspense>
-        <!-- v-for: players 배열만큼 캐릭터 생성 -->
-        <Character
+        <GameCharacter
           v-for="(p, idx) in players"
           :key="p.id"
           :x="playerCoords(idx).x"
@@ -53,22 +57,24 @@
       </Suspense>
     </TresCanvas>
 
-    <!-- 턴 표시 UI -->
-    <div v-if="gameStarted" style="position: absolute; top: 10px; left: 10px; color: white; z-index: 10;">
+    <!-- UI: 현재 누구 턴인지 표시 -->
+    <div v-if="gameStarted" class="turn-info">
       <h2>Current Turn: Player {{ currentTurn + 1 }}</h2>
     </div>
 
-    <!-- 게임 시작 전 플레이어 수 선택 UI -->
+    <!-- UI: 게임 시작 전 인원수 선택 화면 -->
     <div v-if="!gameStarted" class="start-screen">
       <h1>Select Player Count</h1>
       <div class="buttons">
+        <!-- 인원수 버튼 (2~4명) -->
         <button @click="startGame(2)">2 Players</button>
         <button @click="startGame(3)">3 Players</button>
         <button @click="startGame(4)">4 Players</button>
       </div>
     </div>
 
-    <Roulette
+    <!-- UI: 룰렛 컴포넌트 -->
+    <GameRoulette
       v-if="gameStarted"
       :rotation="rotation"
       :isMoving="isMoving"
@@ -84,62 +90,89 @@ import { ref } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls } from '@tresjs/cientos'
 
-import Tile3D from '@/components/Tile3D.vue'
-import Character from '@/components/Character.vue'
-import Roulette from '@/components/Roulette.vue'
+// [컴포넌트 Import]
+// 주의: 파일명을 GameCharacter.vue 등으로 바꿨다면 경로 수정 필요
+import Tile3D from '@/components/game/board3D/Tile3D.vue'
+import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
+import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
 
-/* ===== 설정값 상수 ===== */
-const GRID_SIZE = 12       // 보드판 가로/세로 크기 (12x12)
+/* ========== [TS] 인터페이스 정의 (TypeScript 빨간 줄 해결용) ========== */
+
+// 플레이어 정보 타입
+interface Player {
+  id: number           // 플레이어 고유 번호 (0, 1, 2...)
+  currentIndex: number // 현재 위치한 경로상의 인덱스 (0 = 시작점)
+  color: string        // 캐릭터 색상 (Hex 코드)
+}
+
+// 그리드 타일 정보 타입
+interface GridItem {
+  x: number     // 그리드 X 좌표
+  y: number     // 그리드 Y 좌표
+  type: number  // 0: 빈칸, 1: 일반 길, 2: 특수(시작/끝)
+}
+
+// 경로 좌표 타입 (X, Y 쌍)
+interface PathCoord {
+  x: number
+  y: number
+}
+
+// 이동 방향 벡터 타입
+interface Dir {
+  dx: number
+  dy: number
+}
+
+/* ========== 게임 설정 상수 ========== */
+const GRID_SIZE = 12       // 보드판 크기 (12x12)
 const PATH_LENGTH = 31     // 생성할 경로의 총 길이 (칸 수)
 
-/* ===== 그리드 초기화 ===== */
-// 전체 보드판의 좌표 정보를 담을 배열
-const grid = ref([])
+/* ========== 그리드 초기화 ========== */
+// 12x12 격자를 모두 0(빈칸)으로 초기화
+const grid = ref<GridItem[]>([])
 
-// 12x12 모든 칸을 우선 'type: 0' (빈 칸)으로 채움
 for (let x = 0; x < GRID_SIZE; x++) {
   for (let y = 0; y < GRID_SIZE; y++) {
     grid.value.push({ x, y, type: 0 })
   }
 }
 
-/* ===== 랜덤 경로 생성 알고리즘 (DFS) ===== */
-// 실제 게임에서 쓰일 경로의 좌표 리스트 [start, ..., end]
-const pathCoords = ref([])
+/* ========== 랜덤 경로 생성 로직 (DFS 알고리즘) ========== */
+const pathCoords = ref<PathCoord[]>([]) // 실제 생성된 경로 좌표들을 저장할 배열
 
-/*
- * 함수: 깊이 우선 탐색(DFS)으로 랜덤한 꼬불꼬불한 길 만들기
- * @param gridSize - 맵 크기
- * @param targetLength - 목표하는 길의 총 칸 수
+/**
+ * 랜덤 경로 생성 함수 (DFS 사용)
+ * (11,11)에서 시작하여 (0,0)까지 이어지는 랜덤한 길을 만듭니다.
+ *
+ * @param gridSize 그리드 크기
+ * @param targetLength 목표 경로 길이
+ * @returns 생성된 경로 좌표 배열 (실패 시 null)
  */
-function generateRandomPath(gridSize, targetLength) {
-  // 시작점과 도착점 좌표 지정
-  const start = { x: 11, y: 11 } // 우하단
-  const end = { x: 0, y: 0 }     // 좌상단
+function generateRandomPath(gridSize: number, targetLength: number): PathCoord[] | null {
+  const start = { x: 11, y: 11 } // 시작점
+  const end = { x: 0, y: 0 }     // 도착점
 
-  // 이동 가능한 4방향 (상, 하, 좌, 우)
-  const dirs = [
+  // 상하좌우 이동 방향
+  const dirs: Dir[] = [
     { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
     { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
   ]
 
-  // 재귀적 탐색 함수
-  function dfs(current, path, visited) {
-    // 1. 종료 조건: 도착점에 도달했을 때
+  // 재귀적 DFS 함수
+  function dfs(current: PathCoord, path: PathCoord[], visited: Set<string>): PathCoord[] | null {
+    // 1. 기저 조건: 도착점에 도달했을 때
     if (current.x === end.x && current.y === end.y) {
-      // 정확히 목표 길이에 맞췄다면 성공(return path)
-      if (path.length === targetLength) return path
-      else return null // 길이가 안 맞으면 실패
+      if (path.length === targetLength) return path // 목표 길이와 딱 맞으면 성공!
+      else return null
     }
 
-    // 2. 가지치기: 현재 위치에서 도착점까지의 최단 거리(Manhattan Distance) 계산
+    // 2. 가지치기 (Pruning): 남은 거리가 필요한 스텝 수보다 멀면 포기
     const distToEnd = Math.abs(current.x - end.x) + Math.abs(current.y - end.y)
-    const remainingSteps = targetLength - path.length // 남은 허용 걸음 수
-
-    // 남은 걸음 수보다 최단 거리가 더 멀면, 절대 도착 불가능 -> 포기
+    const remainingSteps = targetLength - path.length
     if (distToEnd > remainingSteps) return null
 
-    // 3. 방향 섞기: 매번 랜덤한 방향으로 시도하기 위해 셔플
+    // 3. 랜덤성 부여: 이동 방향을 무작위로 섞음
     const shuffledDirs = [...dirs].sort(() => Math.random() - 0.5)
 
     for (const dir of shuffledDirs) {
@@ -147,14 +180,14 @@ function generateRandomPath(gridSize, targetLength) {
       const ny = current.y + dir.dy
       const key = `${nx},${ny}`
 
-      // 범위 체크 및 방문 여부 체크
+      // 유효성 검사: 보드 범위 내 && 방문하지 않음
       if (
         nx >= 0 && nx < gridSize &&
         ny >= 0 && ny < gridSize &&
         !visited.has(key)
       ) {
-        // [중요] 길끼리 너무 다닥다닥 붙지 않게 체크 (인접한 길이 2개 이상이면 패스)
-        // 이렇게 해야 "ㄹ"자 모양으로 꼬불꼬불 예쁘게 나옴
+        // [중요] 인접 체크: 길이 꼬여서 자기 자신과 붙는 것을 방지
+        // 현재 진행방향을 제외하고 이미 방문한 타일이 주변에 1개보다 많으면 안됨
         let visitedNeighbors = 0
         for (const checkDir of dirs) {
           const cx = nx + checkDir.dx
@@ -164,15 +197,14 @@ function generateRandomPath(gridSize, targetLength) {
 
         if (visitedNeighbors > 1) continue
 
-        // 길 추가
+        // 경로에 추가하고 재귀 호출
         visited.add(key)
         path.push({ x: nx, y: ny })
 
-        // 다음 단계 탐색
         const result = dfs({ x: nx, y: ny }, path, visited)
-        if (result) return result // 성공하면 결과 반환
+        if (result) return result // 성공한 경로를 찾았으면 바로 반환
 
-        // 실패했으면 백트래킹 (다시 돌아나옴)
+        // 실패 시 백트래킹 (경로에서 제거하고 다시 시도)
         path.pop()
         visited.delete(key)
       }
@@ -180,57 +212,59 @@ function generateRandomPath(gridSize, targetLength) {
     return null
   }
 
-  // 탐색 시작 (시작점 포함)
+  // DFS 시작
   return dfs(start, [{ x: 11, y: 11 }], new Set(['11,11']))
 }
 
+// 그리드 타입 리셋 함수 (새 게임 시작 시)
 function resetGridTypes() {
   grid.value.forEach((t) => (t.type = 0))
 }
 
-/* ===== 게임 상태 및 플레이어 관리 ===== */
-const players = ref([])       // 플레이어 목록 (id, 위치, 색상 등)
-const currentTurn = ref(0)    // 현재 턴인 플레이어 인덱스 (0 ~ 3)
-const gameStarted = ref(false) // 게임 시작 여부 (false면 대기화면)
+/* ========== 플레이어 및 게임 상태 관리 ========== */
+const players = ref<Player[]>([])     // 플레이어 목록
+const currentTurn = ref(0)            // 현재 턴 (0 ~ players.length-1)
+const gameStarted = ref(false)        // 게임 시작 여부
 
-// 플레이어별 고유 색상 (빨, 초, 파, 노)
+// 플레이어별 색상 정의 (빨강, 초록, 파랑, 노랑)
 const PLAYER_COLORS = ['#ff4444', '#44ff44', '#4444ff', '#ffff44']
 
 /**
- * 함수: 경로를 생성하고 grid 데이터에 type(길 모양)을 표시하는 함수
- * (type 1: 길, type 2: 시작/끝)
+ * 맵을 생성하고 grid 데이터에 반영하는 함수
  */
 function buildPathOnGrid() {
   resetGridTypes()
-  let path = null
-  // 랜덤 경로가 만들어질 때까지 계속 시도 (가끔 실패할 수 있어서 while문 사용)
+  let path: PathCoord[] | null = null
+
+  // 유효한 경로가 나올 때까지 반복 시도
   while (!path) {
     path = generateRandomPath(GRID_SIZE, PATH_LENGTH)
   }
   pathCoords.value = path
 
-  // grid 배열 업데이트 (화면에 길 그리기)
+  // 생성된 경로를 화면(grid)에 표시
+  // 시작점(index 0)과 끝점(마지막)은 type 2 (노란색), 나머지는 type 1 (흰색)
   path.forEach((p, index) => {
     const tile = grid.value.find((t) => t.x === p.x && t.y === p.y)
     if (!tile) return
-    tile.type = index === 0 || index === path.length - 1 ? 2 : 1
+    tile.type = (index === 0 || index === (path?.length ?? 0) - 1) ? 2 : 1
   })
 }
 
-/*
- * 함수: 게임 시작 버튼 클릭 시 실행
- * 선택된 인원수(count)만큼 플레이어 객체를 생성함
+/**
+ * 게임 시작 함수
+ * @param count 선택한 플레이어 수
  */
-const startGame = (count) => {
+const startGame = (count: number) => {
   buildPathOnGrid() // 맵 생성
 
-  // 플레이어 배열 초기화
+  // 플레이어 초기화
   players.value = []
   for (let i = 0; i < count; i++) {
     players.value.push({
       id: i,
-      currentIndex: 0,                     // 시작점 인덱스 (0)
-      color: PLAYER_COLORS[i % 4]          // 색상 할당
+      currentIndex: 0, // 모두 시작점에서 출발
+      color: PLAYER_COLORS[i % PLAYER_COLORS.length]
     })
   }
 
@@ -238,123 +272,114 @@ const startGame = (count) => {
   gameStarted.value = true
 }
 
-/*
- * elper: 인덱스에 해당하는 플레이어의 현재 [X, Y] 좌표 반환
- * (Character 컴포넌트에 props로 넘겨주기 위함)
- */
-const playerCoords = (idx) => {
+/* [헬퍼 함수] 플레이어의 현재/다음 좌표 계산 */
+
+// 현재 플레이어가 위치한 그리드 좌표(x,y) 반환
+const playerCoords = (idx: number): PathCoord => {
   if (!players.value[idx]) return { x: 0, y: 0 }
   const pIdx = players.value[idx].currentIndex
-  // 경로 데이터(pathCoords)에서 해당 인덱스의 좌표를 찾음
-  return pathCoords.value[pIdx] || pathCoords.value[0]
+  return pathCoords.value[pIdx] || (pathCoords.value[0] ?? { x: 0, y: 0 })
 }
 
-/*
- * elper: 해당 플레이어가 다음으로 이동해야 할 '목적지' 좌표 반환
- * (캐릭터가 바라볼 방향 결정을 위해 사용)
- */
-const playerNextTarget = (idx) => {
+// 현재 플레이어가 이동 시 바라봐야 할 다음 좌표 반환 (시선 처리용)
+const playerNextTarget = (idx: number): PathCoord => {
   if (!players.value[idx]) return { x: 0, y: 0 }
   const pIdx = players.value[idx].currentIndex
-  // 마지막 칸이면 자기 자신이 타겟 (더 못 감)
+  // 마지막 칸이면 제자리, 아니면 다음 칸 리턴
   if (pIdx >= pathCoords.value.length - 1) {
-    return pathCoords.value[pIdx]
+    return pathCoords.value[pIdx] ?? { x: 0, y: 0 }
   }
-  // 아니면 다음 칸 리턴
-  return pathCoords.value[pIdx + 1]
+  return pathCoords.value[pIdx + 1] ?? { x: 0, y: 0 }
 }
 
-/* ===== 룰렛 & 턴 진행 로직 ===== */
-const isMoving = ref(false)   // 현재 말이 움직이는 중인가? (중복 실행 방지)
-const isSpinning = ref(false) // 룰렛이 돌아가는 중인가?
-const rotation = ref(0)       // 룰렛의 회전 각도 (누적값)
-const labelByIndex = [1, 2, 3, 4, 5, 6] // 룰렛판 숫자 배치
+/* ========== 룰렛 및 이동 로직 ========== */
+const isMoving = ref(false)     // 말이 이동 중인지 (이동 중엔 룰렛 클릭 방지)
+const isSpinning = ref(false)   // 룰렛이 도는 중인지
+const rotation = ref(0)         // 룰렛 회전 각도 (애니메이션용)
+const labelByIndex: number[] = [1, 2, 3, 4, 5, 6] // 룰렛 숫자 배열
 
-/*
- * 함수: 룰렛 돌리기 버튼 클릭 시 실행
+/**
+ * 룰렛 돌리기 함수
  */
 const spinRoulette = () => {
   if (isMoving.value || isSpinning.value) return // 이미 동작 중이면 무시
 
   isSpinning.value = true
 
-  // 1. 결과값 랜덤 결정 (1~6) -> 나중에 백엔드에서 받아올 부분!
+  // 1~6 랜덤값 생성
   const result = Math.floor(Math.random() * 6) + 1
   const targetIndex = labelByIndex.indexOf(result)
 
-  // 2. 회전 각도 계산 (360도 * 5바퀴 + 목표 지점까지의 각도)
+  // 회전 애니메이션 각도 계산
   const sectionAngle = 360 / 6
-  const totalSpins = 360 * 5 // 최소 5바퀴 회전 연출
+  const totalSpins = 360 * 5 // 최소 5바퀴 회전
 
   const currentDegrees = ((rotation.value % 360) + 360) % 360
   const extraToZero = (360 - currentDegrees) % 360
-  const targetRotation = -(targetIndex * sectionAngle) // 반시계 방향 고려
+  const targetRotation = -(targetIndex * sectionAngle)
 
-  // 최종 회전 각도 적용 (CSS transition이 애니메이션 처리)
+  // 실제 회전 값 적용 (Vue가 감지하여 CSS 애니메이션 발생)
   rotation.value += totalSpins + extraToZero + targetRotation
 
-  // 3. 3.2초 뒤(애니메이션 끝난 뒤) 실제 이동 시작
+  // 회전 종료 후(3.2초 뒤) 이동 로직 실행
   setTimeout(() => {
     isSpinning.value = false
-    moveStep(result) // 이동 함수 호출
+    moveStep(result)
   }, 3200)
 }
 
-/*
- * 함수: 주사위 결과만큼 캐릭터 한 칸씩 이동
- * async/await를 써서 한 칸 이동이 끝나야 다음 칸으로 가도록 함
+/**
+ * 말 이동 로직 (한 칸씩 점프)
+ * @param steps 이동할 칸 수
  */
-const moveStep = async (steps) => {
+const moveStep = async (steps: number) => {
   isMoving.value = true
 
   const activePlayer = players.value[currentTurn.value]
 
-  // 한 칸씩 점프하며 이동
-  for (let i = 0; i < steps; i++) {
-    // 도착점에 도달했으면 즉시 중단 (더 이상 못 감)
-    if (activePlayer.currentIndex >= pathCoords.value.length - 1) break
+    // [중요] activePlayer가 없을 경우를 대비해 예외 처리 (이게 빨간 줄 해결!)
+  if (!activePlayer) {
+    console.error("No active player found!")
+    isMoving.value = false
+    return
+  }
 
-    // 점프함수 호출 (0.6초 대기)
+  // 한 칸씩 차례대로 이동
+  for (let i = 0; i < steps; i++) {
+    // 도착점에 도달하면 멈춤
+    if (activePlayer.currentIndex >= pathCoords.value.length - 1) break
     await jumpStep(activePlayer)
   }
 
   isMoving.value = false
 
-  /*
-   * [충돌 체크 & 잡기 로직]
-   * 이동을 마친 후 타일에 다른 플레이어가 있는지 확인
-   */
-  // 시작점(0)과 도착점(끝)은 안전지대라 제외
+  /* [규칙] 잡기(Knockback) 로직 */
+  // 이동이 끝난 후, 도착한 자리에 다른 플레이어가 있는지 확인
   if (activePlayer.currentIndex > 0 && activePlayer.currentIndex < pathCoords.value.length - 1) {
     players.value.forEach((p) => {
-      // 나 자신이 아니고, 내 위치랑 같은 플레이어를 발견하면
+      // 나 자신이 아니고, 같은 위치에 있는 플레이어라면?
       if (p.id !== activePlayer.id && p.currentIndex === activePlayer.currentIndex) {
-        console.log(`[잡기 발생] Player ${p.id + 1} -> Start 지점 복귀`)
-        p.currentIndex = 0 // 상대를 시작점으로 강제 이동!
+        console.log(`Player ${p.id + 1} caught!`)
+        p.currentIndex = 0 // 태초마을(0번 인덱스)로 강제 이동시킴
       }
     })
   }
 
-  // 다음 사람 턴으로 넘기기 (0 -> 1 -> 2 -> 3 -> 0 ...)
+  // 턴 넘기기
   currentTurn.value = (currentTurn.value + 1) % players.value.length
 }
 
-/*
- * 함수: 실제 좌표값(currentIndex)을 1 증가시키는 함수
- * Promise를 반환하여, 애니메이션 시간만큼 기다리게 함
- */
-const jumpStep = (player) =>
-  new Promise((resolve) => {
-    // 이미 끝이면 무시
+// 한 칸 이동 애니메이션 (Promise로 비동기 대기)
+const jumpStep = (player: Player) =>
+  new Promise<void>((resolve) => {
     if (player.currentIndex >= pathCoords.value.length - 1) {
       resolve()
       return
     }
 
-    // 좌표 1 증가 (이때 Character.vue의 watch가 반응해서 애니메이션 실행됨)
     player.currentIndex++
 
-    // 이동 애니메이션 시간(0.5초) + 여유시간(0.1초) 대기 후 완료 신호
+    // 애니메이션 시간만큼 대기 (Character.vue의 이동 시간과 합을 맞춰야 함)
     setTimeout(() => {
       setTimeout(resolve, 100)
     }, 600)
@@ -362,6 +387,7 @@ const jumpStep = (player) =>
 </script>
 
 <style scoped>
+/* 화면 전체를 가득 채우는 컨테이너 */
 .board-container {
   width: 100vw;
   height: 100vh;
@@ -369,6 +395,7 @@ const jumpStep = (player) =>
   overflow: hidden;
 }
 
+/* 시작 화면(인원 선택) 오버레이 */
 .start-screen {
   position: absolute;
   top: 0; left: 0;
@@ -382,13 +409,23 @@ const jumpStep = (player) =>
   z-index: 100;
 }
 
-.start-screen .buttons {
+/* 현재 턴 표시 UI */
+.turn-info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: white;
+  z-index: 10;
+}
+
+.buttons {
   display: flex;
   gap: 20px;
   margin-top: 20px;
 }
 
-.start-screen button {
+/* 버튼 스타일 */
+button {
   padding: 15px 30px;
   font-size: 1.2rem;
   background: white;
@@ -399,7 +436,7 @@ const jumpStep = (player) =>
   font-weight: bold;
 }
 
-.start-screen button:hover {
+button:hover {
   background: #ddd;
 }
 </style>
