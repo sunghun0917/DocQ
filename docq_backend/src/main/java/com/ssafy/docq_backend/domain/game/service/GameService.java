@@ -164,6 +164,18 @@ public class GameService {
                     .build();
             room.getPlayerStates().put(pid, ps);
         }
+
+        // 맵 특수 효과 배치 (Random 5 tiles with "TILE_X2")
+        room.getMapEvents().clear();
+        Random random = new Random();
+        Set<Integer> eventTiles = new HashSet<>();
+        while (eventTiles.size() < 5) {
+            int pos = random.nextInt(29) + 1; // 1 ~ 29 (0번은 시작점이라 제외)
+            if (eventTiles.add(pos)) {
+                room.getMapEvents().put(pos, "TILE_X2");
+            }
+        }
+        log.info("Map Events Initialized: {}", room.getMapEvents());
     }
 
     private void determineTurnOrder(Room room) {
@@ -225,6 +237,7 @@ public class GameService {
         String currentTurnUserId = room.getStatus() == RoomStatus.WAITING ? null : room.getCurrentTurnUserId();
         List<String> turnOrder = room.getStatus() == RoomStatus.WAITING ? null : room.getTurnOrder();
         Map<String, Integer> cardDrawResult = room.getStatus() == RoomStatus.WAITING ? null : room.getCardDrawResult();
+        Map<Integer, String> mapEvents = room.getStatus() == RoomStatus.WAITING ? null : room.getMapEvents();
 
         GameDto.GameStateResponse response = GameDto.GameStateResponse.builder()
                 .state(room.getStatus())
@@ -233,6 +246,7 @@ public class GameService {
                 .players(playerInfos)
                 .turnOrder(turnOrder)
                 .cardDrawResult(cardDrawResult)
+                .mapEvents(mapEvents)
                 .build();
 
         messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/state", response);
@@ -341,7 +355,7 @@ public class GameService {
         }
     }
 
-    private void processRoundResult(String roomId, Long quizId) {
+    void processRoundResult(String roomId, Long quizId) {
         try {
             Room room = roomRepository.findById(roomId).orElse(null);
             if (room == null)
@@ -423,17 +437,82 @@ public class GameService {
                     nextPos = 0;
                 // if (nextPos >= MAX) ...
 
-                // Update State
-                winnerState.setPosition(nextPos);
+                // Update State (Initial Move)
+                // winnerState.setPosition(nextPos); // Defer update until end of chain
 
                 // Create Move Info
                 List<GameDto.MoveAction> actions = new ArrayList<>();
+
+                // 1. Roulette Action
                 actions.add(GameDto.MoveAction.builder()
                         .type("ROULETTE")
                         .value(moveValue)
                         .before(currentPos)
                         .after(nextPos)
                         .build());
+
+                // 2. Buff Action (Example: DOUBLE_MOVE)
+                // Assuming 'DOUBLE_MOVE' doubles the roulette value
+                if ("DOUBLE_MOVE".equals(winnerState.getHasBuff())) {
+                    int beforeBuffPos = nextPos;
+                    nextPos += moveValue; // Add gain again (x2)
+
+                    actions.add(GameDto.MoveAction.builder()
+                            .type("BUFF")
+                            .buffType("DOUBLE_MOVE")
+                            .before(beforeBuffPos)
+                            .after(nextPos)
+                            .build());
+
+                    // Consume Buff
+                    winnerState.setHasBuff(null);
+                    log.info("User {} consumed buff DOUBLE_MOVE", winnerUserId);
+                }
+
+                // 3. Tile Effect (Map Event)
+                if (room.getMapEvents().containsKey(nextPos)) {
+                    String eventType = room.getMapEvents().get(nextPos);
+
+                    actions.add(GameDto.MoveAction.builder()
+                            .type("TILE_EFFECT")
+                            .effectType(eventType)
+                            .before(nextPos)
+                            .after(nextPos) // Position doesn't change for X2
+                            .build());
+
+                    if ("TILE_X2".equals(eventType)) {
+                        log.info("User {} landed on {} and got effect {}", winnerUserId, nextPos, eventType);
+                    }
+                }
+
+                // 4. Collision / Catching Logic
+                // Check if any other player is at nextPos
+                for (String pid : room.getPlayers()) {
+                    if (pid.equals(winnerUserId))
+                        continue; // Skip self
+
+                    PlayerState otherPs = room.getPlayerStates().get(pid);
+                    if (otherPs != null && otherPs.getPosition() == nextPos && nextPos != 0) { // Don't catch at
+                                                                                               // start(0)
+                        // Catch!
+                        int caughtPos = 0;
+                        int originalPos = otherPs.getPosition();
+                        otherPs.setPosition(caughtPos); // Send back to 0
+
+                        actions.add(GameDto.MoveAction.builder()
+                                .type("CATCH")
+                                .targetUserId(pid)
+                                .before(originalPos)
+                                .after(caughtPos)
+                                .build());
+
+                        log.info("User {} CAUGHT User {} at position {}", winnerUserId, pid, nextPos);
+                    }
+                }
+
+                // Final Position Update
+                winnerState.setPosition(nextPos);
+                roomRepository.save(room); // Save state changes (position, buff consumption)
 
                 GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
                         .userId(winnerUserId)
@@ -448,8 +527,38 @@ public class GameService {
                 broadcastGameState(room);
             }
 
-            // Prepare Next Round / Turn (Next logic, maybe wait and then next turn)
-            // For now, logic ends here.
+            // --- Prepare Next Turn / Round ---
+
+            // 1. Find Current Turn Index
+            List<String> turnOrder = room.getTurnOrder();
+            int currentIndex = turnOrder.indexOf(turnUser);
+
+            // 2. Calculate Next Index
+            int nextIndex = currentIndex + 1;
+
+            // 3. Check for Round Change
+            if (nextIndex >= turnOrder.size()) {
+                // Round Over -> Next Round, Reset to First Player
+                nextIndex = 0;
+                room.setRound(room.getRound() + 1);
+                log.info("Room {} - Round {} Started", room.getId(), room.getRound());
+            }
+
+            // 4. Set Next Turn User
+            String nextTurnUser = turnOrder.get(nextIndex);
+            room.setCurrentTurnUserId(nextTurnUser);
+            roomRepository.save(room);
+
+            log.info("Pass Turn: {} -> {} (Round {})", turnUser, nextTurnUser, room.getRound());
+
+            // 5. Broadcast Updated State (Next Turn Info)
+            broadcastGameState(room);
+
+            // 6. Schedule Next Quiz (Delay for Animation: e.g., 5 seconds)
+            scheduler.schedule(() -> {
+                startQuiz(roomId);
+            }, 6000, TimeUnit.MILLISECONDS);
+
         } catch (Exception e) {
             log.error("Error in processRoundResult", e);
         }
