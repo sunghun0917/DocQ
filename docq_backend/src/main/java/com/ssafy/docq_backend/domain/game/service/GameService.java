@@ -53,6 +53,7 @@ public class GameService {
                     return;
                 }
                 room.addPlayer(request.getUserId());
+                roomRepository.save(room); // Persistence Fix
             }
             broadcastGameState(room);
         } catch (DocqException e) {
@@ -79,7 +80,9 @@ public class GameService {
                 return;
             }
             log.info("Setting ready state for user {} to {}", request.getUserId(), request.isReady());
+
             room.setReady(request.getUserId(), request.isReady());
+            roomRepository.save(room); // Persistence Fix
 
             log.info("Broadcasting game state after ready update");
             broadcastGameState(room);
@@ -127,6 +130,7 @@ public class GameService {
 
             // 상태 변경
             room.setStatus(RoomStatus.STARTING);
+            roomRepository.save(room); // Persistence Fix
 
             // 브로드캐스트
             broadcastGameState(room);
@@ -317,10 +321,10 @@ public class GameService {
                 sendError(request.getUserId(), ErrorCode.ALREADY_SUBMITTED);
                 return;
             }
-
             // Save Answer with Timestamp
             request.setSubmitTime(LocalDateTime.now());
             room.getQuizAnswers().put(request.getUserId(), request);
+            roomRepository.save(room); // Persistence Fix
             log.info("User {} submitted answer: {} at {}", request.getUserId(), request.getAnswer(),
                     request.getSubmitTime());
 
