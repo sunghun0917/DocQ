@@ -1,57 +1,39 @@
-// 게임 진행 상태 및 퀴즈 관리
-/*
-게임 시작:
-1. startGame() 호출
-2. 점수 초기화
-3. 첫 번째 퀴즈 로드
-4. 타이머 시작
-
-퀴즈 진행:
-1. 사용자가 답 선택
-2. submitAnswer() 호출
-3. 정답 확인 및 점수 업데이트
-4. nextQuiz() 호출
-
-게임 종료:
-1. 마지막 퀴즈 완료
-2. endGame() 호출
-3. 순위 계산
-4. ResultModal 표시
-*/
-
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useRoomStore } from './roomtStore'
+import { useRoomStore } from './roomtStore' // roomtStore? check spelling if needed
 import { mockQuizzes } from '@/mocks/quizzes'
+
+interface QuizSubmission {
+    userId: string
+    answer: number
+    timestamp: number
+}
 
 // 게임 진행 상태 및 퀴즈 관리
 export const useGameStore = defineStore('game', () => {
-    // state
-
-    // 퀴즈 관련
+    // State
     const quizzes = ref(mockQuizzes)
     const currentQuizIndex = ref(0)
-    const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
 
     // 게임 상태
-    const gameStatus = ref<'waiting' | 'playing' | 'finished'>('waiting')
-    const timeRemaining = ref(30)
+    const isGameEnded = ref(false)
+    const timeRemaining = ref(5) // Default 5 seconds for turn
+    const timerInterval = ref<number | null>(null)
 
-    // 점수
+    // 점수 및 결과
     const scores = ref<Record<string, number>>({})
+    const lastAnswerResult = ref<boolean | null>(null) // 결과 표시용
 
-    // 현재 퀴즈 정답 여부 (UI 피드백용)
-    const lastAnswerResult = ref<boolean | null>(null)
+    // [New] Turn & Interaction Logic
+    const currentTurnUserId = ref<string | null>(null)
+    const quizSubmissions = ref<Record<string, QuizSubmission>>({})
 
     // Getters
-
-    // 전체 퀴즈 개수
+    const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
     const totalQuizCount = computed(() => quizzes.value.length)
 
-    // 순위 계산
     const rankings = computed(() => {
         const roomStore = useRoomStore()
-        // Convert scores object to an array of { userId, score } and sort
         const userScores = Object.entries(scores.value).map(([userId, score]) => ({
             userId,
             score: score as number,
@@ -60,136 +42,148 @@ export const useGameStore = defineStore('game', () => {
         return userScores.sort((a, b) => b.score - a.score);
     })
 
-    // 게임 종료 여부
-    const isGameFinished = computed(() => gameStatus.value === 'finished')
-
     // Actions
-
-    let timerInterval: number | null = null
 
     // 게임 시작
     const startGame = () => {
         const roomStore = useRoomStore()
 
-        // roomStore의 사용자 목록으로 점수 초기화
+        // Initialize scores
         roomStore.users.forEach(user => {
             scores.value[user.id] = 0
         })
 
         currentQuizIndex.value = 0
-        gameStatus.value = 'playing'
-        timeRemaining.value = currentQuiz.value?.timeLimit || 30
+        isGameEnded.value = false
+        timeRemaining.value = 5
+        currentTurnUserId.value = roomStore.users[0]?.id || null
+        quizSubmissions.value = {}
         lastAnswerResult.value = null
 
-        // 타이머 시작
         startTimer()
     }
 
-    // 다음 퀴즈
+    // 답안 제출 (동시 입력)
+    const submitAnswer = (userId: string, answer: number) => {
+        // 이미 제출했으면 무시
+        if (quizSubmissions.value[userId]) return
+
+        quizSubmissions.value[userId] = {
+            userId,
+            answer,
+            timestamp: Date.now()
+        }
+    }
+
+    // 결과 판정 (타이머 종료 시 호출)
+    const concludeQuiz = () => {
+        if (!currentQuiz.value) return
+
+        const correctAnswer = currentQuiz.value.answer
+        const submissions = Object.values(quizSubmissions.value)
+
+        // 1. 턴 주인 확인
+        const ownerSubmission = submissions.find(s => s.userId === currentTurnUserId.value)
+
+        let winnerId: string | null = null
+
+        // 턴 주인이 맞췄는지 확인
+        if (ownerSubmission && ownerSubmission.answer === correctAnswer) {
+            winnerId = ownerSubmission.userId
+        } else {
+            // 턴 주인 실패 -> 스틸 기회 (나머지 중 가장 빠른 정답자)
+            const otherCorrectSubmissions = submissions
+                .filter(s => s.userId !== currentTurnUserId.value && s.answer === correctAnswer)
+                .sort((a, b) => a.timestamp - b.timestamp) // 시간순 정렬
+
+            if (otherCorrectSubmissions.length > 0) {
+                winnerId = otherCorrectSubmissions[0].userId
+            }
+        }
+
+        if (winnerId) {
+            scores.value[winnerId] = (scores.value[winnerId] || 0) + 10
+            lastAnswerResult.value = true
+        } else {
+            lastAnswerResult.value = false
+        }
+
+        // 잠시 대기 후 다음으로
+        setTimeout(() => {
+            nextQuiz()
+        }, 2000)
+    }
+
+    // 다음 퀴즈 준비
     const nextQuiz = () => {
         stopTimer()
-        lastAnswerResult.value = null
-
         if (currentQuizIndex.value < quizzes.value.length - 1) {
             currentQuizIndex.value++
-            timeRemaining.value = currentQuiz.value?.timeLimit || 30
+            timeRemaining.value = 5
+            quizSubmissions.value = {}
+            lastAnswerResult.value = null
+
+            // TODO: Rotate Turn User
+            // currentTurnUserId.value = getNextUser(...)
+
             startTimer()
         } else {
             endGame()
         }
     }
 
-    // 답안 제출
-    const submitAnswer = (userId: string, answerIndex: number) => {
-        if (!currentQuiz.value) return
-
-        // 정답 확인
-        const isCorrect = currentQuiz.value.answer === answerIndex
-        lastAnswerResult.value = isCorrect
-
-        if (isCorrect) {
-            // 기본 점수
-            let points = 10
-
-            // 시간 보너스 (남은 시간에 비례)
-            const timeBonus = Math.floor(timeRemaining.value / 3)
-            points += timeBonus
-
-            // 점수 추가
-            scores.value[userId] = (scores.value[userId] || 0) + points
-        }
-
-        // 다음 퀴즈로 (약간의 딜레이 후)
-        setTimeout(() => {
-            nextQuiz()
-        }, 1200) // 피드백 볼 시간 약간 확보 (1초 -> 1.2초)
-    }
-
-    // 점수 업데이트
-    const updateScore = (userId: string, score: number) => {
-        scores.value[userId] = score
-    }
-
-    // 게임 종료
     const endGame = () => {
+        isGameEnded.value = true
         stopTimer()
-        gameStatus.value = 'finished'
     }
 
-    // 타이머 시작
     const startTimer = () => {
-        stopTimer() // 기존 타이머 정리
-
-        timerInterval = window.setInterval(() => {
+        stopTimer()
+        timerInterval.value = window.setInterval(() => {
             if (timeRemaining.value > 0) {
                 timeRemaining.value--
             } else {
-                // 시간 초과 시 자동으로 다음 퀴즈
-                nextQuiz()
+                // 시간 초과 -> 자동 결산
+                stopTimer()
+                concludeQuiz()
             }
         }, 1000)
     }
 
-    // 타이머 정지
     const stopTimer = () => {
-        if (timerInterval !== null) {
-            clearInterval(timerInterval)
-            timerInterval = null
+        if (timerInterval.value !== null) {
+            clearInterval(timerInterval.value)
+            timerInterval.value = null
         }
     }
 
-    // 초기화
-    const reset = () => {
+    const resetTimer = () => {
         stopTimer()
-        currentQuizIndex.value = 0
-        scores.value = {}
-        gameStatus.value = 'waiting'
-        timeRemaining.value = 30
-        lastAnswerResult.value = null
+        timeRemaining.value = 5
+        startTimer()
     }
+
     return {
-        // State
         quizzes,
-        currentQuizIndex,
         currentQuiz,
-        gameStatus,
-        timeRemaining,
+        currentQuizIndex,
+        isGameEnded,
         scores,
+        timeRemaining,
+        rankings,
+
+        // New State
+        currentTurnUserId,
+        quizSubmissions,
         lastAnswerResult,
 
-        // Getters
-        totalQuizCount,
-        rankings,
-        isGameFinished,
-
-        // Actions
         startGame,
-        nextQuiz,
         submitAnswer,
-        updateScore,
+        nextQuiz,
         endGame,
         startTimer,
         stopTimer,
-        reset
+        resetTimer,
+        concludeQuiz
     }
 })
