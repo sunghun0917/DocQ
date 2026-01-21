@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -54,6 +55,27 @@ public class GameDto {
     }
 
     @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class AvatarSelectRequest {
+        private String roomId;
+        private String userId;
+        private Integer avatarId;
+    }
+
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class AvatarUpdateResponse {
+        private String userId;
+        private Integer avatarId;
+    }
+
+
+    @Getter
     @Builder
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -68,6 +90,7 @@ public class GameDto {
         private Integer score;
         private Integer position;
         private String hasBuff; // null or Enum string
+        private Integer avatarId;
     }
 
     @Getter
@@ -77,4 +100,64 @@ public class GameDto {
         private String code;
         private String message;
     }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class QuizMessage {
+        private Long quizId;
+        private String question;
+        private List<String> options; // 4 options
+        private long timeLimit; // ms
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class SubmitAnswer {
+        private String roomId;
+        private String userId;
+        private Long quizId;
+        private String answer; // or index
+
+        // 서버에서 기록하는 제출 시간
+        private LocalDateTime submitTime;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class RoundResult {
+        private Long quizId;
+        private String correctAnswer;
+        private boolean isTurnUserCorrect;
+        private String winnerUserId;
+        private String rouletteType; // BUFF, MOVE, NONE
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class MoveInfo {
+        private String userId;
+        private int startPosition;
+        private int endPosition;
+        private List<MoveAction> moveProcess;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class MoveAction {
+        private String type; // ROULETTE, BUFF, TILE_EFFECT
+        private int value; // for ROULETTE
+        private String buffType; // for BUFF
+        private String effectType; // for TILE_EFFECT
+        private Integer before;
+        private Integer after;
+    }
+
 }
