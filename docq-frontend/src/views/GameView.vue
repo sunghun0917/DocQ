@@ -2,8 +2,7 @@
 import { ref, computed } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
-import { useRoomStore } from '@/stores/roomtStore'
-
+import {useRoomStore} from "@/stores/roomStore.ts";
 const roomStore = useRoomStore()
 
 // 방 정보 가져오기
@@ -21,7 +20,7 @@ const toggleReady = () => {
 }
 
 // 게임 종료 상태 (테스트용: true로 두면 들어가자마자 모달 뜸)
-const isGameEnded = ref(true); 
+const isGameEnded = ref(true);
 </script>
 
 <template>
@@ -32,9 +31,9 @@ const isGameEnded = ref(true);
     <!-- UI 오버레이: 3D 캔버스 위에 텍스트나 모달 등을 띄움 -->
     <div class="ui-overlay">
       <h1 class="text-white text-center pt-20 text-4xl font-bold drop-shadow-md">게임 진행 중...</h1>
-      
-      <button 
-        @click="isGameEnded = !isGameEnded" 
+
+      <button
+        @click="isGameEnded = !isGameEnded"
         class="absolute bottom-10 left-10 bg-white text-black p-4 rounded shadow-lg hover:bg-gray-100 pointer-events-auto"
       >
         결과창 토글 (테스트)

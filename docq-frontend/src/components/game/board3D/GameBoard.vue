@@ -227,7 +227,7 @@ const currentTurn = ref(0)            // 현재 턴 (0 ~ players.length-1)
 const gameStarted = ref(false)        // 게임 시작 여부
 
 // 플레이어별 색상 정의 (빨강, 초록, 파랑, 노랑)
-const PLAYER_COLORS = ['#ff4444', '#44ff44', '#4444ff', '#ffff44']
+const PLAYER_COLORS = ['#ff4444', '#44ff44', '#4444ff', '#ffff44'] as const
 
 /**
  * 맵을 생성하고 grid 데이터에 반영하는 함수
@@ -260,11 +260,13 @@ const startGame = (count: number) => {
 
   // 플레이어 초기화
   players.value = []
+
   for (let i = 0; i < count; i++) {
+    const color =  PLAYER_COLORS[i % PLAYER_COLORS.length] ?? '#ffffff'
     players.value.push({
       id: i,
       currentIndex: 0, // 모두 시작점에서 출발
-      color: PLAYER_COLORS[i % PLAYER_COLORS.length]
+      color
     })
   }
 

@@ -69,7 +69,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         try {
             // WebSocket 서비스 생성
             wsService.value = new WebSocketService({
-                url: import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws-docq',
+                url: import.meta.env.VITE_WS_URL || '/api/ws-docq',
 
                 onConnect: () => {
                     isConnected.value = true

@@ -4,6 +4,7 @@ pydantic
 openai
 python-dotenv
 pymupdf
-pytesseract
+pytesseractg
 pdf2image
 Pillow
+python-multipart

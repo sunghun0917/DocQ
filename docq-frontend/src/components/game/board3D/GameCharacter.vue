@@ -1,13 +1,12 @@
 <!-- src/components/game/board3d/Character.vue -->
 <script setup lang="ts">
-import { shallowRef, watch, onMounted } from 'vue'
+import { shallowRef, watch, onMounted ,computed} from 'vue'
 import { useFBX, useAnimations } from '@tresjs/cientos'
 import { useIsometric } from '@/composables/useIsometric'
 // @ts-ignore
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import * as THREE from 'three' // THREE 타입 사용을 위해 임포트
 import gsap from 'gsap'
-
 // [TS] Props 인터페이스 정의 (상세 주석 포함)
 // withDefaults를 사용하여 color의 기본값을 설정
 const props = withDefaults(defineProps<{
@@ -35,15 +34,20 @@ const idleClips = idleState.animations || []
 /* ===== 씬 복제 (Independent Instances) ===== */
 // 원본 씬을 그대로 쓰면 모든 플레이어가 똑같이 움직이므로, clone()으로 복제해서 사용
 // [TS] 타입 단언(as THREE.Group)을 사용하여 타입 에러 방지
-let scene: THREE.Group | null = null
+const scene = shallowRef<THREE.Object3D | null>(null)
+
 if (idleSceneRaw) {
-  scene = (typeof idleSceneRaw.clone === 'function' ? clone(idleSceneRaw) : idleSceneRaw) as THREE.Group
+  scene.value = (
+    typeof idleSceneRaw.clone === 'function'
+      ? clone(idleSceneRaw)
+      : idleSceneRaw
+  ) as THREE.Object3D
 }
 
 /* ===== 색상 적용 (Material Clone) ===== */
 // 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
-if (scene) {
-  scene.traverse((child: any) => {
+if (scene.value) {
+  scene.value.traverse((child: any) => {
     // Mesh인 경우에만 재질 변경
     if (child.isMesh && child.material) {
       const mesh = child as THREE.Mesh
@@ -65,28 +69,30 @@ const idleClip = idleClips[0] || null
 const allClips = shallowRef(idleClip ? [idleClip] : [])
 
 // 로드 실패 시 에러 로그
-if (!scene) {
+if (!scene.value) {
   console.error('Character scene is null; check FBX load.')
 }
 
 /* ===== 초기 위치 설정 ===== */
-if (scene) {
+if (scene.value) {
   // 시작점 3D 좌표 계산
   const startPos = get3DPos(props.x, props.y)
 
   // Y축(높이)에 0.25를 더해 타일 위에 올라가게 함
-  scene.position.set(startPos[0], startPos[1] + 0.25, startPos[2])
+  scene.value.position.set(startPos[0], startPos[1] + 0.25, startPos[2])
 
   // 모델 크기 축소 (FBX 원본 크기에 맞춰 조절)
-  scene.scale.set(0.01, 0.01, 0.01)
+  scene.value.scale.set(0.01, 0.01, 0.01)
 
   // 기본 회전값 (모델이 뒷면을 보고 있다면 180도 회전)
-  scene.rotation.y = Math.PI
+  scene.value.rotation.y = Math.PI
 }
 
 /* ===== 애니메이션 액션 설정 ===== */
 // scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
-const { actions } = useAnimations(allClips, scene || new THREE.Object3D())
+const animationTarget = computed(() => scene.value)
+
+const { actions } = useAnimations(allClips, animationTarget)
 
 // 상수로 관리하는 설정값들
 const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
@@ -98,24 +104,27 @@ const Y_OFFSET = 0.25       // 높이 보정값
  * lookAt 메소드를 사용해 3D 공간 상의 특정 좌표를 응시
  */
 const updateLookDirection = () => {
-  if (!scene || !props.lookTarget) return
+  if (!scene.value || !props.lookTarget) return
   const target3D: [number, number, number] = get3DPos(props.lookTarget.x, props.lookTarget.y)
   // 캐릭터의 발밑이 아닌 눈높이를 바라보게 하기 위해 Y_OFFSET 더함
-  scene.lookAt(target3D[0], target3D[1] + Y_OFFSET, target3D[2])
+  scene.value.lookAt(target3D[0], target3D[1] + Y_OFFSET, target3D[2])
 }
 
 /*
  * 라이프사이클: 컴포넌트 마운트 시 애니메이션 시작
  */
 onMounted(() => {
-  if (idleClip && actions[idleClip.name]) {
-    const action = actions[idleClip.name]
-    // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
-    action.setEffectiveTimeScale(2.0)
-    // 페이드인과 함께 재생
-    action.reset().fadeIn(FADE_TIME).play()
+  if (!idleClip) return
+
+  const action = actions[idleClip.name]
+  if (!action) {
+    console.warn(`Animation action not found: ${idleClip.name}`)
+    return
   }
-  // 초기 시선 처리
+
+  action.setEffectiveTimeScale(2.0)
+  action.reset().fadeIn(FADE_TIME).play()
+
   updateLookDirection()
 })
 
@@ -125,13 +134,13 @@ onMounted(() => {
 watch(
   () => [props.x, props.y] as [number, number],
   ([newX, newY]: [number, number]) => {
-    if (!scene) return
+    if (!scene.value) return
 
     // 목표 지점 3D 좌표
     const target: [number, number, number] = get3DPos(newX, newY)
 
     // GSAP를 이용한 부드러운 트윈(Tween) 이동
-    gsap.to(scene.position, {
+    gsap.to(scene.value.position, {
       x: target[0],
       z: target[2],
       y: target[1] + Y_OFFSET,
@@ -141,7 +150,8 @@ watch(
       // 이동 시작 시: 목적지 바라보기
       onStart: () => {
         const dest3D: [number, number, number] = get3DPos(newX, newY)
-        scene.lookAt(dest3D[0], dest3D[1] + Y_OFFSET, dest3D[2])
+        if (!scene.value) return
+        scene.value.lookAt(dest3D[0], dest3D[1] + Y_OFFSET, dest3D[2])
       },
 
       // 이동 완료 시: 다음 타겟(Target+1) 바라보기
