@@ -26,18 +26,14 @@ onMounted(() => {
   }
 })
 
-const confirmNickname = async () => {
+const confirmNickname = () => {
   if (nickname.value.trim().length < 2) {
     alert("닉네임을 2자 이상 입력해주세요.");
     return;
   }
-
-  const result = await userStore.loginWithApi(nickname.value.trim())
-  if (!result.success) {
-    alert('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.')
-    return
-  }
-
+  
+  // 게스트로 로그인
+  userStore.loginAsGuest(nickname.value.trim())
   isNicknameSet.value = true;
 };
 

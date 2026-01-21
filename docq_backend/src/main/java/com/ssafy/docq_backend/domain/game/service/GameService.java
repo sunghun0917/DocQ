@@ -11,8 +11,12 @@ import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ssafy.docq_backend.domain.game.dto.QuizDto;
+import com.ssafy.docq_backend.domain.game.entity.Quiz;
+import com.ssafy.docq_backend.global.client.AiClient;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -29,6 +33,57 @@ public class GameService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final AiClient aiClient;
+
+    public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
+        log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
+
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        // AI Client 호출
+        List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
+        log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
+
+        // Quiz 엔티티 로 변환 및 저장
+        List<Quiz> quizzes = quizResponses.stream()
+                .map(dto -> Quiz.builder()
+                        .quizId(UUID.randomUUID().toString())
+                        .question(dto.getQuestion())
+                        .options(dto.getOptions())
+                        .answerIndex(dto.getAnswerIndex())
+                        .answerText(dto.getAnswerText())
+                        .build())
+                .collect(Collectors.toList());
+
+        room.setQuizList(quizzes);
+
+        // 완료 알림 브로드캐스트
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+    }
+
+    public List<QuizDto.Response> getQuizzes(String roomId) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        if (room.getQuizList() == null) {
+            return Collections.emptyList();
+        }
+
+        return room.getQuizList().stream()
+                .map(q -> QuizDto.Response.builder()
+                        .quizId(q.getQuizId())
+                        .question(q.getQuestion())
+                        .options(q.getOptions())
+                        .answerIndex(q.getAnswerIndex())
+                        .answerText(q.getAnswerText())
+                        .build())
+                .collect(Collectors.toList());
+    }
     // Simple Scheduler for Quiz Timer
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 

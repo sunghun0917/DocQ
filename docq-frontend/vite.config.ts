@@ -17,8 +17,4 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
-  define: {
-    // SockJS를 위한 global 객체 정의
-    global: 'globalThis',
-  },
 })

@@ -4,14 +4,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.ssafy.docq_backend.domain.game.entity.PlayerState;
+import com.ssafy.docq_backend.domain.game.entity.Quiz;
 
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
-import java.time.LocalDateTime;
-
-import com.ssafy.docq_backend.domain.game.dto.GameDto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -43,10 +41,6 @@ public class Room {
     @Builder.Default
     private Set<String> readyPlayers = ConcurrentHashMap.newKeySet();
 
-    // UserId -> AvatarId
-    @Builder.Default
-    private Map<String, Integer> playerAvatars = new ConcurrentHashMap<>();
-
     @Builder.Default
     private List<String> turnOrder = new ArrayList<>();
 
@@ -59,15 +53,13 @@ public class Room {
 
     private String currentTurnUserId;
 
-    // --- Quiz State ---
-    private Long currentQuizId;
-    @Builder.Default
-    private Map<String, GameDto.SubmitAnswer> quizAnswers = new ConcurrentHashMap<>();
-    private LocalDateTime quizStartTime;
-
     // userId -> PlayerState
     @Builder.Default
     private Map<String, PlayerState> playerStates = new ConcurrentHashMap<>();
+
+    // 퀴즈 목록
+    @Builder.Default
+    private List<Quiz> quizList = new ArrayList<>();
 
     public void addPlayer(String userId) {
         players.add(userId);

@@ -21,7 +21,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useRoomStore } from './roomStore'
+import { useRoomStore } from './roomtStore'
 import { mockQuizzes } from '@/mocks/quizzes'
 
 // 게임 진행 상태 및 퀴즈 관리
@@ -40,9 +40,6 @@ export const useGameStore = defineStore('game', () => {
     // 점수
     const scores = ref<Record<string, number>>({})
 
-    // 현재 퀴즈 정답 여부 (UI 피드백용)
-    const lastAnswerResult = ref<boolean | null>(null)
-
     // Getters
 
     // 전체 퀴즈 개수
@@ -55,7 +52,7 @@ export const useGameStore = defineStore('game', () => {
         const userScores = Object.entries(scores.value).map(([userId, score]) => ({
             userId,
             score: score as number,
-            nickname: roomStore.users.find((u: any) => u.id === userId)?.nickname || 'Unknown'
+            username: roomStore.users.find((u: any) => u.id === userId)?.username || 'Unknown'
         }));
         return userScores.sort((a, b) => b.score - a.score);
     })
@@ -79,7 +76,6 @@ export const useGameStore = defineStore('game', () => {
         currentQuizIndex.value = 0
         gameStatus.value = 'playing'
         timeRemaining.value = currentQuiz.value?.timeLimit || 30
-        lastAnswerResult.value = null
 
         // 타이머 시작
         startTimer()
@@ -88,7 +84,6 @@ export const useGameStore = defineStore('game', () => {
     // 다음 퀴즈
     const nextQuiz = () => {
         stopTimer()
-        lastAnswerResult.value = null
 
         if (currentQuizIndex.value < quizzes.value.length - 1) {
             currentQuizIndex.value++
@@ -105,7 +100,6 @@ export const useGameStore = defineStore('game', () => {
 
         // 정답 확인
         const isCorrect = currentQuiz.value.answer === answerIndex
-        lastAnswerResult.value = isCorrect
 
         if (isCorrect) {
             // 기본 점수
@@ -122,7 +116,7 @@ export const useGameStore = defineStore('game', () => {
         // 다음 퀴즈로 (약간의 딜레이 후)
         setTimeout(() => {
             nextQuiz()
-        }, 1200) // 피드백 볼 시간 약간 확보 (1초 -> 1.2초)
+        }, 1000)
     }
 
     // 점수 업데이트
@@ -165,7 +159,6 @@ export const useGameStore = defineStore('game', () => {
         scores.value = {}
         gameStatus.value = 'waiting'
         timeRemaining.value = 30
-        lastAnswerResult.value = null
     }
     return {
         // State
@@ -175,7 +168,6 @@ export const useGameStore = defineStore('game', () => {
         gameStatus,
         timeRemaining,
         scores,
-        lastAnswerResult,
 
         // Getters
         totalQuizCount,
