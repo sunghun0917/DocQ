@@ -8,10 +8,11 @@ const roomStore = useRoomStore();
 
 const isSpinning = ref(false);
 const rotation = ref(0);
+const isVisible = ref(false); // [NEW] 내부 표시 관리
 const labelByIndex = [1, 2, 3, 4, 5, 6];
 
-// 룰렛 표시 조건: gameStore.rouletteTargetId가 있을 때
-const show = computed(() => !!gameStore.rouletteTargetId);
+// 컴포넌트 마운트 여부 (Store 상태 의존)
+const shouldMount = computed(() => !!gameStore.rouletteTargetId);
 const targetUserId = computed(() => gameStore.rouletteTargetId);
 const targetUser = computed(() => roomStore.users.find(u => u.id === targetUserId.value));
 
@@ -56,17 +57,31 @@ const spinRoulette = () => {
 
   rotation.value += totalSpins + extraToZero + targetRotation;
 
-  // 회전 종료 후 결과 처리
+  // 회전 종료 후 로직
+  // 1. 회전 시간(3.2s) 대기
+  // 2. 결과 확인 시간(1s) 대기
+  // 3. 팝업 닫기
+  // 4. GameBoard에 이동 신호 전송
   setTimeout(() => {
     isSpinning.value = false;
-    // Store에 결과값 전달 -> GameBoard가 이를 감지하여 이동 시작
-    gameStore.setRouletteResult(result);
+    
+    // 결과 보여주기 위한 짧은 대기
+    setTimeout(() => {
+        isVisible.value = false; // 팝업 닫기 (이러면 보드판이 보임)
+        
+        // 팝업이 완전히 사라진 후 이동 신호 전송 (Fade out 고려 0.3s)
+        setTimeout(() => {
+             gameStore.setRouletteResult(result);
+        }, 300);
+    }, 1500); // 1.5초 동안 결과 보여줌
+
   }, 3200);
 };
 
-// show가 true가 되면 자동 스핀 (약간의 딜레이 후)
-watch(show, (newVal) => {
+// TargetId가 생기면 팝업을 열고 스핀 시작
+watch(() => gameStore.rouletteTargetId, (newVal) => {
   if (newVal) {
+    isVisible.value = true;
     setTimeout(() => {
         spinRoulette();
     }, 500);
@@ -76,7 +91,7 @@ watch(show, (newVal) => {
 </script>
 
 <template>
-  <div v-if="show" class="roulette-overlay">
+  <div v-if="shouldMount && isVisible" class="roulette-overlay">
     <div class="roulette-modal">
         <div class="modal-header">
             <h3>{{ targetUser?.username || 'Unknown' }}님의 결과 확인</h3>

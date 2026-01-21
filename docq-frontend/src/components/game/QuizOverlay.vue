@@ -17,6 +17,8 @@ const mySubmission = computed(() =>
 
 const hasSubmitted = computed(() => !!mySubmission.value)
 
+const isRoulettePhase = computed(() => !!gameStore.rouletteTargetId)
+
 // 타이머 (Progress Bar Width%)
 const timePercentage = computed(() => (gameStore.timeRemaining / 5) * 100)
 
@@ -28,7 +30,7 @@ const handleAnswer = (index: number) => {
 </script>
 
 <template>
-  <div v-if="quiz" class="quiz-overlay-container">
+  <div v-if="quiz && !gameStore.rouletteTargetId" class="quiz-overlay-container">
     
     <!-- 타이머 + 역할 메시지 -->
     <div class="status-header">
@@ -51,7 +53,11 @@ const handleAnswer = (index: number) => {
 
     <!-- 문제 카드 -->
     <div class="question-card">
+      <div class="header-badge">
+         <span class="round-badge">Round {{ gameStore.currentQuizIndex + 1 }}</span>
+      </div>
       <h2 class="question-text">{{ quiz.question }}</h2>
+      <div class="timer-text-display">남은 시간: {{ gameStore.timeRemaining.toFixed(1) }}s</div>
     </div>
 
     <!-- 보기 버튼 영역 -->

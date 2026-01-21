@@ -44,16 +44,21 @@
         플레이어 캐릭터 렌더링:
         Suspense 컴포넌트는 비동기 모델 로딩(FBX)을 기다려줌
       -->
-      <Suspense>
+      <Suspense v-for="(p, idx) in players" :key="p.id">
         <GameCharacter
-          v-for="(p, idx) in players"
-          :key="p.id"
           :x="playerCoords(idx).x"
           :y="playerCoords(idx).y"
           :isMoving="isMoving && currentTurn === idx"
           :lookTarget="playerNextTarget(idx)"
           :color="p.color"
         />
+        <template #fallback>
+            <!-- 로딩 중일 때 보일 노란 큐브 -->
+             <TresMesh :position="[playerCoords(idx).x, 0.5, playerCoords(idx).y]" :scale="[0.3, 0.3, 0.3]">
+                <TresBoxGeometry />
+                <TresMeshStandardMaterial color="yellow" />
+             </TresMesh>
+        </template>
       </Suspense>
     </TresCanvas>
 
@@ -62,41 +67,127 @@
       <h2>Current Turn: Player {{ currentTurn + 1 }}</h2>
     </div>
 
-    <!-- UI: 게임 시작 전 인원수 선택 화면 -->
-    <div v-if="!gameStarted" class="start-screen">
-      <h1>Select Player Count</h1>
-      <div class="buttons">
-        <!-- 인원수 버튼 (2~4명) -->
-        <button @click="startGame(2)">2 Players</button>
-        <button @click="startGame(3)">3 Players</button>
-        <button @click="startGame(4)">4 Players</button>
-      </div>
-    </div>
-
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue' // watch 추가
+import { ref, computed, watch, onMounted } from 'vue' // onMounted 추가
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls } from '@tresjs/cientos'
-import { useGameStore } from '@/stores/gameStore' // [NEW]
-import { useRoomStore } from '@/stores/roomtStore' // [NEW]
+import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomtStore'
 
 // [컴포넌트 Import]
 import Tile3D from '@/components/game/board3D/Tile3D.vue'
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
-import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
+// import GameRoulette from '@/components/game/board3D/GameRoulette.vue' // Removed as it's likely an overlay now
 
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
 const myUserId = computed(() => roomStore.myUser?.id || '')
 
-// ... (interfaces)
+// 좌표 인터페이스
+interface PathCoord {
+  x: number
+  y: number
+}
+
+// 플레이어 인터페이스
+interface Player {
+  id: string
+  currentIndex: number
+  color: string
+}
 
 /* ========== 게임 설정 상수 ========== */
-// ... (grid, path logic)
+const GRID_SIZE = 10
+const PATH_LENGTH = 20
+
+/* ========== 상태 변수 ========== */
+// 10x10 격자 데이터 생성
+const grid = ref(
+  Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => ({
+    x: i % GRID_SIZE,
+    y: Math.floor(i / GRID_SIZE),
+    type: 0 // 0: empty, 1: path, 2: start/end
+  }))
+)
+
+// 생성된 길(Path)의 좌표 배열
+const pathCoords = ref<PathCoord[]>([])
+
+/**
+ * 격자 타입 초기화 (모두 0으로)
+ */
+function resetGridTypes() {
+  grid.value.forEach((t) => (t.type = 0))
+}
+
+/**
+ * 랜덤 경로 생성 알고리즘 (DFS/Random Walk)
+ */
+function generateRandomPath(size: number, length: number): PathCoord[] | null {
+  const startX = 0
+  const startY = 0
+  const path: PathCoord[] = [{ x: startX, y: startY }]
+  const visited = new Set([`0,0`])
+
+  let currentX = startX
+  let currentY = startY
+
+  // 4방향 (상, 하, 좌, 우)
+  const directions = [
+    { dx: 0, dy: 1 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: -1, dy: 0 }
+  ]
+
+  for (let i = 0; i < length; i++) {
+    // 이동 가능한 후보 찾기
+    const candidates = directions
+      .map(d => ({ x: currentX + d.dx, y: currentY + d.dy }))
+      .filter(pos => 
+        pos.x >= 0 && pos.x < size &&
+        pos.y >= 0 && pos.y < size &&
+        !visited.has(`${pos.x},${pos.y}`)
+      )
+
+    if (candidates.length === 0) return null // 막다름 -> 실패
+
+    // 랜덤 선택
+    const next = candidates[Math.floor(Math.random() * candidates.length)]!
+    path.push(next)
+    visited.add(`${next.x},${next.y}`)
+    currentX = next.x
+    currentY = next.y
+  }
+
+  return path
+}
+
+/* ========== 플레이어 좌표 헬퍼 ========== */
+// 플레이어의 현재 grid index를 3D 좌표로 변환
+const playerCoords = (index: number) => {
+  const p = players.value[index]
+  if (!p || !pathCoords.value.length) return { x: 0, y: 0 }
+  
+  const coord = pathCoords.value[p.currentIndex] ?? pathCoords.value[0]
+  if (!coord) return { x: 0, y: 0 } // Safety check
+
+  // Tile 크기가 1x1이라고 가정, 높이 등을 고려해 조정 가능
+  return { x: coord.x, y: coord.y }
+}
+
+// 플레이어가 바라볼 다음 좌표 (LookAt)
+const playerNextTarget = (index: number): { x: number, y: number } => {
+  const p = players.value[index]
+  if (!p || !pathCoords.value.length) return { x: 0, y: 0 }
+
+  const nextIndex = Math.min(p.currentIndex + 1, pathCoords.value.length - 1)
+  const coord = pathCoords.value[nextIndex]
+  return { x: coord.x, y: coord.y }
+}
 
 // ...
 
@@ -106,7 +197,56 @@ const currentTurn = ref(0)            // 현재 턴 (0 ~ players.length-1)
 // const gameStarted = ref(false)     // (기존)
 const gameStarted = computed(() => !gameStore.isGameEnded) // Store 연동
 
-// ... (startGame logic remains for initialization but improved)
+// 플레이어별 색상 정의 (빨강, 초록, 파랑, 노랑)
+const PLAYER_COLORS = ['#ff4444', '#44ff44', '#4444ff', '#ffff44']
+
+/**
+ * 맵을 생성하고 grid 데이터에 반영하는 함수
+ */
+function buildPathOnGrid() {
+  resetGridTypes() // Assuming this function exists elsewhere
+  let path: PathCoord[] | null = null
+
+  // 유효한 경로가 나올 때까지 반복 시도
+  while (!path) {
+    path = generateRandomPath(GRID_SIZE, PATH_LENGTH) // Assuming these exist elsewhere
+  }
+  pathCoords.value = path // Assuming pathCoords is defined
+
+  // 생성된 경로를 화면(grid)에 표시
+  // 시작점(index 0)과 끝점(마지막)은 type 2 (노란색), 나머지는 type 1 (흰색)
+  path.forEach((p, index) => {
+    const tile = grid.value.find((t) => t.x === p.x && t.y === p.y) // Assuming grid is defined
+    if (!tile) return
+    tile.type = (index === 0 || index === (path?.length ?? 0) - 1) ? 2 : 1
+  })
+}
+
+/**
+ * 게임 초기화 (자동 시작)
+ */
+const initializeGame = () => {
+  console.log('InitializeGame called')
+  buildPathOnGrid() // 맵 생성
+
+  // 플레이어 초기화 (RoomStore 기반)
+  const users = roomStore.users.length > 0 ? roomStore.users : [{id: '1'}, {id: '2'}]
+  console.log('Room Users:', roomStore.users)
+  console.log('Using Users:', users)
+  
+  players.value = users.map((u, i) => ({
+    id: u.id, 
+    currentIndex: 0,
+    color: PLAYER_COLORS[i % PLAYER_COLORS.length]
+  })) as any // Interface mismatch fix later
+  
+  console.log('Players initialized:', players.value)
+  currentTurn.value = 0
+}
+
+onMounted(() => {
+    initializeGame()
+})
 
 // ...
 
@@ -205,48 +345,5 @@ const jumpStep = (player: Player) =>
   overflow: hidden;
 }
 
-/* 시작 화면(인원 선택) 오버레이 */
-.start-screen {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.8);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  color: white;
-  z-index: 100;
-}
 
-/* 현재 턴 표시 UI */
-.turn-info {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  color: white;
-  z-index: 10;
-}
-
-.buttons {
-  display: flex;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-/* 버튼 스타일 */
-button {
-  padding: 15px 30px;
-  font-size: 1.2rem;
-  background: white;
-  color: black;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-button:hover {
-  background: #ddd;
-}
 </style>

@@ -3,7 +3,8 @@ import { ref, computed, onMounted } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
 import QuizOverlay from '@/components/game/QuizOverlay.vue';
-import AnswerFeedback from '@/components/game/AnswerFeedback.vue'; // [NEW]
+import AnswerFeedback from '@/components/game/AnswerFeedback.vue';
+import RouletteOverlay from '@/components/game/RouletteOverlay.vue'; // [NEW]
 import { useRoomStore } from '@/stores/roomtStore'
 import { useGameStore } from '@/stores/gameStore'
 
