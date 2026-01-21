@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import ResultModal from '@/components/game/ResultModal.vue'; // 방금 만든 모달 임포트
 
-import { useRoomStore } from '@/stores/roomtStore'
+import { useRoomStore } from '@/stores/roomStore'
 const roomStore = useRoomStore()
 
 // 방 정보 가져오기

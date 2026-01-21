@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { WebSocketService } from '@/services/websocket'
 import { useUserStore } from './userStore'
-import { useRoomStore } from './roomtStore'
+import { useRoomStore } from './roomStore'
 
 // 백엔드 DTO 타입 정의
 export interface GameStateResponse {
@@ -65,6 +65,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
                 onDisconnect: () => {
                     isConnected.value = false
+                    isConnecting.value = false
                     console.log('🔌 WebSocket Store: Disconnected')
                 },
 
@@ -105,20 +106,30 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
 
         const roomStore = useRoomStore()
+        const userStore = useUserStore()
 
         wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: GameStateResponse) => {
             console.log('📨 Game State Update:', data)
 
-            // Pinia 스토어 업데이트
-            // 플레이어 목록 동기화
-            roomStore.users = data.players.map(p => ({
-                id: p.userId,
-                username: p.nickname,
-                avatar: '🎮', // 기본 아바타
-                isReady: p.isReady,
-                isHost: p.isHost,
-                isMe: p.userId === useUserStore().userId
-            }))
+            const nextUsers = data.players.map(player => {
+                const existingUser = roomStore.users.find(u => u.id === player.userId)
+                const isMe = player.userId === userStore.userId
+
+                return {
+                    id: player.userId,
+                    nickname: player.nickname,
+                    avatar: existingUser?.avatar || (isMe ? userStore.avatar : '🎮'),
+                    isReady: player.isReady,
+                    isHost: player.isHost,
+                    isMe
+                }
+            })
+
+            roomStore.setUsers(nextUsers)
+            roomStore.setRoomInfo({
+                status: data.state,
+                currentCount: nextUsers.length
+            })
         })
     }
 
@@ -174,6 +185,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 게임 시작 (Host Only)
+     */
+    const startGame = (roomId: string, userId: string) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/start', {
+            roomId,
+            userId
+        })
+    }
+
+    /**
      * 특정 경로 구독 해제
      */
     const unsubscribe = (destination: string) => {
@@ -206,6 +232,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         subscribeErrors,
         joinGame,
         setReady,
+        startGame,
         unsubscribe,
         cleanup
     }

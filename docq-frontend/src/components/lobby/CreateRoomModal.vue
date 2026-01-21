@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/userStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { useWebSocketStore } from '@/stores/websocketStore'
+import { createRoom as createRoomApi, getErrorMessage } from '@/services/api'
 
 const router = useRouter();
 const emit = defineEmits(['close']);
+const userStore = useUserStore()
+const roomStore = useRoomStore()
+const wsStore = useWebSocketStore()
+const isSubmitting = ref(false)
 
 // 방 정보 상태
 const roomName = ref('');
@@ -51,15 +59,53 @@ const isReadyToCreate = computed(() => {
   return roomName.value.trim().length > 0 && uploadStatus.value === 'done';
 });
 
-const createRoom = () => {
-  if (!isReadyToCreate.value) return;
-  
-  // 실제로는 여기서 file과 roomInfo를 서버로 전송
-  const newRoomId = 'R' + Math.floor(Math.random() * 1000);
-  // router.push: Vue router로 페이지 이동
-  router.push(`/waiting/${newRoomId}`);
-  // modal 닫기
-  emit('close');
+const createRoom = async () => {
+  if (!isReadyToCreate.value || isSubmitting.value) return;
+
+  if (!userStore.userId) {
+    alert('닉네임을 먼저 설정해주세요.')
+    return
+  }
+
+  if (isSecret.value && !password.value.trim()) {
+    alert('비밀방 비밀번호를 입력해주세요.')
+    return
+  }
+
+  isSubmitting.value = true
+
+  try {
+    const room = await createRoomApi({
+      userId: userStore.userId,
+      capacity: maxUsers.value,
+      title: roomName.value.trim(),
+      isPrivate: isSecret.value,
+      password: isSecret.value ? password.value.trim() : undefined
+    })
+
+    roomStore.createRoom({
+      roomId: room.roomId,
+      inviteCode: room.inviteCode,
+      hostId: room.hostId,
+      title: roomName.value.trim(),
+      capacity: maxUsers.value,
+      isPrivate: room.isPrivate,
+      status: 'WAITING',
+      currentCount: 0
+    })
+
+    await wsStore.connect()
+    wsStore.subscribeErrors(userStore.userId)
+    wsStore.subscribeGameState(room.roomId)
+    wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
+
+    router.push(`/waiting/${room.roomId}`);
+    emit('close');
+  } catch (error) {
+    alert(getErrorMessage(error))
+  } finally {
+    isSubmitting.value = false
+  }
 };
 </script>
 
