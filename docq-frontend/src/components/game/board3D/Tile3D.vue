@@ -1,20 +1,21 @@
-<!-- src/components/Tile3D.vue -->
+<!-- src/components/game/board3d/Tile3D.vue -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useIsometric } from '@/composables/useIsometric.js'
+import { useIsometric } from '@/composables/useIsometric'
 import { BoxGeometry, EdgesGeometry } from 'three'
 
-const props = defineProps({
-  x: { type: Number, required: true },    // 타일의 그리드 X 좌표
-  y: { type: Number, required: true },    // 타일의 그리드 Y 좌표
-  type: { type: Number, required: true }, // 타일 타입 (0: 빈 공간, 1: 길, 2: 시작/도착점)
-})
+// [TS] Props 타입 정의
+const props = defineProps<{
+  x: number     // 타일의 그리드 X 좌표
+  y: number     // 타일의 그리드 Y 좌표
+  type: number  // 타일 타입 (0: 빈 공간, 1: 길, 2: 시작/도착점)
+}>()
 
 // 3D 좌표 변환 훅 및 타일 크기 상수 가져오기
 const { get3DPos, TILE_SIZE } = useIsometric()
 
-// 타입별 타일 색상 매핑
-const COLORS = {
+// [TS] 타입별 타일 색상 매핑 (텍스처 대신 색상 사용)
+const COLORS: Record<number, string> = {
     0: '#888',     // 회색 (빈 공간)
     1: '#fff',     // 흰색 (경로)
     2: '#ffd54f',  // 노란색 (특수 지점)
@@ -44,7 +45,7 @@ const edgesGeo = new EdgesGeometry(boxGeo) // 모서리 선 따기
       v-if="type !== 0"
       :args="[TILE_SIZE * 0.95, TILE_SIZE * 0.95, 0.5]"
     />
-    <!-- type이 0이면(배경이면) 얇은 평면 생성 (혹은 아예 렌더링 안 할 수도 있음) -->
+    <!-- type이 0이면(배경이면) 얇은 평면 생성 -->
     <TresPlaneGeometry
       v-else
       :args="[TILE_SIZE * 0.95, TILE_SIZE * 0.95]"
