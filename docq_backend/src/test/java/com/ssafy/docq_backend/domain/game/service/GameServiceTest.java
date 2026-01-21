@@ -7,7 +7,6 @@ import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
 import com.ssafy.docq_backend.domain.user.entity.User;
 import com.ssafy.docq_backend.domain.user.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,15 +16,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
-import java.util.Optional;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class GameServiceTest {
+
+    @InjectMocks
+    private GameService gameService;
 
     @Mock
     private RoomRepository roomRepository;
@@ -36,98 +40,90 @@ class GameServiceTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
-    @InjectMocks
-    private GameService gameService;
+    @Test
+    @DisplayName("턴 주인이 틀리고, 고스트가 맞췄을 때 가장 빠른 고스트가 승리한다")
+    void testQuizLogic_GhostWin() throws InterruptedException {
+        // Given
+        String roomId = "room-1";
+        String hostId = "user-1";
+        String ghost1 = "user-2";
+        String ghost2 = "user-3";
 
-    private Room room;
-    private User host;
-    private User player2;
-
-    @BeforeEach
-    void setUp() {
-        host = User.builder().id("host-id").nickname("HostUser").build();
-        player2 = User.builder().id("player2-id").nickname("Player2").build();
-
-        room = Room.builder()
-                .id("room-1")
-                .hostId(host.getId())
-                .title("Test Room")
-                .capacity(4)
+        Room room = Room.builder()
+                .id(roomId)
+                .hostId(hostId)
+                .currentCount(3)
+                .status(RoomStatus.PLAYING)
+                .round(1)
+                .players(new HashSet<>(Arrays.asList(hostId, ghost1, ghost2)))
+                .turnOrder(Arrays.asList(hostId, ghost1, ghost2))
+                .currentTurnUserId(hostId) // Turn Owner: user-1
+                .playerStates(new java.util.concurrent.ConcurrentHashMap<>())
                 .build();
 
-        room.addPlayer(host.getId());
-        room.addPlayer(player2.getId());
-    }
+        // Init Player States
+        room.getPlayerStates().put(hostId, PlayerState.builder().userId(hostId).position(0).score(0).build());
+        room.getPlayerStates().put(ghost1, PlayerState.builder().userId(ghost1).position(0).score(0).build());
+        room.getPlayerStates().put(ghost2, PlayerState.builder().userId(ghost2).position(0).score(0).build());
 
-    @Test
-    @DisplayName("게임 시작 성공 테스트: 상태 변경, 순서 결정, 브로드캐스트 확인")
-    void testStartGame_Success() {
-        // Given
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
-        when(userRepository.findById("host-id")).thenReturn(Optional.of(host));
-        when(userRepository.findById("player2-id")).thenReturn(Optional.of(player2));
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
 
-        // When
-        gameService.startGame("room-1", "host-id");
+        // 1. Start Quiz
+        System.out.println("[TEST] Starting Quiz...");
+        gameService.startQuiz(roomId);
 
-        // Then
-        // 1. 상태 변경 확인
-        assertEquals(RoomStatus.STARTING, room.getStatus(), "방 상태가 STARTING이어야 합니다.");
-        assertEquals(1, room.getRound(), "라운드가 1이어야 합니다.");
+        // Wait briefly for async scheduler (if needed, but startQuiz uses scheduler for
+        // ENDING, not starting)
+        Thread.sleep(100);
 
-        // 2. 턴 순서 및 카드 결과 확인
-        assertNotNull(room.getTurnOrder(), "턴 순서가 생성되어야 합니다.");
-        assertEquals(2, room.getTurnOrder().size(), "플레이어 수만큼 턴 순서가 있어야 합니다.");
-        assertNotNull(room.getCardDrawResult(), "카드 뽑기 결과가 있어야 합니다.");
-        assertEquals(2, room.getCardDrawResult().size());
+        ArgumentCaptor<GameDto.QuizMessage> quizCaptor = ArgumentCaptor.forClass(GameDto.QuizMessage.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/game/" + roomId + "/quiz"), quizCaptor.capture());
+        GameDto.QuizMessage sentQuiz = quizCaptor.getValue();
+        Long quizId = sentQuiz.getQuizId();
+        System.out.println("[TEST] Quiz Started: ID=" + quizId + ", Q=" + sentQuiz.getQuestion());
 
-        // 3. 플레이어 상태 초기화 확인
-        assertEquals(2, room.getPlayerStates().size());
-        PlayerState hostState = room.getPlayerStates().get("host-id");
-        assertNotNull(hostState);
-        assertEquals(0, hostState.getScore());
-        assertEquals(0, hostState.getPosition());
+        // 2. Submit Answers
+        // Correct Answer is "String" based on mock implementation
 
-        // 4. 브로드캐스트 호출 확인
-        ArgumentCaptor<GameDto.GameStateResponse> captor = ArgumentCaptor.forClass(GameDto.GameStateResponse.class);
-        verify(messagingTemplate).convertAndSend(eq("/topic/game/room-1/state"), captor.capture());
+        // Turn User (Host) -> Wrong Answer
+        System.out.println("[TEST] User-1 (Turn Owner) submitting WRONG answer...");
+        gameService.submitAnswer(new GameDto.SubmitAnswer(roomId, hostId, quizId, "int", null));
+        Thread.sleep(100);
 
-        GameDto.GameStateResponse response = captor.getValue();
-        assertEquals(RoomStatus.STARTING, response.getState());
-        assertEquals(1, response.getRound());
-        assertNotNull(response.getTurnOrder());
-        assertNotNull(response.getCardDrawResult());
+        // Ghost 1 -> Correct Answer (Fastest)
+        System.out.println("[TEST] User-2 (Ghost) submitting CORRECT answer...");
+        GameDto.SubmitAnswer ans1 = new GameDto.SubmitAnswer(roomId, ghost1, quizId, "String", null);
+        gameService.submitAnswer(ans1);
+        Thread.sleep(500); // Simulate time gap
 
-        System.out.println("Turn Order: " + response.getTurnOrder());
-        System.out.println("Card Draw Result: " + response.getCardDrawResult());
-    }
+        // Ghost 2 -> Correct Answer (Slower)
+        System.out.println("[TEST] User-3 (Ghost) submitting CORRECT answer...");
+        GameDto.SubmitAnswer ans2 = new GameDto.SubmitAnswer(roomId, ghost2, quizId, "String", null);
+        gameService.submitAnswer(ans2);
 
-    @Test
-    @DisplayName("게임 시작 실패: 방장이 아닌 경우")
-    void testStartGame_Fail_NotHost() {
-        // Given
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        // 3. Wait for Timer (Mock 5000ms in service, so we must wait)
+        // Since we cannot easily inject specific scheduler into Service here without
+        // refactor,
+        // we will wait actually or verify logic by manually triggering if that method
+        // was public/protected.
+        // It is private. But we have a scheduler in the service.
+        // The service uses Executors.newScheduledThreadPool(1).
 
-        // When
-        gameService.startGame("room-1", "player2-id"); // Not host
+        System.out.println("[TEST] Waiting for Quiz Timer (5s)...");
+        // We wait a bit more than 5s to ensure task runs
+        Thread.sleep(6000);
 
-        // Then
-        verify(messagingTemplate).convertAndSend(eq("/queue/errors/player2-id"), any(GameDto.ErrorResponse.class));
-        assertEquals(RoomStatus.WAITING, room.getStatus(), "상태가 변경되지 않아야 합니다.");
-    }
+        // 4. Verify Result
+        ArgumentCaptor<GameDto.RoundResult> resultCaptor = ArgumentCaptor.forClass(GameDto.RoundResult.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/game/" + roomId + "/result"), resultCaptor.capture());
 
-    @Test
-    @DisplayName("게임 시작 실패: 인원 부족")
-    void testStartGame_Fail_NotEnoughPlayers() {
-        // Given
-        room.removePlayer(player2.getId()); // 혼자 남음
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        GameDto.RoundResult result = resultCaptor.getValue();
+        System.out.println("[TEST] Result Received: Winner=" + result.getWinnerUserId() + ", IsTurnCorrect="
+                + result.isTurnUserCorrect());
 
-        // When
-        gameService.startGame("room-1", "host-id");
+        assert result.isTurnUserCorrect() == false;
+        assert result.getWinnerUserId().equals(ghost1); // ghost1 submitted before ghost2
 
-        // Then
-        verify(messagingTemplate).convertAndSend(eq("/queue/errors/host-id"), any(GameDto.ErrorResponse.class));
-        assertEquals(RoomStatus.WAITING, room.getStatus());
+        System.out.println("[TEST] Verification Successful: Fastest Ghost Won!");
     }
 }

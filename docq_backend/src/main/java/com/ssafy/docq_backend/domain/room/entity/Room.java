@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import java.time.LocalDateTime;
+
+import com.ssafy.docq_backend.domain.game.dto.GameDto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,6 +43,10 @@ public class Room {
     @Builder.Default
     private Set<String> readyPlayers = ConcurrentHashMap.newKeySet();
 
+    // UserId -> AvatarId
+    @Builder.Default
+    private Map<String, Integer> playerAvatars = new ConcurrentHashMap<>();
+
     @Builder.Default
     private List<String> turnOrder = new ArrayList<>();
 
@@ -51,6 +58,12 @@ public class Room {
     private int round = 1;
 
     private String currentTurnUserId;
+
+    // --- Quiz State ---
+    private Long currentQuizId;
+    @Builder.Default
+    private Map<String, GameDto.SubmitAnswer> quizAnswers = new ConcurrentHashMap<>();
+    private LocalDateTime quizStartTime;
 
     // userId -> PlayerState
     @Builder.Default
