@@ -1,88 +1,159 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, watchEffect } from 'vue';
 import UserCard from '@/components/lobby/UserCard.vue';
-import { useRouter } from 'vue-router'; 
-
+import { useRouter, useRoute } from 'vue-router';
 import { useRoomStore } from '@/stores/roomStore'
-const roomStore = useRoomStore()
+import { useUserStore } from '@/stores/userStore'
+import { useWebSocketStore } from '@/stores/websocketStore'
+import { getRoomById, getErrorMessage } from '@/services/api'
 
-// 방 정보 가져오기
+const router = useRouter();
+const route = useRoute();
+const roomStore = useRoomStore()
+const userStore = useUserStore()
+const wsStore = useWebSocketStore()
+
+const roomId = computed(() => String(route.params.roomId || ''))
 const roomInfo = computed(() => roomStore.roomInfo)
 const users = computed(() => roomStore.users)
+const myUser = computed(() => roomStore.myUser)
 
-// 준비 상태 토글
-const toggleReady = () => {
-  roomStore.updateUser(myUserId, { isReady: !isReady })
-}
+const roomTypeLabel = computed(() => (roomInfo.value.isPrivate ? '비밀' : '공개'))
+const currentCount = computed(() => users.value.length)
+const maxUsers = computed(() => roomInfo.value.capacity || 0)
 
-const router = useRouter(); 
-// [R&R] 창민: 대기실 및 콘텐츠 흐름 담당
-const roomInfo = ref({
-  roomId: 'A1B2',
-  roomName: '매너게임 한판 하실?',
-  roomType: '공개',
-  maxUsers: 4,
-  users: [
-    { id: 1, nickname: '티라노', avatar: '🐱', isReady: true, isHost: true, isMe: true }, 
-    // [테스트] 아래 유저의 isReady를 false로 두면 버튼이 비활성화됩니다.
-    { id: 2, nickname: '창민짱짱돌이', avatar: '🐶', isReady: false, isHost: false, isMe: false },
-    { id: 3, nickname: '머라카노', avatar: '🐸', isReady: false, isHost: false, isMe: false }, 
-    { id: 4, nickname: '', avatar: '', isReady: false, isHost: false, isMe: false }, 
-  ]
-});
+const displayUsers = computed(() => {
+  // users.value의 avatar가 undefined일 수 있으므로 string으로 변환
+  const filled = users.value.map(u => ({
+    ...u,
+    avatar: u.avatar || ''
+  }))
+  
+  const targetSize = Math.max(maxUsers.value || 0, filled.length)
+  const emptySlots = Math.max(targetSize - filled.length, 0)
+
+  for (let i = 0; i < emptySlots; i += 1) {
+    filled.push({
+      id: `empty-${i}`,
+      nickname: '',
+      avatar: '',
+      isReady: false,
+      isHost: false,
+      isMe: false
+    })
+  }
+
+  return filled
+})
 
 const characters = ['🐱', '🐶', '🦊', '🐰', '🐯', '🐸', '🐨', '🐷'];
-const selectedChar = ref(roomInfo.value.users.find(u => u.isMe)?.avatar || '🐱');
-const isHost = ref(true); 
+const selectedChar = ref('🐱');
 
-const currentCount = computed(() => roomInfo.value.users.filter(u => u.nickname).length);
-
-// [추가] 게임 시작 조건 검사 (최소 2명 이상 & 전원 Ready)
-const isAllReady = computed(() => {
-  const realUsers = roomInfo.value.users.filter(u => u.nickname);
-  // 혼자서는 게임 불가(>1) AND 모든 인원이 준비 완료(every)
-  return realUsers.length > 1 && realUsers.every(u => u.isReady);
-});
+watchEffect(() => {
+  if (myUser.value?.avatar) {
+    selectedChar.value = myUser.value.avatar
+  }
+})
 
 const isCharacterTaken = (char: string) => {
-  return roomInfo.value.users.some(user => user.avatar === char && !user.isMe);
+  return users.value.some(user => user.avatar === char && !user.isMe);
 };
 
 const selectCharacter = (char: string) => {
+  // 준비 완료 상태에서는 캐릭터 변경 불가 (방장은 예외)
+  if (myUser.value?.isReady && !myUser.value?.isHost) return;
   if (isCharacterTaken(char)) return;
   selectedChar.value = char;
-  const myUser = roomInfo.value.users.find(u => u.isMe);
-  if (myUser) {
-    myUser.avatar = char;
+  
+  if (myUser.value && userStore.userId) {
+    const avatarId = characters.indexOf(char)
+    if (avatarId !== -1) {
+      wsStore.setAvatar(roomId.value, userStore.userId, avatarId)
+    }
   }
 };
+
+const isAllReady = computed(() => {
+  const realUsers = users.value.filter(user => user.nickname);
+  return realUsers.length > 1 && realUsers.every(user => user.isReady || user.isHost);
+});
+
+const isHost = computed(() => roomStore.isHost || myUser.value?.isHost || false)
 
 const toggleReady = () => {
-  const myUser = roomInfo.value.users.find(u => u.isMe);
-  if (myUser) {
-    myUser.isReady = !myUser.isReady;
-  }
-};
+  if (!myUser.value || !userStore.userId) return
+  wsStore.setReady(roomId.value, userStore.userId, !myUser.value.isReady)
+}
 
 const copyRoomCode = () => {
-  navigator.clipboard.writeText(roomInfo.value.roomId);
+  const code = roomInfo.value.inviteCode || roomInfo.value.roomId
+  if (!code) return
+  navigator.clipboard.writeText(code);
   alert(`코드 복사 완료!`);
 };
 
 const handleStartGame = () => {
-  // [추가] 강제 실행 방지
   if (!isAllReady.value) {
     alert("모든 플레이어가 준비해야 합니다!");
     return;
   }
-  console.log("게임 시작 로직 실행");
+  if (!userStore.userId) return;
+  // 서버로 게임 시작 요청 전송
+  wsStore.startGame(roomId.value, userStore.userId)
 };
+
+// 방 상태가 PLAYING으로 변하면 게임 화면으로 이동
+watchEffect(() => {
+  if (roomInfo.value.status === 'PLAYING') {
+    console.log('🎮 Game Started! redirecting to /game...')
+    router.push('/game')
+  }
+})
 
 const leaveRoom = () => {
   if (confirm("정말 방을 나가시겠습니까?")) {
-    router.push('/'); 
+    wsStore.cleanup()
+    roomStore.leaveRoom()
+    router.push('/');
   }
 };
+
+onMounted(async () => {
+  if (!roomId.value) return
+
+  if (!userStore.userId) {
+    userStore.restoreUser()
+  }
+
+  if (!userStore.userId) {
+    alert('닉네임을 먼저 설정해주세요.')
+    router.push('/')
+    return
+  }
+
+  if (roomStore.roomInfo.roomId !== roomId.value) {
+    try {
+      const room = await getRoomById(roomId.value)
+      roomStore.joinRoom({
+        roomId: room.roomId,
+        title: room.title,
+        capacity: room.capacity,
+        isPrivate: room.isPrivate,
+        status: room.status,
+        currentCount: room.currentCount
+      })
+    } catch (error) {
+      alert(getErrorMessage(error))
+      router.push('/')
+      return
+    }
+  }
+
+  await wsStore.connect()
+  wsStore.subscribeErrors(userStore.userId)
+  wsStore.subscribeGameState(roomId.value)
+  wsStore.joinGame(roomId.value, userStore.userId, userStore.username)
+})
 </script>
 
 <template>
@@ -92,15 +163,15 @@ const leaveRoom = () => {
       <header class="flex justify-between items-center mb-10 px-8">
         <div class="flex items-center gap-6">
           <h1 class="text-4xl font-black text-[#2d3436] tracking-tight">
-            {{ roomInfo.roomName }}
+            {{ roomInfo.title || '대기실' }}
           </h1>
           <span class="bg-[#ede9fe] text-[#7c3aed] px-4 py-1.5 rounded-lg text-sm font-extrabold tracking-wide">
-            {{ roomInfo.roomType }}
+            {{ roomTypeLabel }}
           </span>
         </div>
         <div class="flex items-center gap-2 bg-[#f1f2f6] px-5 py-2.5 rounded-lg font-bold text-[#636e72]">
           <span>👥</span>
-          <span>{{ currentCount }} / {{ roomInfo.maxUsers }}</span>
+          <span>{{ currentCount }} / {{ maxUsers || '-' }}</span>
         </div>
       </header>
 
@@ -109,7 +180,7 @@ const leaveRoom = () => {
         <main class="col-span-8 bg-white p-8 rounded-[22px] border-2 border-[#dfe6e9]">
           <div class="grid grid-cols-2 grid-rows-2 gap-6 h-full">
             <UserCard 
-              v-for="user in roomInfo.users" 
+              v-for="user in displayUsers" 
               :key="user.id" 
               :user="user" 
               class="w-full h-full transition-transform hover:-translate-y-1"
@@ -129,13 +200,13 @@ const leaveRoom = () => {
                 v-for="char in characters" 
                 :key="char"
                 @click="selectCharacter(char)"
-                :disabled="isCharacterTaken(char)"
+                :disabled="isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost)"
                 class="aspect-square rounded-lg text-4xl flex items-center justify-center transition-all relative border-2 bg-white"
                 :class="[
                   selectedChar === char 
                     ? 'border-[#6c5ce7] shadow-[0_4px_0_0_#a29bfe] -translate-y-1' 
                     : 'border-transparent hover:bg-[#f1f2f6]',
-                  isCharacterTaken(char) 
+                  (isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost))
                     ? 'opacity-40 cursor-not-allowed grayscale bg-slate-50' 
                     : 'cursor-pointer'
                 ]"
@@ -174,14 +245,14 @@ const leaveRoom = () => {
               class="w-full h-20 rounded-[24px] font-black text-2xl transition-all 
                      active:shadow-none active:translate-y-[8px] 
                      flex flex-col items-center justify-center border-b-0"
-              :class="roomInfo.users.find(u => u.isMe)?.isReady 
+              :class="myUser?.isReady 
                 ? 'bg-[#00b894] text-white shadow-[0_8px_0_0_#00896f]' 
                 : 'bg-white text-[#636e72] border-4 border-[#b2bec3] shadow-[0_8px_0_0_#636e72]'"
             >
               <span class="text-sm font-extrabold opacity-80 mb-1 tracking-wider">
-                {{ roomInfo.users.find(u => u.isMe)?.isReady ? 'ALL SET!' : 'ARE YOU READY?' }}
+                {{ myUser?.isReady ? 'ALL SET!' : 'ARE YOU READY?' }}
               </span>
-              <span>{{ roomInfo.users.find(u => u.isMe)?.isReady ? '준비완료' : '준비하기' }}</span>
+              <span>{{ myUser?.isReady ? '준비완료' : '준비하기' }}</span>
             </button>
           </div>
         </aside>
@@ -194,7 +265,7 @@ const leaveRoom = () => {
         
         <div class="flex gap-4">
           <button @click="copyRoomCode" class="px-6 py-3 rounded-lg font-bold bg-white border-2 border-[#dfe6e9] text-[#636e72] hover:bg-[#f1f2f6] transition flex items-center gap-2">
-            Code: <span class="text-[#2d3436] font-black">{{ roomInfo.roomId }}</span>
+            Code: <span class="text-[#2d3436] font-black">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
           </button>
           
           <button 
