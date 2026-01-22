@@ -5,6 +5,7 @@ pipeline {
         BACKEND_DIR = 'docq_backend'
         FRONTEND_DIR = 'docq-frontend'
         AI_DIR = 'docq-ai'
+        COMPOSE_DIR = 'deploy/compose' // <- docker-compose.yml 위치
     }
 
     stages {
@@ -14,55 +15,52 @@ pipeline {
             }
         }
 
-        stage('Build: Backend') {
-            steps {
-                dir("${BACKEND_DIR}") {
-                    sh 'docker build -t docq-backend .'
+        stage('Build Images') {
+            parallel {
+                stage('Build Backend Image') {
+                    steps {
+                        dir("${BACKEND_DIR}") {
+                            sh 'docker build -t docq-backend .'
+                        }
+                    }
+                }
+
+                stage('Build Frontend Image') {
+                    steps {
+                        dir("${FRONTEND_DIR}") {
+                            sh 'docker build -t docq-frontend .'
+                        }
+                    }
+                }
+
+                stage('Build AI Image') {
+                    steps {
+                        dir("${AI_DIR}") {
+                            sh 'docker build -t docq-ai .'
+                        }
+                    }
                 }
             }
         }
 
-        stage('Build: Frontend') {
+        stage('Deploy') {
             steps {
-                dir("${FRONTEND_DIR}") {
-                    sh 'docker build -t docq-frontend .'
+                dir("${COMPOSE_DIR}") {
+                    sh '''
+                        docker compose down
+                        docker compose up -d --build
+                    '''
                 }
-            }
-        }
-
-        stage('Build: AI') {
-            steps {
-                dir("${AI_DIR}") {
-                    sh 'docker build -t docq-ai .'
-                }
-            }
-        }
-
-        stage('Deploy: All Containers') {
-            steps {
-                sh '''
-                    docker stop docq-backend || true
-                    docker rm docq-backend || true
-                    docker run -d --name docq-backend --network app-network -p 8080:8080 docq-backend
-
-                    docker stop docq-frontend || true
-                    docker rm docq-frontend || true
-                    docker run -d --name docq-frontend --network app-network -p 3000:80 docq-frontend
-
-                    docker stop docq-ai || true
-                    docker rm docq-ai || true
-                    docker run -d --name docq-ai --network app-network -p 5000:8000 docq-ai
-                '''
             }
         }
     }
 
     post {
         success {
-            echo '✅ 파이프라인 성공!'
+            echo '✅ 배포 성공!'
         }
         failure {
-            echo '❌ 파이프라인 실패'
+            echo '❌ 배포 실패'
         }
         always {
             cleanWs()
