@@ -160,4 +160,25 @@ public class GameDto {
         private String targetUserId; // For CATCH effect
     }
 
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class FinishResponse {
+        private String type; // "FINISH"
+        private String winnerUserId;
+        private List<FinishRank> rankings;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class FinishRank {
+        private String userId;
+        private String nickname;
+        private int position;
+        private int remaining;
+        private int score;
+        private int rank;
+    }
+
 }
