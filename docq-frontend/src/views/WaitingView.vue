@@ -5,7 +5,10 @@ import { useRouter, useRoute } from 'vue-router';
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
+// [통합] API 함수들 합침
 import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, type QuizResponse } from '@/services/api'
+import AlertModal from '@/components/common/AlertModal.vue';
+import ExitConfirmModal from '@/components/common/ExitConfirmModal.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -18,16 +21,23 @@ const roomInfo = computed(() => roomStore.roomInfo)
 const users = computed(() => roomStore.users)
 const myUser = computed(() => roomStore.myUser)
 
-const roomTypeLabel = computed(() => (roomInfo.value.isPrivate ? '비밀' : '공개'))
+const roomTypeIcon = computed(() => (roomInfo.value.isPrivate ? 'lock' : 'public'))
 const currentCount = computed(() => users.value.length)
 const maxUsers = computed(() => roomInfo.value.capacity || 0)
 
-// Quiz Generation State
+// [HEAD] 디자인용 상태
+const isToastOpen = ref(false);
+const toastMessage = ref('');
+const toastType = ref<'success' | 'error'>('success');
+const showExitModal = ref(false);
+
+// [Frontend] 퀴즈 관련 상태 추가
 const isGenerating = ref(false)
-const selectedFile = ref<File | null>(null)
+const selectedFile = ref<File | null>(null);
 const generatedQuizzes = ref<QuizResponse[]>([])
 const isQuizModalOpen = ref(false)
 
+// [Frontend] 파일 선택 핸들러
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   if (target.files && target.files.length > 0) {
@@ -35,23 +45,70 @@ const handleFileChange = (event: Event) => {
   }
 }
 
+// [Frontend] PDF 업로드 및 퀴즈 생성
 const handleUploadPdf = async () => {
   if (!selectedFile.value || !roomId.value) return
   
   isGenerating.value = true
   try {
     await generateQuiz(roomId.value, selectedFile.value)
-    alert('퀴즈 생성이 시작되었습니다! 잠시 후 완료 알림이 뜹니다.')
+    // 디자인 통일성을 위해 alert 대신 토스트 사용 권장 (여기선 로직 유지를 위해 유지하되 스타일 적용 가능)
+    toastMessage.value = '퀴즈 생성이 시작되었습니다! 잠시 후 완료됩니다.';
+    toastType.value = 'success';
+    isToastOpen.value = true;
+    
     selectedFile.value = null // Reset
-    // Refresh quizzes (optional, or wait for websocket)
     await loadQuizzes()
   } catch (error) {
-    alert('퀴즈 생성 실패: ' + getErrorMessage(error))
+    toastMessage.value = '퀴즈 생성 실패: ' + getErrorMessage(error);
+    toastType.value = 'error';
+    isToastOpen.value = true;
   } finally {
     isGenerating.value = false
   }
 }
+// ... 기존 import 문 아래 ...
 
+// [추가] 드래그 상태 관리
+const isDragging = ref(false);
+const fileInputRef = ref<HTMLInputElement | null>(null);
+
+// [추가] 드래그 앤 드롭 핸들러
+const onDragOver = (e: DragEvent) => {
+  e.preventDefault();
+  isDragging.value = true;
+};
+
+const onDragLeave = (e: DragEvent) => {
+  e.preventDefault();
+  isDragging.value = false;
+};
+
+const onDrop = (e: DragEvent) => {
+  e.preventDefault();
+  isDragging.value = false;
+  
+  // e.dataTransfer가 존재하는지 확실히 체크
+  if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+    const file = e.dataTransfer.files[0];
+    
+    // file 변수가 확실히 File 객체인지 확인
+    if (file && file.type === 'application/pdf') {
+      selectedFile.value = file;
+    } else {
+      // PDF가 아닐 경우 알림
+      toastMessage.value = 'PDF 파일만 업로드 가능합니다.';
+      toastType.value = 'error';
+      isToastOpen.value = true;
+    }
+  }
+};
+// [추가] 클릭 시 파일 탐색기 열기
+const triggerFileInput = () => {
+  fileInputRef.value?.click();
+};
+
+// [Frontend] 퀴즈 목록 불러오기
 const loadQuizzes = async () => {
   try {
     generatedQuizzes.value = await getQuizzes(roomId.value)
@@ -60,13 +117,13 @@ const loadQuizzes = async () => {
   }
 }
 
+// [Frontend] 퀴즈 모달 열기
 const openQuizModal = async () => {
   await loadQuizzes()
   isQuizModalOpen.value = true
 }
 
 const displayUsers = computed(() => {
-  // users.value의 avatar가 undefined일 수 있으므로 string으로 변환
   const filled = users.value.map(u => ({
     ...u,
     avatar: u.avatar || ''
@@ -103,7 +160,6 @@ const isCharacterTaken = (char: string) => {
 };
 
 const selectCharacter = (char: string) => {
-  // 준비 완료 상태에서는 캐릭터 변경 불가 (방장은 예외)
   if (myUser.value?.isReady && !myUser.value?.isHost) return;
   if (isCharacterTaken(char)) return;
   selectedChar.value = char;
@@ -128,43 +184,46 @@ const toggleReady = () => {
   wsStore.setReady(roomId.value, userStore.userId, !myUser.value.isReady)
 }
 
-const copyRoomCode = () => {
+const copyRoomCode = async () => {
   const code = roomInfo.value.inviteCode || roomInfo.value.roomId
   if (!code) return
-  navigator.clipboard.writeText(code);
-  alert(`코드 복사 완료!`);
+
+  try {
+    await navigator.clipboard.writeText(code);
+    toastMessage.value = '방 코드가 복사되었습니다!';
+    toastType.value = 'success';
+    isToastOpen.value = true;
+  } catch (err) {
+    toastMessage.value = '복사에 실패했습니다.';
+    toastType.value = 'error';
+    isToastOpen.value = true;
+  }
 };
 
 const handleStartGame = () => {
-  // 퀴즈 필수 체크 (선택 사항)
-  // if (generatedQuizzes.value.length === 0) {
-  //    if (!confirm("퀴즈가 생성되지 않았습니다. 그래도 시작하시겠습니까?")) return;
-  // }
-
   if (!isAllReady.value) {
     alert("모든 플레이어가 준비해야 합니다!");
     return;
   }
   if (!userStore.userId) return;
-  // 서버로 게임 시작 요청 전송
   wsStore.startGame(roomId.value, userStore.userId)
 };
 
-// 방 상태가 STARTING 또는 PLAYING으로 변하면 게임 화면으로 이동
 watchEffect(() => {
-  const status = roomInfo.value.status
-  if (status === 'STARTING' || status === 'PLAYING') {
-    console.log(`🎮 Game Started! (${status}) redirecting to /game...`)
+  if (roomInfo.value.status === 'PLAYING') {
+    console.log('🎮 Game Started! redirecting to /game...')
     router.push('/game')
   }
 })
 
 const leaveRoom = () => {
-  if (confirm("정말 방을 나가시겠습니까?")) {
-    wsStore.cleanup()
-    roomStore.leaveRoom()
-    router.push('/');
-  }
+  showExitModal.value = true; 
+};
+
+const handleExitConfirm = () => {
+  wsStore.cleanup();
+  roomStore.leaveRoom();
+  router.push('/');
 };
 
 onMounted(async () => {
@@ -206,27 +265,47 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#F0F2F5] flex items-center justify-center p-12 font-sans text-[#2d3436]">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  
+  <div class="min-h-screen bg-[#fff1f2] flex items-center justify-center p-8 font-display text-[#881337] relative overflow-hidden">
     
-    <div class="w-full max-w-7xl bg-white rounded-[10px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] py-16 px-16 border border-white">      
-      <header class="flex justify-between items-center mb-10 px-8">
+    <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+      <div class="absolute -top-[10%] -right-[10%] w-[800px] h-[800px] rounded-full 
+                  bg-gradient-to-br from-[#e11d48]/10 to-[#fda4af]/20 
+                  blur-[80px] animate-float">
+      </div>
+      <div class="absolute -bottom-[10%] -left-[10%] w-[800px] h-[800px] rounded-full 
+                  bg-gradient-to-tr from-[#fb923c]/15 to-[#e11d48]/10 
+                  blur-[80px] animate-float-delay">
+      </div>
+    </div>
+    
+    <div class="w-full max-w-7xl bg-white/60 backdrop-blur-xl rounded-[12px] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.15)] py-12 px-12 border border-white relative z-10">      
+      
+      <header class="flex justify-between items-center mb-10 px-4">
         <div class="flex items-center gap-6">
-          <h1 class="text-4xl font-black text-[#2d3436] tracking-tight">
+          <h1 class="text-4xl font-extrabold text-[#881337] tracking-tight drop-shadow-sm">
             {{ roomInfo.title || '대기실' }}
           </h1>
-          <span class="bg-[#ede9fe] text-[#7c3aed] px-4 py-1.5 rounded-lg text-sm font-extrabold tracking-wide">
-            {{ roomTypeLabel }}
+          <span class="bg-[#fff1f2] text-[#e11d48] border border-[#fecdd3] px-3 py-1.5 rounded-full text-sm font-bold tracking-wide shadow-sm flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px]">
+              {{ roomTypeIcon }}
+            </span>
+            <span>
+              {{ roomInfo.isPrivate ? '비밀방' : '공개방' }}
+            </span>
           </span>
         </div>
-        <div class="flex items-center gap-2 bg-[#f1f2f6] px-5 py-2.5 rounded-lg font-bold text-[#636e72]">
-          <span>👥</span>
+        
+        <div class="flex items-center gap-2 bg-white px-5 py-2.5 rounded-2xl font-bold text-[#e11d48] shadow-sm border border-[#ffe4e6]">
+          <span class="material-symbols-outlined text-[20px]">group</span>
           <span>{{ currentCount }} / {{ maxUsers || '-' }}</span>
         </div>
       </header>
 
-      <div class="grid grid-cols-12 gap-10 h-[580px]">
+      <div class="grid grid-cols-12 gap-8 h-[600px]">
         
-        <main class="col-span-8 bg-white p-8 rounded-[22px] border-2 border-[#dfe6e9]">
+        <main class="col-span-8 bg-white/50 rounded-[12px] border border-[#fecdd3] p-8 shadow-inner">
           <div class="grid grid-cols-2 grid-rows-2 gap-6 h-full">
             <UserCard 
               v-for="user in displayUsers" 
@@ -237,100 +316,182 @@ onMounted(async () => {
           </div>
         </main>
 
-        <aside class="col-span-4 flex flex-col justify-between h-full gap-8">
+        <aside class="col-span-4 flex flex-col justify-between h-full gap-6">
           
-          <div class="bg-white p-8 rounded-[22px] border-2 border-[#dfe6e9] flex-1 overflow-hidden flex flex-col">
-            <h3 class="text-lg font-bold mb-6 text-[#636e72] flex items-center gap-2 px-2">
-              <span></span> 캐릭터 선택
+          <div class="bg-white/50 p-8 rounded-[12px] border border-[#fecdd3] flex-1 flex flex-col shadow-sm overflow-hidden">
+            <h3 class="text-lg font-bold mb-6 text-[#9f1239] flex items-center gap-2">
+              <span class="material-symbols-outlined text-[#e11d48]">face</span>
+              캐릭터 선택
             </h3>
             
-            <div class="grid grid-cols-3 gap-4 content-start px-2 mb-6">
+            <div class="grid grid-cols-4 gap-3 content-start mb-6">
               <button 
                 v-for="char in characters" 
                 :key="char"
                 @click="selectCharacter(char)"
                 :disabled="isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost)"
-                class="aspect-square rounded-lg text-4xl flex items-center justify-center transition-all relative border-2 bg-white"
+                class="aspect-square rounded-2xl text-3xl flex items-center justify-center transition-all relative border-2 bg-white"
                 :class="[
                   selectedChar === char 
-                    ? 'border-[#6c5ce7] shadow-[0_4px_0_0_#a29bfe] -translate-y-1' 
-                    : 'border-transparent hover:bg-[#f1f2f6]',
+                    ? 'border-[#e11d48] bg-[#fff1f2] shadow-[0_0_0_4px_rgba(225,29,72,0.1)] -translate-y-1' 
+                    : 'border-transparent hover:bg-[#fff1f2] hover:scale-105',
                   (isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost))
-                    ? 'opacity-40 cursor-not-allowed grayscale bg-slate-50' 
+                    ? 'opacity-40 cursor-not-allowed grayscale bg-gray-50' 
                     : 'cursor-pointer'
                 ]"
               >
                 {{ char }}
-                <div v-if="isCharacterTaken(char)" class="absolute inset-0 flex items-center justify-center text-[#636e72] text-xl font-bold">
-                  🔒
+                <div v-if="isCharacterTaken(char)" class="absolute inset-0 flex items-center justify-center bg-white/50 rounded-2xl">
+                  <span class="material-symbols-outlined text-gray-400 text-xl font-bold">lock</span>
                 </div>
               </button>
             </div>
 
-            <!-- Quiz Management Section (Host Only) -->
-            <div v-if="isHost" class="border-t pt-4">
-              <h3 class="text-sm font-bold text-[#636e72] mb-3">📄 퀴즈 설정</h3>
-              
-              <div class="flex flex-col gap-2">
-                 <input 
-                   type="file" 
-                   accept="application/pdf"
-                   @change="handleFileChange"
-                   class="mb-2 text-xs text-slate-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-xs file:font-semibold
-                    file:bg-violet-50 file:text-violet-700
-                    hover:file:bg-violet-100"
-                 />
+            <div class="border-t border-[#fecdd3] pt-6 mt-auto">
+              <h3 class="text-lg font-bold text-[#9f1239] mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-xl">quiz</span>
+                퀴즈 설정
+              </h3>
+
+              <div v-if="isHost" class="flex flex-col gap-4">
                  
-                 <div class="flex gap-2">
+                 <div 
+                   @dragover="onDragOver"
+                   @dragleave="onDragLeave"
+                   @drop="onDrop"
+                   @click="triggerFileInput"
+                   class="relative w-full h-32 rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
+                   :class="[
+                     isDragging 
+                       ? 'border-[#e11d48] bg-[#fff1f2] scale-[1.02]' 
+                       : selectedFile
+                         ? 'border-[#00b894] bg-[#f0fff4]'
+                         : 'border-[#fecdd3] bg-white hover:border-[#e11d48] hover:bg-[#fff1f2]'
+                   ]"
+                 >
+                   <input 
+                     ref="fileInputRef"
+                     type="file" 
+                     accept="application/pdf"
+                     @change="handleFileChange"
+                     class="hidden"
+                   />
+
+                   <div v-if="!selectedFile" class="flex flex-col items-center text-center p-4 pointer-events-none">
+                     <div class="w-10 h-10 rounded-full bg-[#fff1f2] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-[#e11d48] text-2xl">cloud_upload</span>
+                     </div>
+                     <p class="text-sm font-bold text-[#881337]">PDF 드래그 또는 클릭</p>
+                     <p class="text-xs text-[#fda4af] mt-1 font-medium">퀴즈로 만들 문서를 올려주세요</p>
+                   </div>
+
+                   <div v-else class="flex flex-col items-center text-center p-4 w-full animate-bounce-short">
+                      <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
+                        <span class="material-symbols-outlined text-[#00b894] text-2xl">description</span>
+                     </div>
+                     <p class="text-sm font-black text-[#00b894] truncate max-w-[90%]">{{ selectedFile.name }}</p>
+                     <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">변경하려면 클릭하세요</p>
+                     
+                     <button 
+                       @click.stop="selectedFile = null" 
+                       class="absolute top-2 right-2 text-[#00b894] hover:text-red-500 transition-colors p-1"
+                     >
+                        <span class="material-symbols-outlined text-lg">close</span>
+                     </button>
+                   </div>
+                 </div>
+                 <div class="flex gap-3 mt-4">
                     <button 
                       @click="handleUploadPdf"
                       :disabled="!selectedFile || isGenerating"
-                      class="flex-1 py-2 rounded-lg bg-blue-100 text-blue-700 font-bold text-xs hover:bg-blue-200 disabled:opacity-50"
+                      class="flex-1 h-14 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm border-b-4 active:border-b-0 active:translate-y-1"
+                      :class="(!selectedFile || isGenerating) 
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                        : 'bg-[#e11d48] text-white border-[#9f1239] hover:bg-[#be123c]'"
                     >
-                      <span v-if="isGenerating">생성 중...</span>
-                      <span v-else>퀴즈 생성</span>
+                      <span v-if="isGenerating" class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-xl animate-spin">progress_activity</span>
+                        생성 중...
+                      </span>
+                      <span v-else class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">auto_fix</span>
+                        퀴즈 생성
+                      </span>
                     </button>
                     
                     <button 
                       @click="openQuizModal"
-                      class="flex-1 py-2 rounded-lg bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200"
+                      class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
                     >
-                      목록 보기
+                      <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">list_alt</span>
+                      목록
                     </button>
                  </div>
               </div>
-            </div>
-            <div v-else class="border-t pt-4">
-               <h3 class="text-sm font-bold text-[#636e72] mb-3">📄 퀴즈 상태</h3>
-               <button 
-                  @click="openQuizModal"
-                  class="w-full py-2 rounded-lg bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200"
-                >
-                  퀴즈 확인하기(공유)
-                </button>
-            </div>
 
+<div v-else class="flex flex-col gap-4">
+                 
+                 <div 
+                   class="w-full h-32 rounded-2xl border-2 transition-all duration-500 flex flex-col items-center justify-center overflow-hidden relative"
+                   :class="generatedQuizzes.length > 0 
+                     ? 'border-[#00b894] bg-[#f0fff4]'  /* 퀴즈 있음: 초록색 성공 스타일 */
+                     : 'border-dashed border-[#fecdd3] bg-[#fff1f2]/50' /* 퀴즈 없음: 대기 스타일 */"
+                 >
+                    <div v-if="generatedQuizzes.length > 0" class="flex flex-col items-center animate-bounce-short">
+                      <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
+                        <span class="material-symbols-outlined text-[#00b894] text-2xl">check_circle</span>
+                      </div>
+                      <p class="text-sm font-black text-[#00b894]">PDF 업로드 완료</p>
+                      <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">총 {{ generatedQuizzes.length }}문제 생성됨</p>
+                    </div>
+
+                    <div v-else class="flex flex-col items-center text-center p-4">
+                       <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-2 animate-pulse">
+                          <span class="material-symbols-outlined text-[#fda4af] text-2xl">hourglass_top</span>
+                       </div>
+                       <p class="text-sm font-bold text-[#9f1239] animate-pulse">방장이 문서를 준비 중입니다</p>
+                       <p class="text-xs text-[#fda4af] mt-1 font-medium">잠시만 기다려주세요...</p>
+                    </div>
+                 </div>
+
+                 <button 
+                   @click="openQuizModal"
+                   :disabled="generatedQuizzes.length === 0"
+                   class="w-full h-14 rounded-2xl border-2 border-b-[5px] font-black text-base flex items-center justify-center gap-2 transition-all shadow-sm group relative"
+                   :class="generatedQuizzes.length > 0
+                     ? 'bg-[#fff1f2] text-[#e11d48] border-[#fecdd3] hover:bg-[#ffe4e6] hover:border-[#e11d48] active:border-b-2 active:translate-y-[3px] cursor-pointer'
+                     : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'"
+                 >
+                   <span class="material-symbols-outlined text-xl" 
+                         :class="generatedQuizzes.length > 0 ? 'group-hover:scale-110 transition-transform' : ''">
+                     visibility
+                   </span>
+                   
+                   <span v-if="generatedQuizzes.length > 0">생성된 퀴즈 확인하기</span>
+                   <span v-else>퀴즈 대기 중...</span>
+                 </button>
+              </div>
+            </div>
           </div>
           
-          <div class="flex flex-col gap-2 justify-end min-h-[6rem]">
+          <div class="flex flex-col gap-3 justify-end min-h-[6rem]">
             
             <template v-if="isHost">
-              <div v-if="!isAllReady" class="text-red-500 text-xs font-bold text-center animate-pulse">
-                📢 모두 준비완료가 되어야 합니다.
+              <div v-if="!isAllReady" class="text-[#e11d48] text-sm font-bold text-center animate-pulse bg-[#fff1f2] py-2 rounded-lg">
+                <span class="material-symbols-outlined text-sm">warning</span>
+                모두 준비 완료가 되어야 시작할 수 있습니다
               </div>
               
               <button 
                 @click="handleStartGame"
                 :disabled="!isAllReady"
-                class="w-full h-20 rounded-[24px] font-black text-2xl text-white transition-all 
-                       flex items-center justify-center gap-3 border-b-0"
+                class="w-full h-20 rounded-[12px] font-black text-2xl text-white transition-all 
+                      flex items-center justify-center gap-3 shadow-lg"
                 :class="isAllReady 
-                  ? 'bg-[#6c5ce7] shadow-[0_8px_0_0_#5f3dc4] hover:bg-[#5f3dc4] active:translate-y-[8px] active:shadow-none' 
-                  : 'bg-[#b2bec3] cursor-not-allowed shadow-none opacity-50'"
+                  ? 'bg-gradient-to-r from-[#e11d48] to-[#be123c] shadow-rose-500/30 hover:shadow-[0_0_25px_rgba(225,29,72,0.4)] hover:scale-[1.02] active:scale-[0.98]' 
+                  : 'bg-gray-300 cursor-not-allowed shadow-none opacity-50'"
               >
+                <span class="material-symbols-outlined text-3xl">play_circle</span>
                 GAME START
               </button>
             </template>
@@ -338,83 +499,145 @@ onMounted(async () => {
             <button 
               v-else
               @click="toggleReady"
-              class="w-full h-20 rounded-[24px] font-black text-2xl transition-all 
-                     active:shadow-none active:translate-y-[8px] 
-                     flex flex-col items-center justify-center border-b-0"
+              class="w-full h-20 rounded-[12px] font-black text-2xl transition-all 
+                    active:scale-[0.98] flex flex-col items-center justify-center shadow-lg"
               :class="myUser?.isReady 
-                ? 'bg-[#00b894] text-white shadow-[0_8px_0_0_#00896f]' 
-                : 'bg-white text-[#636e72] border-4 border-[#b2bec3] shadow-[0_8px_0_0_#636e72]'"
+                ? 'bg-[#e11d48] text-white shadow-rose-500/30 ring-4 ring-rose-100' 
+                : 'bg-white text-[#9f1239] border-2 border-[#e11d48] hover:bg-[#fff1f2]'"
             >
-              <span class="text-sm font-extrabold opacity-80 mb-1 tracking-wider">
-                {{ myUser?.isReady ? 'ALL SET!' : 'ARE YOU READY?' }}
+              <span class="material-symbols-outlined text-3xl mb-1 animate-pulse">
+                {{ myUser?.isReady ? 'pause' : 'play_arrow' }}
               </span>
-              <span>{{ myUser?.isReady ? '준비완료' : '준비하기' }}</span>
+
+              <span>{{ myUser?.isReady ? '준비취소' : '준비하기' }}</span>
             </button>
           </div>
         </aside>
       </div>
 
-    <!-- Quiz Modal -->
-    <div v-if="isQuizModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="isQuizModalOpen = false">
-       <div class="bg-white rounded-2xl p-8 w-[600px] max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
-          <header class="flex justify-between items-center mb-6">
-             <h2 class="text-2xl font-black text-gray-800">📋 생성된 퀴즈 목록</h2>
-             <button @click="isQuizModalOpen = false" class="text-gray-400 hover:text-gray-600 font-bold text-xl">✕</button>
+      <footer class="mt-10 px-4 flex justify-between items-center border-t border-[#fecdd3] pt-8">
+        <div class="text-[#fda4af] text-sm font-bold flex items-center gap-2">
+          <span class="material-symbols-outlined">description</span>
+          DocQ - PDF 문서 기반 퀴즈 게임
+        </div>
+        
+        <div class="flex gap-4">
+          <button @click="copyRoomCode" class="px-6 py-3 rounded-xl font-bold bg-white border border-[#fecdd3] text-[#9f1239] hover:bg-[#fff1f2] transition flex items-center gap-2 shadow-sm">
+            <span class="material-symbols-outlined">add_link</span>
+            <span class="text-[#e11d48] font-black tracking-wider">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
+          </button>
+          
+          <button 
+            @click="leaveRoom" 
+            class="px-8 py-3 rounded-xl font-bold bg-[#fff1f2] text-[#e11d48] border border-transparent hover:bg-[#ffe4e6] transition shadow-sm flex items-center gap-2"
+          >
+            <span class="material-symbols-outlined">logout</span>
+            나가기
+          </button>
+          <AlertModal 
+            :isOpen="isToastOpen" 
+            :message="toastMessage" 
+            :type="toastType" 
+            @close="isToastOpen = false"
+          />
+          <ExitConfirmModal 
+            :isOpen="showExitModal"
+            @close="showExitModal = false"
+            @confirm="handleExitConfirm"
+          />
+        </div>
+      </footer>
+      
+    </div>
+
+    <div v-if="isQuizModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-[#881337]/20 backdrop-blur-sm p-4 animate-fade-in" @click.self="isQuizModalOpen = false">
+       <div class="bg-white/95 backdrop-blur rounded-[12px] p-8 w-[600px] max-h-[80vh] overflow-hidden flex flex-col shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-white animate-slide-up">
+          <header class="flex justify-between items-center mb-6 border-b border-[#fecdd3] pb-4">
+             <h2 class="text-2xl font-extrabold text-[#881337] flex items-center gap-2">
+               <span class="material-symbols-outlined text-[#e11d48]">format_list_bulleted</span>
+               생성된 퀴즈 목록
+             </h2>
+             <button @click="isQuizModalOpen = false" class="text-[#fda4af] hover:text-[#e11d48] transition-colors rounded-full p-1 hover:bg-[#fff1f2]">
+               <span class="material-symbols-outlined text-2xl font-bold">close</span>
+             </button>
           </header>
           
-          <div class="flex-1 overflow-y-auto pr-2 space-y-4">
-             <div v-if="generatedQuizzes.length === 0" class="text-center py-12 text-gray-400 font-bold">
-                 생성된 퀴즈가 없습니다.<br>
-                 <span class="text-sm font-normal">방장이 PDF를 업로드하여 퀴즈를 생성해주세요.</span>
+          <div class="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+             <div v-if="generatedQuizzes.length === 0" class="text-center py-12 flex flex-col items-center gap-2">
+                 <span class="material-symbols-outlined text-6xl text-[#fecdd3]">quiz</span>
+                 <p class="text-[#9f1239] font-bold text-lg">생성된 퀴즈가 없습니다.</p>
+                 <span class="text-[#fda4af] text-sm font-medium">방장이 PDF를 업로드하여 퀴즈를 생성해주세요.</span>
              </div>
              
-             <div v-for="(quiz, idx) in generatedQuizzes" :key="quiz.quizId" class="border rounded-xl p-5 bg-gray-50 border-gray-200">
+             <div v-for="(quiz, idx) in generatedQuizzes" :key="quiz.quizId" class="border rounded-2xl p-5 bg-white border-[#fecdd3] hover:border-[#e11d48] transition-colors shadow-sm">
                 <div class="flex gap-3 mb-3">
-                   <span class="bg-[#6c5ce7] text-white rounded-lg px-2.5 py-0.5 text-sm font-black h-fit">Q{{ idx + 1 }}</span>
-                   <p class="font-bold text-gray-800 leading-snug">{{ quiz.question }}</p>
+                   <span class="bg-[#e11d48] text-white rounded-lg px-2.5 py-0.5 text-sm font-black h-fit shadow-sm">Q{{ idx + 1 }}</span>
+                   <p class="font-bold text-[#881337] leading-snug">{{ quiz.question }}</p>
                 </div>
-                <div class="space-y-1.5 pl-2">
+                <div class="space-y-2 pl-2">
                    <div v-for="(opt, oIdx) in quiz.options" :key="oIdx" 
-                        class="text-sm flex items-center gap-2"
-                        :class="oIdx === quiz.answerIndex ? 'text-[#00b894] font-bold' : 'text-gray-600'">
-                      <span class="w-4 h-4 rounded-full border flex items-center justify-center text-[10px]"
-                            :class="oIdx === quiz.answerIndex ? 'border-[#00b894] bg-[#00b894]/10' : 'border-gray-400'">
-                            {{ oIdx + 1 }}
+                        class="text-sm flex items-center gap-2 transition-all p-2 rounded-lg"
+                        :class="oIdx === quiz.answerIndex ? 'bg-[#f0fff4] text-[#166534] font-bold ring-1 ring-[#22c55e]' : 'text-[#64748b] bg-[#f8fafc]'">
+                      <span class="w-5 h-5 rounded-full border flex items-center justify-center text-[10px]"
+                            :class="oIdx === quiz.answerIndex ? 'border-[#166534] bg-[#22c55e] text-white' : 'border-gray-300 bg-white'">
+                           {{ oIdx + 1 }}
                       </span>
                       {{ opt }}
-                      <span v-if="oIdx === quiz.answerIndex">✅</span>
+                      <span v-if="oIdx === quiz.answerIndex" class="material-symbols-outlined text-sm">check_circle</span>
                    </div>
                 </div>
              </div>
           </div>
           
-          <div class="mt-6 pt-4 border-t flex justify-end">
-             <button @click="isQuizModalOpen = false" class="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-gray-700">
-                닫기
+          <div class="mt-6 pt-4 border-t border-[#fecdd3] flex justify-end">
+             <button @click="isQuizModalOpen = false" class="px-6 py-3 bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#e11d48] rounded-xl font-bold transition-colors">
+               닫기
              </button>
           </div>
        </div>
     </div>
-
-      <footer class="mt-12 px-8 flex justify-between items-center border-t border-[#dfe6e9] pt-8">
-        <div class="text-[#b2bec3] text-sm font-bold">
-          DocQ - 문서 기반 퀴즈 게임
-        </div>
-        
-        <div class="flex gap-4">
-          <button @click="copyRoomCode" class="px-6 py-3 rounded-lg font-bold bg-white border-2 border-[#dfe6e9] text-[#636e72] hover:bg-[#f1f2f6] transition flex items-center gap-2">
-            Code: <span class="text-[#2d3436] font-black">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
-          </button>
-          
-          <button 
-            @click="leaveRoom" 
-            class="px-8 py-3 rounded-lg font-bold bg-[#fff5f5] text-[#ff6b6b] border-2 border-transparent hover:border-[#ff6b6b] transition shadow-sm"
-          >
-            나가기
-          </button>
-        </div>
-      </footer>
-      
-    </div>
   </div>
 </template>
+
+<style scoped>
+.font-display {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.animate-float {
+  animation: float 10s infinite ease-in-out;
+}
+
+.animate-float-delay {
+  animation: float 12s infinite ease-in-out reverse;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(20px, -20px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* 모달 애니메이션 */
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* 스크롤바 커스텀 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #fff1f2;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #fecdd3;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #fb7185;
+}
+</style>
