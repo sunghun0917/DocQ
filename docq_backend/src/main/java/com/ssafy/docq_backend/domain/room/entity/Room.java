@@ -77,6 +77,14 @@ public class Room {
     @Builder.Default
     private List<Quiz> quizList = new ArrayList<>();
 
+    // MiniGame State: UserId -> Score
+    @Builder.Default
+    private Map<String, Integer> miniGameScores = new ConcurrentHashMap<>();
+
+    // Played MiniGame Types (to avoid repetition until all played)
+    @Builder.Default
+    private Set<String> playedMiniGames = ConcurrentHashMap.newKeySet();
+
     public void addPlayer(String userId) {
         players.add(userId);
         this.currentCount = players.size();

@@ -8,5 +8,6 @@ public enum RoomStatus {
     ROULETTE,
     MOVE,
     FINISHED,
-    PLAYING // deprecated but kept for compatibility if needed, or remove if fully replaced.
+    PLAYING, // deprecated but kept for compatibility if needed, or remove if fully replaced.
+    MINIGAME
 }
