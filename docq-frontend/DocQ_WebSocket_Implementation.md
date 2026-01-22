@@ -65,6 +65,28 @@ cd docq-frontend
 npm run dev
 ```
 
+**AI Server (Python)**
+> [!TIP] Window 환경 기준 명령어입니다.
+```bash
+cd docq-ai
+
+# 1. 초기 세팅 (가상환경 생성 및 패키지 설치)
+# Git Bash의 경우: source venv/Scripts/activate && pip install -r requirements.txt
+python -m venv venv && venv\Scripts\pip install -r requirements.txt
+
+# 2. 서버 실행
+# Git Bash의 경우 가상환경 활성화 후: uvicorn app.main:app --reload
+venv\Scripts\uvicorn app.main:app --reload
+```
+
+### Docker 실행 (전체 통합)
+> [!TIP] 로컬 개발 환경 대신 Docker로 3개 서버(FE, BE, AI)를 동시에 띄울 때 사용합니다. 코드 수정 사항을 반영하려면 `--build` 옵션을 꼭 붙여야 합니다.
+
+```bash
+cd deploy/compose
+docker-compose up -d --build
+```
+
 ### 시나리오 테스트 (브라우저 콘솔)
 프론트엔드 코드에 `test-api.ts` 유틸리티가 포함되어 있어 콘솔에서 즉시 테스트 가능합니다.
 
