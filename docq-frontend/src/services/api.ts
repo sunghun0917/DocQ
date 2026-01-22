@@ -182,6 +182,18 @@ export const getQuizzes = async (roomId: string): Promise<QuizResponse[]> => {
     return response.data
 }
 
+/**
+ * 기본 퀴즈 선택
+ * POST /api/game/{roomId}/quiz/default?type=nonsense|common|mixed
+ */
+export const setDefaultQuizzes = async (roomId: string, type: string): Promise<{ count: number }> => {
+    const response = await apiClient.post<{ count: number }>(`/game/${roomId}/quiz/default`, null, {
+        params: { type }
+    })
+    return response.data
+}
+
+
 // ==================== 에러 처리 헬퍼 ====================
 
 /**
@@ -213,6 +225,7 @@ export default {
     verifyJoinRoom,
     generateQuiz,
     getQuizzes,
+    setDefaultQuizzes,
     getErrorMessage,
     getErrorCode
 }

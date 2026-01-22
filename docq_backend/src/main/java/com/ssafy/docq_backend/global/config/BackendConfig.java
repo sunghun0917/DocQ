@@ -13,7 +13,7 @@ public class BackendConfig {
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
-                .setConnectTimeout(Duration.ofSeconds(10))
+                .setConnectTimeout(Duration.ofSeconds(2))
                 .setReadTimeout(Duration.ofSeconds(180)) // AI 처리 시간 고려하여 넉넉하게 설정
                 .build();
     }
