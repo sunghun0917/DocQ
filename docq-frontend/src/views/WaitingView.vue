@@ -6,7 +6,6 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, type QuizResponse } from '@/services/api'
-
 const router = useRouter();
 const route = useRoute();
 const roomStore = useRoomStore()
