@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 import { WebSocketService } from '@/services/websocket'
 import { useUserStore } from './userStore'
 import { useRoomStore } from './roomStore'
+import { useGameStore } from './gameStore'
 
 // 백엔드 DTO 타입 정의
 export interface GameStateResponse {
@@ -69,7 +70,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         try {
             // WebSocket 서비스 생성
             wsService.value = new WebSocketService({
-                url: import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws-docq',
+                url: import.meta.env.VITE_WS_URL || '/ws-docq',
 
                 onConnect: () => {
                     isConnected.value = true
@@ -124,10 +125,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         const roomStore = useRoomStore()
         const userStore = useUserStore()
+        const gameStore = useGameStore() // Inject GameStore
 
         wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: any) => {
             console.log('📨 Game State Update:', data)
 
+            // 1. GameStore 업데이트 (게임 진행 상태)
+            gameStore.setGameState(data)
+
+            // 2. RoomStore 업데이트 (로비/유저 목록 상태)
             const players = Array.isArray(data.players) ? data.players : []
             const nextUsers = players.map((player: any) => {
                 const isMe = player.userId === userStore.userId
@@ -137,9 +143,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 const isHost = player.isHost !== undefined ? player.isHost : (player.host !== undefined ? player.host : false)
 
                 // 아바타 결정 로직:
-                // 1. 서버에서 준 avatarId가 있으면 최우선 적용
-                // 2. 서버 데이터가 없다면(null/undefined), 로컬 캐시에서 확인
-                // 3. 그것도 없다면 나인 경우 내 프로필 아바타, 아니면 기본 게임기(🎮)
                 let avatar = '🎮'
                 const cachedAvatar = avatarCache.value[player.userId]
 
@@ -184,6 +187,38 @@ export const useWebSocketStore = defineStore('websocket', () => {
             if (data.userId === userStore.userId) {
                 userStore.updateAvatar(emoji)
             }
+        })
+
+        // 이동/룰렛 이벤트 구독
+        wsService.value.subscribe(`/topic/game/${roomId}/move`, (data: any) => {
+            console.log('📨 Move Event:', data)
+            gameStore.handleMove(data)
+        })
+
+        // 퀴즈 문제 수신
+        wsService.value.subscribe(`/topic/game/${roomId}/quiz`, (data: any) => {
+            console.log('📨 Quiz Received:', data)
+            gameStore.onQuizReceived(data)
+        })
+
+        // 라운드 결과 수신
+        wsService.value.subscribe(`/topic/game/${roomId}/result`, (data: any) => {
+            console.log('📨 Round Result:', data)
+            gameStore.onRoundResultReceived(data)
+        })
+    }
+
+    /**
+     * 정답 제출
+     */
+    const submitAnswer = (roomId: string, userId: string, quizId: number, answer: string) => {
+        if (!wsService.value) return
+
+        wsService.value.publish('/app/game/submit', {
+            roomId,
+            userId,
+            quizId,
+            answer
         })
     }
 
@@ -303,6 +338,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         subscribeGameState,
         subscribeErrors,
         joinGame,
+        submitAnswer,
         setReady,
         setAvatar,
         startGame,

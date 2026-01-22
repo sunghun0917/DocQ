@@ -46,15 +46,18 @@ public class GameService {
         log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
 
         // Quiz 엔티티 로 변환 및 저장
-        List<Quiz> quizzes = quizResponses.stream()
-                .map(dto -> Quiz.builder()
-                        .quizId(UUID.randomUUID().toString())
-                        .question(dto.getQuestion())
-                        .options(dto.getOptions())
-                        .answerIndex(dto.getAnswerIndex())
-                        .answerText(dto.getAnswerText())
-                        .build())
-                .collect(Collectors.toList());
+        // Quiz 엔티티 로 변환 및 저장
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < quizResponses.size(); i++) {
+            QuizDto.Response dto = quizResponses.get(i);
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1)) // 1-based sequential ID
+                    .question(dto.getQuestion())
+                    .options(dto.getOptions())
+                    .answerIndex(dto.getAnswerIndex())
+                    .answerText(dto.getAnswerText())
+                    .build());
+        }
 
         room.setQuizList(quizzes);
 
@@ -84,6 +87,7 @@ public class GameService {
                         .build())
                 .collect(Collectors.toList());
     }
+
     // Simple Scheduler for Quiz Timer
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
@@ -345,12 +349,22 @@ public class GameService {
             Room room = roomRepository.findById(roomId)
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            // Mock Quiz Data
-            long quizId = 101L + room.getRound(); // Simple ID generation
+            // 1. Validate Quiz List
+            if (room.getQuizList() == null || room.getQuizList().isEmpty()) {
+                log.warn("No quizzes found in room {}", roomId);
+                return;
+            }
+
+            // 2. Select Quiz (Round-Robin or fail if out of bounds)
+            int quizIndex = (room.getRound() - 1) % room.getQuizList().size();
+            Quiz quizEntity = room.getQuizList().get(quizIndex);
+
+            Long quizId = quizEntity.getQuizId();
+
             GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
                     .quizId(quizId)
-                    .question("Round " + room.getRound() + ": 다음 중 Java의 기본형이 아닌 것은?")
-                    .options(Arrays.asList("int", "double", "boolean", "String"))
+                    .question("Round " + room.getRound() + ": " + quizEntity.getQuestion())
+                    .options(quizEntity.getOptions())
                     .timeLimit(5000L)
                     .build();
 
@@ -426,7 +440,25 @@ public class GameService {
             log.info("Processing Round Result for Room {}, Quiz {}", roomId, quizId);
 
             String turnUser = room.getCurrentTurnUserId();
-            String correctAnswer = "String"; // Mock Correct Answer
+            // Fetch Correct Answer from Quiz Entity
+            final String correctAnswer;
+            if (room.getQuizList() != null && !room.getQuizList().isEmpty()) {
+                // Find quiz by quizId to be safe, or use index if strict
+                // Using ID matching is safer if logic changes
+                Quiz quizEntity = room.getQuizList().stream()
+                        .filter(q -> q.getQuizId().equals(quizId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (quizEntity == null) {
+                    log.error("Quiz ID {} not found in room {}", quizId, roomId);
+                    return;
+                }
+                correctAnswer = quizEntity.getAnswerText();
+            } else {
+                log.error("Quiz list is empty during result processing for room {}", roomId);
+                return;
+            }
 
             boolean isTurnUserCorrect = false;
             GameDto.SubmitAnswer turnUserSubmit = room.getQuizAnswers().get(turnUser);

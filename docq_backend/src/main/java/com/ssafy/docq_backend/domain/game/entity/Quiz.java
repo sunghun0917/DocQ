@@ -12,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Quiz {
-    private String quizId;
+    private Long quizId;
     private String question;
     private List<String> options;
     private int answerIndex;

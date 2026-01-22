@@ -159,7 +159,7 @@ const handleJoinRoom = () => { showJoinModal.value = true; };
         >
           <div class="flex items-center justify-center gap-3">
             <span class="material-symbols-outlined text-2xl">login</span>
-            <span class="text-lg font-bold tracking-wide">방 참여하기</span>
+            <span class="text-lg font-bold tracking-wide">참여하기</span>
           </div>
         </button>
       </div>

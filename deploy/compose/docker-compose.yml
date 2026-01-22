@@ -1,0 +1,42 @@
+
+services:
+  backend:
+    build: ../../docq_backend
+    container_name: docq-backend
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    networks:
+      - docq-network
+
+  frontend:
+    build: ../../docq-frontend
+    container_name: docq-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - docq-network
+
+  ai-service:
+    build: ../../docq-ai
+    container_name: docq-ai
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../../docq-ai/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - docq-network
+
+networks:
+  docq-network:
+    driver: bridge
