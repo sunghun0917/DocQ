@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage } from '@/services/api';
@@ -49,6 +49,26 @@ const editNickname = () => {
 
 const handleCreateRoom = () => { showCreateModal.value = true; };
 const handleJoinRoom = () => { showJoinModal.value = true; };
+
+const syncNicknameFromStore = () => {
+  if (isNicknameSet.value) return;
+  if (userStore.isAuthenticated && userStore.username && userStore.username !== 'Guest') {
+    nickname.value = userStore.username;
+    isNicknameSet.value = true;
+  }
+};
+
+onMounted(() => {
+  userStore.restoreUser();
+  syncNicknameFromStore();
+});
+
+watch(
+  () => userStore.isAuthenticated,
+  () => {
+    syncNicknameFromStore();
+  }
+);
 </script>
 
 <template>
