@@ -8,12 +8,11 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { mockUsers } from '@/mocks/users'
 
 // 타입 정의
 export interface User {
     id: string
-    username: string
+    nickname: string
     avatar?: string
     isReady: boolean
     isHost: boolean
@@ -22,49 +21,68 @@ export interface User {
 
 export interface RoomInfo {
     roomId: string
-    roomName: string
-    maxUsers: number
-    isSecret: boolean
+    title: string
+    capacity: number
+    isPrivate: boolean
+    status: string
+    inviteCode: string
+    hostId: string
+    currentCount: number
 }
 
 export const useRoomStore = defineStore('room', () => {
     // State
     const roomInfo = ref<RoomInfo>({
         roomId: '',
-        roomName: '',
-        maxUsers: 8,
-        isSecret: false
+        title: '',
+        capacity: 0,
+        isPrivate: false,
+        status: 'WAITING',
+        inviteCode: '',
+        hostId: '',
+        currentCount: 0
     })
 
-    const users = ref<User[]>(mockUsers)
+    const users = ref<User[]>([])
     const isHost = ref(false)
 
     // Getters (계산된 값)
     const currentUserCount = computed(() => users.value.length)
-    const isAllReady = computed(() => users.value.every(user => user.isReady || user.isHost))
+    const isAllReady = computed(() => users.value.length > 1 && users.value.every(user => user.isReady || user.isHost))
     const myUser = computed(() => users.value.find(user => user.isMe))
 
     // Actions
-    const createRoom = (roomData: Partial<RoomInfo>) => {
+    const setRoomInfo = (roomData: Partial<RoomInfo>) => {
         roomInfo.value = {
             ...roomInfo.value,
             ...roomData
         }
+    }
+
+    const setUsers = (nextUsers: User[]) => {
+        users.value = nextUsers
+    }
+
+    const createRoom = (roomData: Partial<RoomInfo>) => {
+        setRoomInfo(roomData)
         isHost.value = true
     }
 
-    const joinRoom = (roomCode: string) => {
-        // TODO: Implement room joining logic
-        roomInfo.value.roomId = roomCode
+    const joinRoom = (roomData: Partial<RoomInfo>) => {
+        setRoomInfo(roomData)
         isHost.value = false
     }
 
     const leaveRoom = () => {
         roomInfo.value = {
             roomId: '',
-            roomName: '',
-            maxUsers: 8,
-            isSecret: false
+            title: '',
+            capacity: 0,
+            isPrivate: false,
+            status: 'WAITING',
+            inviteCode: '',
+            hostId: '',
+            currentCount: 0
         }
         users.value = []
         isHost.value = false
@@ -100,6 +118,8 @@ export const useRoomStore = defineStore('room', () => {
         myUser,
 
         // Actions
+        setRoomInfo,
+        setUsers,
         createRoom,
         joinRoom,
         leaveRoom,

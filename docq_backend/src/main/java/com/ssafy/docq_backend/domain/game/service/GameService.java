@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.ssafy.docq_backend.domain.game.dto.QuizDto;
 import com.ssafy.docq_backend.domain.game.entity.Quiz;
+import com.ssafy.docq_backend.domain.minigame.service.MiniGameService;
 import com.ssafy.docq_backend.global.client.AiClient;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,8 @@ public class GameService {
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final AiClient aiClient;
+    private final MiniGameService miniGameService;
+    private static final int TARGET_POSITION = 30;
 
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
@@ -519,10 +522,14 @@ public class GameService {
                 int currentPos = winnerState.getPosition();
                 int nextPos = currentPos + moveValue;
 
-                // 단순 맵 크기 제한 (e.g. 20칸)
+                // 단순 맵 크기 제한 (e.g. 30칸)
                 if (nextPos < 0)
                     nextPos = 0;
-                // if (nextPos >= MAX) ...
+                if (nextPos >= TARGET_POSITION) {
+                    nextPos = TARGET_POSITION; // Max Position
+                    log.info("User {} reached destination. Ending Game!", winnerUserId);
+                    room.setStatus(RoomStatus.FINISHED);
+                }
 
                 // Update State (Initial Move)
                 // winnerState.setPosition(nextPos); // Defer update until end of chain
@@ -538,22 +545,34 @@ public class GameService {
                         .after(nextPos)
                         .build());
 
-                // 2. Buff Action (Example: DOUBLE_MOVE)
-                // Assuming 'DOUBLE_MOVE' doubles the roulette value
-                if ("DOUBLE_MOVE".equals(winnerState.getHasBuff())) {
-                    int beforeBuffPos = nextPos;
-                    nextPos += moveValue; // Add gain again (x2)
+                // 2. Buff Action
+                if (winnerState.getHasBuff() != null) {
+                    if ("DOUBLE_SCORE".equals(winnerState.getHasBuff())) {
+                        int beforeBuffPos = nextPos;
+                        nextPos += moveValue; // Add gain again (x2)
 
-                    actions.add(GameDto.MoveAction.builder()
-                            .type("BUFF")
-                            .buffType("DOUBLE_MOVE")
-                            .before(beforeBuffPos)
-                            .after(nextPos)
-                            .build());
+                        actions.add(GameDto.MoveAction.builder()
+                                .type("BUFF")
+                                .buffType("DOUBLE_SCORE")
+                                .before(beforeBuffPos)
+                                .after(nextPos)
+                                .build());
+                        log.info("User {} consumed buff DOUBLE_SCORE (x2 Move)", winnerUserId);
+                    } else if ("PLUS_THREE".equals(winnerState.getHasBuff())) {
+                        int beforeBuffPos = nextPos;
+                        nextPos += 3; // Add 3
+
+                        actions.add(GameDto.MoveAction.builder()
+                                .type("BUFF")
+                                .buffType("PLUS_THREE")
+                                .before(beforeBuffPos)
+                                .after(nextPos)
+                                .build());
+                        log.info("User {} consumed buff PLUS_THREE (+3 Move)", winnerUserId);
+                    }
 
                     // Consume Buff
                     winnerState.setHasBuff(null);
-                    log.info("User {} consumed buff DOUBLE_MOVE", winnerUserId);
                 }
 
                 // 3. Tile Effect (Map Event)
@@ -601,6 +620,13 @@ public class GameService {
                 winnerState.setPosition(nextPos);
                 roomRepository.save(room); // Save state changes (position, buff consumption)
 
+                if (room.getStatus() == RoomStatus.FINISHED) {
+                    GameDto.FinishResponse finishResponse = buildFinishResponse(room);
+                    messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/finish", finishResponse);
+                    broadcastGameState(room);
+                    return;
+                }
+
                 GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
                         .userId(winnerUserId)
                         .startPosition(currentPos)
@@ -625,7 +651,15 @@ public class GameService {
 
             // 3. Check for Round Change
             if (nextIndex >= turnOrder.size()) {
-                // Round Over -> Next Round, Reset to First Player
+                // Round Over
+                if (room.getRound() % 2 != 0) {
+                    // Odd Round Ended -> Trigger MiniGame
+                    log.info("Odd Round {} Ended. Triggering MiniGame for Room {}", room.getRound(), room.getId());
+                    miniGameService.startMiniGame(roomId);
+                    return; // Stop here, do not set next turn or schedule quiz
+                }
+
+                // Even Round Ended -> Next Round, Reset to First Player
                 nextIndex = 0;
                 room.setRound(room.getRound() + 1);
                 log.info("Room {} - Round {} Started", room.getId(), room.getRound());
@@ -649,5 +683,85 @@ public class GameService {
         } catch (Exception e) {
             log.error("Error in processRoundResult", e);
         }
+
+    }
+
+    public void resumeAfterMiniGame(String roomId) {
+        try {
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+            log.info("Resuming Game after MiniGame for Room {}", roomId);
+
+            // Set Room Status back to QUIZ_TIME as per user's state transition rules
+            // (MOVE -> QUIZ_TIME)
+            room.setStatus(RoomStatus.QUIZ_TIME);
+
+            // Reset Turn to First Player
+            if (!room.getTurnOrder().isEmpty()) {
+                room.setCurrentTurnUserId(room.getTurnOrder().get(0));
+            }
+
+            roomRepository.save(room);
+
+            // Broadcast Updated State
+            broadcastGameState(room);
+
+            // Schedule Next Quiz
+            scheduler.schedule(() -> {
+                startQuiz(roomId);
+            }, 5000, TimeUnit.MILLISECONDS);
+
+        } catch (Exception e) {
+            log.error("Error resuming game after mini-game", e);
+        }
+    }
+
+    private GameDto.FinishResponse buildFinishResponse(Room room) {
+        List<GameDto.FinishRank> rankings = buildFinishRankings(room);
+        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getUserId();
+
+        return GameDto.FinishResponse.builder()
+                .type("FINISH")
+                .winnerUserId(winnerUserId)
+                .rankings(rankings)
+                .build();
+    }
+
+    private List<GameDto.FinishRank> buildFinishRankings(Room room) {
+        return room.getPlayerStates().values().stream()
+                .map(state -> {
+                    User user = userRepository.findById(state.getUserId()).orElse(null);
+                    String nickname = user != null ? user.getNickname() : "Unknown";
+                    int position = state.getPosition();
+                    int remaining = Math.max(TARGET_POSITION - position, 0);
+                    int score = state.getScore();
+                    return new Object[] { state.getUserId(), nickname, position, remaining, score };
+                })
+                .sorted((a, b) -> {
+                    int remainingA = (int) a[3];
+                    int remainingB = (int) b[3];
+                    if (remainingA != remainingB) {
+                        return Integer.compare(remainingA, remainingB);
+                    }
+                    int scoreA = (int) a[4];
+                    int scoreB = (int) b[4];
+                    return Integer.compare(scoreB, scoreA);
+                })
+                .collect(Collectors.collectingAndThen(Collectors.toList(), list -> {
+                    List<GameDto.FinishRank> ranks = new ArrayList<>();
+                    for (int i = 0; i < list.size(); i++) {
+                        Object[] item = list.get(i);
+                        ranks.add(GameDto.FinishRank.builder()
+                                .userId((String) item[0])
+                                .nickname((String) item[1])
+                                .position((int) item[2])
+                                .remaining((int) item[3])
+                                .score((int) item[4])
+                                .rank(i + 1)
+                                .build());
+                    }
+                    return ranks;
+                }));
     }
 }
