@@ -1,38 +1,23 @@
 pipeline {
     agent any
 
-    environment {
-        COMPOSE_DIR = 'deploy/compose'
+    // Tools 섹션에 설정한 도구 이름을 넣으면
+    // Jenkins가 자동으로 Docker 바이너리 경로를 PATH에 추가합니다.
+    tools {
+        dockerTool 'my-docker'
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('Deploy') {
             steps {
-                dir("${COMPOSE_DIR}") {
-                    sh '''
-                        docker compose down
-                        docker compose up -d --build
-                    '''
+                script {
+                    // 이제 docker 명령어를 사용할 수 있습니다.
+                    dir('deploy/compose') {
+                        sh 'docker compose down'
+                        sh 'docker compose up -d'
+                    }
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo '✅ 배포 성공'
-        }
-        failure {
-            echo '❌ 배포 실패'
-        }
-        always {
-            cleanWs()
         }
     }
 }
