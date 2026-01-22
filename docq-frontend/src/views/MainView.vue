@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage } from '@/services/api';
 import AlertModal from '@/components/common/AlertModal.vue';
 import CreateRoomModal from '@/components/lobby/CreateRoomModal.vue';
 import JoinRoomModal from '@/components/lobby/JoinRoomModal.vue';
+import { CursorTrail } from '@/utils/cursorTrail';
 
 const userStore = useUserStore();
 const router = useRouter();
@@ -16,6 +17,9 @@ const showJoinModal = ref(false);
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false); 
+const isHovered = ref(false);
+const canvasRef = ref<HTMLCanvasElement | null>(null);
+let cursorTrail: CursorTrail | null = null; 
 
 const confirmNickname = async () => {
   if (nickname.value.trim().length < 2) {
@@ -61,6 +65,17 @@ const syncNicknameFromStore = () => {
 onMounted(() => {
   userStore.restoreUser();
   syncNicknameFromStore();
+  
+  if (canvasRef.value) {
+    cursorTrail = new CursorTrail(canvasRef.value);
+    cursorTrail.start();
+  }
+});
+
+onUnmounted(() => {
+  if (cursorTrail) {
+    cursorTrail.destroy();
+  }
 });
 
 watch(
@@ -76,6 +91,9 @@ watch(
   
   <div class="bg-[#fff1f2] min-h-screen font-display antialiased overflow-hidden selection:bg-[#e11d48]/30 relative flex flex-col justify-center items-center">
     
+    <!-- 마우스 트레일 캔버스 -->
+    <canvas ref="canvasRef" class="absolute inset-0 pointer-events-none z-10"></canvas>
+
     <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       <div class="absolute -top-[10%] -right-[10%] w-[800px] h-[800px] rounded-full 
                   bg-gradient-to-br from-[#e11d48]/20 to-[#fda4af]/30 
@@ -102,7 +120,11 @@ watch(
     <div class="relative z-10 flex flex-col w-full max-w-md px-6 py-8">
       
       <div class="flex flex-col gap-1 items-center justify-center mb-10 transition-all duration-500" :class="isNicknameSet ? 'scale-90' : 'scale-100'">
-        <h1 class="text-[#881337] text-[80px] font-extrabold tracking-tight leading-none text-center drop-shadow-sm">
+        <h1 
+          class="animated-gradient-text text-[80px] font-extrabold tracking-tight leading-none text-center"
+          @mouseenter="isHovered = true"
+          @mouseleave="isHovered = false"
+        >
           DocQ
         </h1>
         <div class="py-4"></div>
@@ -112,10 +134,6 @@ watch(
       <div class="w-full mb-8 mt-6 relative group">
         <label class="sr-only" for="nickname">Nickname</label>
         <div class="relative flex items-center">
-          <span class="absolute left-8 text-[#e11d48]/60 z-20 material-symbols-outlined">
-            face
-          </span>
-          
           <input 
             id="nickname"
             v-model="nickname"
@@ -123,8 +141,8 @@ watch(
             placeholder="닉네임을 입력해 주세요"
             :disabled="isNicknameSet"
             @keyup.enter="!isNicknameSet && confirmNickname()"
-            class="w-full h-16 bg-white/80 backdrop-blur-sm text-[#881337] placeholder:text-[#fda4af] 
-                   pl-14 pr-14 rounded-full border-none 
+            class="w-full h-20 bg-white/80 backdrop-blur-sm text-[#881337] placeholder:text-[#fda4af] 
+                   px-6 rounded-full border-none 
                    shadow-[inset_2px_2px_4px_rgba(163,22,57,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.8)] 
                    focus:ring-2 focus:ring-[#e11d48] focus:shadow-lg focus:shadow-rose-500/10 
                    transition-all duration-300 text-lg text-center font-bold outline-none"
@@ -134,32 +152,30 @@ watch(
             ]"
           />
 
-          <div class="absolute right-2">
+          <div class="absolute right-4">
             <button 
               v-if="!isNicknameSet"
               @click="confirmNickname"
-              class="p-2 bg-white rounded-full shadow-sm text-slate-300 hover:text-[#e11d48] hover:bg-rose-50 transition-colors"
+              class="p-3 bg-white rounded-full shadow-sm text-slate-300 hover:text-[#e11d48] hover:bg-rose-50 transition-colors"
             >
-              <span class="material-symbols-outlined text-[20px] block">arrow_forward</span>
+              <span class="material-symbols-outlined text-[28px] block">arrow_forward</span>
             </button>
-            <span v-else class="p-2 text-slate-400">
-              <span class="material-symbols-outlined text-[20px] block">lock</span>
-            </span>
+            <button 
+              v-else
+              @click="editNickname"
+              class="w-12 h-12 flex items-center justify-center bg-white rounded-full shadow-md text-[#e11d48]/60 hover:text-[#e11d48] hover:bg-rose-50 transition-colors hover:scale-110 active:scale-95"
+              title="닉네임 수정"
+            >
+              <span class="material-symbols-outlined text-[32px]">edit</span>
+            </button>
           </div>
-        </div>
-
-        <div v-if="isNicknameSet" class="mt-3 flex justify-center animate-fade-in">
-          <button 
-            @click="editNickname"
-            class="text-sm font-semibold text-[#e11d48]/80 hover:text-[#e11d48] transition-colors flex items-center gap-1 py-2 px-4 rounded-lg hover:bg-[#e11d48]/5"
-          >
-            <span class="material-symbols-outlined text-[16px]">edit</span>
-            Edit Nickname
-          </button>
         </div>
       </div>
 
-      <div v-if="isNicknameSet" class="flex flex-col gap-4 w-full mt-auto animate-slide-up">
+      <!-- 간격 유지를 위한 spacer -->
+      <div v-if="isNicknameSet" class="h-4"></div>
+
+      <div v-if="isNicknameSet" class="flex flex-col gap-4 w-full animate-slide-up">
         <button 
           @click="handleCreateRoom"
           class="relative group w-full h-16 rounded-full bg-gradient-to-r from-[#e11d48] to-[#be123c] hover:to-[#9f1239] text-white 
@@ -242,6 +258,31 @@ watch(
   animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
+/* 4. 그라디언트 텍스트 애니메이션 */
+.animated-gradient-text {
+  background: linear-gradient(
+    90deg,
+    #881337,
+    #e11d48,
+    #fb923c,
+    #fda4af,
+    #e11d48,
+    #881337
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientFlow 3s linear infinite;
+  filter: drop-shadow(0 2px 4px rgba(136, 19, 55, 0.2));
+  transition: filter 0.3s ease;
+}
+
+.animated-gradient-text:hover {
+  filter: drop-shadow(0 0 12px rgba(225, 29, 72, 0.4)) 
+          drop-shadow(0 0 24px rgba(225, 29, 72, 0.2));
+}
+
 /* 3. 키프레임 정의 */
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
@@ -264,5 +305,10 @@ watch(
   20%, 80% { transform: translate3d(2px, 0, 0); }
   30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
   40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+@keyframes gradientFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
 }
 </style>
