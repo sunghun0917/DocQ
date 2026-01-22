@@ -36,6 +36,7 @@ public class GameService {
     private final SimpMessagingTemplate messagingTemplate;
     private final AiClient aiClient;
     private final MiniGameService miniGameService;
+    private static final int TARGET_POSITION = 30;
 
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
@@ -524,8 +525,8 @@ public class GameService {
                 // 단순 맵 크기 제한 (e.g. 30칸)
                 if (nextPos < 0)
                     nextPos = 0;
-                if (nextPos >= 30) {
-                    nextPos = 30; // Max Position
+                if (nextPos >= TARGET_POSITION) {
+                    nextPos = TARGET_POSITION; // Max Position
                     log.info("User {} reached destination. Ending Game!", winnerUserId);
                     room.setStatus(RoomStatus.FINISHED);
                 }
@@ -619,6 +620,13 @@ public class GameService {
                 winnerState.setPosition(nextPos);
                 roomRepository.save(room); // Save state changes (position, buff consumption)
 
+                if (room.getStatus() == RoomStatus.FINISHED) {
+                    GameDto.FinishResponse finishResponse = buildFinishResponse(room);
+                    messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/finish", finishResponse);
+                    broadcastGameState(room);
+                    return;
+                }
+
                 GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
                         .userId(winnerUserId)
                         .startPosition(currentPos)
@@ -707,5 +715,53 @@ public class GameService {
         } catch (Exception e) {
             log.error("Error resuming game after mini-game", e);
         }
+    }
+
+    private GameDto.FinishResponse buildFinishResponse(Room room) {
+        List<GameDto.FinishRank> rankings = buildFinishRankings(room);
+        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getUserId();
+
+        return GameDto.FinishResponse.builder()
+                .type("FINISH")
+                .winnerUserId(winnerUserId)
+                .rankings(rankings)
+                .build();
+    }
+
+    private List<GameDto.FinishRank> buildFinishRankings(Room room) {
+        return room.getPlayerStates().values().stream()
+                .map(state -> {
+                    User user = userRepository.findById(state.getUserId()).orElse(null);
+                    String nickname = user != null ? user.getNickname() : "Unknown";
+                    int position = state.getPosition();
+                    int remaining = Math.max(TARGET_POSITION - position, 0);
+                    int score = state.getScore();
+                    return new Object[] { state.getUserId(), nickname, position, remaining, score };
+                })
+                .sorted((a, b) -> {
+                    int remainingA = (int) a[3];
+                    int remainingB = (int) b[3];
+                    if (remainingA != remainingB) {
+                        return Integer.compare(remainingA, remainingB);
+                    }
+                    int scoreA = (int) a[4];
+                    int scoreB = (int) b[4];
+                    return Integer.compare(scoreB, scoreA);
+                })
+                .collect(Collectors.collectingAndThen(Collectors.toList(), list -> {
+                    List<GameDto.FinishRank> ranks = new ArrayList<>();
+                    for (int i = 0; i < list.size(); i++) {
+                        Object[] item = list.get(i);
+                        ranks.add(GameDto.FinishRank.builder()
+                                .userId((String) item[0])
+                                .nickname((String) item[1])
+                                .position((int) item[2])
+                                .remaining((int) item[3])
+                                .score((int) item[4])
+                                .rank(i + 1)
+                                .build());
+                    }
+                    return ranks;
+                }));
     }
 }
