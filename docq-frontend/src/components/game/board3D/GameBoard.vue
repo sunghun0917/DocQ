@@ -39,6 +39,13 @@
           :lookTarget="getPlayerFaceTarget(p)"
           :color="getPlayerColor(p.userId)"
         />
+        <template #fallback>
+          <!-- Loading fallback (optional) -->
+          <TresMesh :position="[0, 0.5, 0]" :scale="[0.3, 0.3, 0.3]">
+            <TresBoxGeometry />
+            <TresMeshStandardMaterial color="yellow" />
+          </TresMesh>
+        </template>
       </Suspense>
     </TresCanvas>
 
@@ -72,10 +79,6 @@ interface GridItem {
 interface PathCoord {
   x: number; y: number;
 }
-interface AnimatingPlayer {
-    userId: string
-    currentPathIndex: number // 애니메이션 중의 임시 위치
-} 
 
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
@@ -95,31 +98,19 @@ const grid = ref<GridItem[]>([])
 const pathCoords = ref<PathCoord[]>([])
 const rouletteLabels = ref<number[]>([1, 2, 3, 4])
 
-// 고정된 시드(혹은 단순화된 로직)로 항상 같은 맵 생성
+// 고정된 경로 생성 (동기화 이슈 방지)
 function generateDeterministicPath(): PathCoord[] {
-    // 'ㄹ'자 혹은 나선형으로 단순 생성 (MVP)
-    // 실제로는 복잡한 알고리즘이 필요할 수 있으나 동기화 이슈 방지를 위해 고정함
     const path: PathCoord[] = []
-    let cx = 11, cy = 11
-    // 단순화된 고정 경로 예시
-    const moves = [
-        {dx:0, dy:-1, c:5}, {dx:-1, dy:0, c:5}, 
-        {dx:0, dy:1, c:4}, {dx:1, dy:0, c:4},
-        {dx:0, dy:-1, c:3}, {dx:-1, dy:0, c:3},
-    ] // 총 24칸 + ... 
-    
-    // (MVP) 더 확실한 고정 경로 (Start: 11,11 -> End: 0,0)
-    // 11,11 -> 11,6 -> 6,6 -> 6,1 -> 1,1 -> 1,0 -> 0,0
     path.push({x:11, y:11})
-    for(let i=0; i<5; i++) path.push({x:11, y:10-i}) // up
-    for(let i=0; i<5; i++) path.push({x:10-i, y:6}) // left
-    for(let i=0; i<5; i++) path.push({x:6, y:5-i})  // up
-    for(let i=0; i<5; i++) path.push({x:5-i, y:1})  // left
-    for(let i=0; i<5; i++) path.push({x:1, y:2+i})  // down (twist)
-    // ... 대충 채움 (31칸 맞추기)
+    for(let i=0; i<5; i++) path.push({x:11, y:10-i})
+    for(let i=0; i<5; i++) path.push({x:10-i, y:6})
+    for(let i=0; i<5; i++) path.push({x:6, y:5-i})
+    for(let i=0; i<5; i++) path.push({x:5-i, y:1})
+    for(let i=0; i<5; i++) path.push({x:1, y:2+i})
+    
     while(path.length < PATH_LENGTH) {
         const last = path[path.length-1]
-        if (!last) break // Safety check
+        if (!last) break
         
         if(last.x > 0) path.push({x:last.x-1, y:last.y})
         else if(last.y > 0) path.push({x:last.x, y:last.y-1})
@@ -172,7 +163,7 @@ const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
 const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string, string> | undefined)
 
 // 애니메이션 상태 관리
-const animatingPlayers = ref<Record<string, number>>({}) // userId -> currentPathIndex
+const animatingPlayers = ref<Record<string, number>>({})
 
 // 초기화 시 서버 위치로 동기화
 watch(() => players.value, (newPlayers) => {
@@ -180,7 +171,6 @@ watch(() => players.value, (newPlayers) => {
         if (animatingPlayers.value[p.userId] === undefined) {
             animatingPlayers.value[p.userId] = p.position 
         } else {
-             // 애니메이션 중이 아닐 때만 강제 동기화 (오차 수정)
              if (!isMovingGlobal.value) {
                  animatingPlayers.value[p.userId] = p.position
              }
@@ -213,7 +203,6 @@ watch(mapEvents, (events) => {
 const PLAYER_COLORS = ['#ff4444', '#44ff44', '#4444ff', '#ffff44']
 
 function getPlayerColor(userId: string) {
-    // userId 해시 또는 순서 기반 색상
     const idx = gameStore.gameState.players.findIndex(p => p.userId === userId)
     return PLAYER_COLORS[idx % 4] || '#ffffff'
 }
@@ -225,7 +214,6 @@ function getPlayerDisplayCoords(p: Player) {
 
 function getPlayerFaceTarget(p: Player) {
     const idx = animatingPlayers.value[p.userId] ?? p.position
-    // 다음 칸을 바라봄
     if (idx < pathCoords.value.length - 1) {
         return pathCoords.value[idx+1] || pathCoords.value[idx] || { x: 0, y: 0 }
     }
@@ -328,7 +316,7 @@ async function runIntroCamera() {
 const isMovingGlobal = ref(false)
 const isSpinning = ref(false)
 const rouletteRotation = ref(0)
-const isRouletteVisible = ref(false) // 룰렛 HUD 표시 여부
+const isRouletteVisible = ref(false)
 
 // gameStore.currentMove 감지하여 애니메이션 실행
 watch(() => gameStore.currentMove, async (move) => {
@@ -336,7 +324,7 @@ watch(() => gameStore.currentMove, async (move) => {
 
     isMovingGlobal.value = true
     
-    // 1. 룰렛 돌리기 (있다면)
+    // 1. 룰렛 돌리기
     const rouletteStep = move.moveProcess.find((item: any) => item.type === 'ROULETTE')
     if (rouletteStep && rouletteStep.value) {
         rouletteLabels.value = getRouletteLabels(rouletteStep.value, move.userId)
@@ -350,20 +338,16 @@ watch(() => gameStore.currentMove, async (move) => {
     const end = move.endPosition
     const userId = move.userId
 
-    // 한 칸씩 이동
     if (end > start) {
         for (let i = start + 1; i <= end; i++) {
             animatingPlayers.value[userId] = i
-            await sleep(500) // 캐릭터 점프 시간
+            await sleep(500)
         }
     } else if (end < start) {
-        // 뒤로 가기 or 태초마을 (순간이동 처리 or 역방향)
-        // MVP: 일단 순간이동/빠른이동
         animatingPlayers.value[userId] = end
     }
 
     isMovingGlobal.value = false
-    // 애니메이션 끝난 후 스토어 상태가 완료된 것과 일치하는지 확인 (자동으로 watch가 맞춰줌)
 })
 
 async function spinRouletteAnimation(resultValue: number, labels: number[]) {
@@ -404,7 +388,7 @@ function sleep(ms: number) {
 }
 
 onMounted(() => {
-    // 
+    // Initialization if needed
 })
 </script>
 

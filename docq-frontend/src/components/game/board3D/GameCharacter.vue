@@ -100,36 +100,32 @@ if (scene) {
 
 /* ===== 애니메이션 액션 설정 ===== */
 // scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
-const { actions } = useAnimations(allClips, (scene || new THREE.Group()) as any)
+const { actions } = useAnimations(allClips, scene || new THREE.Object3D())
 
 // 상수로 관리하는 설정값들
 const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
-const MOVE_DURATION = 0.5   // 한 칸 이동 시간 (0.5초)
-const Y_OFFSET = 0.25       // 높이 보정값
+const MOVE_DURATION = 0.5   // 한 칸 이동 시간
+const Y_OFFSET = 0.0        // Primitive는 바닥 기준이므로 0
 
 /*
  * 함수: 다음 이동할 칸을 바라보게 회전시키는 함수
- * lookAt 메소드를 사용해 3D 공간 상의 특정 좌표를 응시
  */
 const updateLookDirection = () => {
   if (!scene || !props.lookTarget) return
-  const target3D: [number, number, number] = get3DPos(props.lookTarget.x, props.lookTarget.y)
-  // 캐릭터의 발밑이 아닌 눈높이를 바라보게 하기 위해 Y_OFFSET 더함
-  scene.lookAt(target3D[0], target3D[1] + Y_OFFSET, target3D[2])
+  const target3D = get3DPos(props.lookTarget.x, props.lookTarget.y)
+  scene.lookAt(target3D[0], target3D[1], target3D[2])
 }
 
 /*
- * 라이프사이클: 컴포넌트 마운트 시 애니메이션 시작
+ * 라이프사이클
  */
 onMounted(() => {
   if (idleClip && actions[idleClip.name]) {
     const action = actions[idleClip.name]
-    if (action) {
-      // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
-      action.setEffectiveTimeScale(2.0)
-      // 페이드인과 함께 재생
-      action.reset().fadeIn(FADE_TIME).play()
-    }
+    // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
+    action.setEffectiveTimeScale(2.0)
+    // 페이드인과 함께 재생
+    action.reset().fadeIn(FADE_TIME).play()
   }
   // 초기 시선 처리
   updateLookDirection()
@@ -182,6 +178,12 @@ watch(() => props.lookTarget, () => updateLookDirection(), { deep: true })
 </script>
 
 <template>
-  <!-- 씬 객체가 준비되면 렌더링 (primitive 사용) -->
+  <!-- 씬 객체가 준비되면 렌더링 -->
   <primitive v-if="scene" :object="scene" cast-shadow />
+  
+  <!-- 로드 실패 시 디버그용 큐브 (빨강) -->
+  <TresMesh v-else :position="get3DPos(x, y)" :scale="[0.5, 0.5, 0.5]">
+    <TresBoxGeometry />
+    <TresMeshStandardMaterial color="red" />
+  </TresMesh>
 </template>

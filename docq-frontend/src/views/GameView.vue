@@ -3,6 +3,9 @@ import { ref, computed, watch, onMounted, watchEffect } from 'vue';
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
+import QuizOverlay from '@/components/game/QuizOverlay.vue';
+import AnswerFeedback from '@/components/game/AnswerFeedback.vue';
+import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -68,14 +71,8 @@ const submitAnswer = (index: number) => {
     selectedOption.value = index
     isSubmitted.value = true
     
-    // WebSocket으로 정답 전송
-    // answerText가 필요하다면 options[index]를 보냄, 여기선 index + 1 or string?
-    // 백엔드 GameController.submitQuiz(String answer) 
-    // 보통 1, 2, 3, 4 번호 혹은 텍스트.
-    // 일단 텍스트로 보낸다고 가정 (Backend logic check needed, but let's try option text)
     const answerText = currentQuiz.value.options[index]
     
-    // roomId is required. userStore doesn't have it? roomStore.roomInfo.roomId
     const roomId = roomStore.roomInfo.roomId
     if (roomId && myUserId.value) {
         wsStore.submitAnswer(roomId, myUserId.value, currentQuiz.value.quizId, answerText || "")
@@ -276,6 +273,16 @@ watchEffect(() => {
   height: 100%;
   z-index: 10;     /* 3D 캔버스보다 위에 표시 */
   pointer-events: none; /* 클릭 이벤트를 3D 쪽으로 통과시킴 (버튼 등은 pointer-events-auto 필요) */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* 퀴즈 콘텐츠 영역 */
+.quiz-contents {
+  width: 100%;
+  height: 100%;
+  pointer-events: auto; /* 내부 버튼 클릭 가능하도록 */
 }
 
 /* 유틸리티 클래스 (Tailwind가 적용 안 될 경우를 대비해 pointer-events 명시) */
