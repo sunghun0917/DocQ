@@ -1,12 +1,15 @@
 FROM python:3.11-slim
 
+# Force rebuild 2026-01-22 v2
 WORKDIR /app
 
 # System deps for OCR and PDF processing
+# text extraction depends on these
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        tesseract-ocr \
-        poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-kor \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
