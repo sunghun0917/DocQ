@@ -14,77 +14,31 @@ pipeline {
             }
         }
 
-        stage('Backend: build') {
+        stage('Build: Backend') {
             steps {
                 dir("${BACKEND_DIR}") {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/app \
-                          -w /app \
-                          eclipse-temurin:17-jdk-alpine \
-                          sh -c "chmod +x ./gradlew && ./gradlew clean build --no-daemon"
-                    '''
+                    sh 'docker build -t docq-backend .'
                 }
             }
         }
 
-        stage('Frontend: build') {
+        stage('Build: Frontend') {
             steps {
                 dir("${FRONTEND_DIR}") {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/app \
-                          -w /app \
-                          node:20-alpine \
-                          sh -c "npm ci && npm run build"
-                    '''
+                    sh 'docker build -t docq-frontend .'
                 }
             }
         }
 
-        stage('AI service: deps check') {
+        stage('Build: AI') {
             steps {
                 dir("${AI_DIR}") {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/app \
-                          -w /app \
-                          python:3.10 \
-                          sh -c "pip install -r requirements.txt && python -m pytest || echo 'No tests'"
-                    '''
+                    sh 'docker build -t docq-ai .'
                 }
             }
         }
 
-        stage('Docker Build') {
-            parallel {
-                stage('Build Backend Image') {
-                    steps {
-                        dir("${BACKEND_DIR}") {
-                            sh 'docker build -t docq-backend .'
-                        }
-                    }
-                }
-
-                stage('Build Frontend Image') {
-                    steps {
-                        dir("${FRONTEND_DIR}") {
-                            sh 'docker build -t docq-frontend .'
-                        }
-                    }
-                }
-
-                stage('Build AI Image') {
-                    steps {
-                        dir("${AI_DIR}") {
-                            sh 'docker build -t docq-ai .'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Deploy') {
+        stage('Deploy: All Containers') {
             steps {
                 sh '''
                     docker stop docq-backend || true
@@ -97,7 +51,7 @@ pipeline {
 
                     docker stop docq-ai || true
                     docker rm docq-ai || true
-                    docker run -d --name docq-ai --network app-network -p 5000:5000 docq-ai
+                    docker run -d --name docq-ai --network app-network -p 5000:8000 docq-ai
                 '''
             }
         }
