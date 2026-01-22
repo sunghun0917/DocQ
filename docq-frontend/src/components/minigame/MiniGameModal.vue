@@ -1,28 +1,32 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import MashGame from './MashGame.vue';
 import SequenceGame from './SequenceGame.vue';
 import StopwatchGame from './StopWatchGame.vue';
 
 const props = defineProps<{
   gameType: 'mash' | 'sequence' | 'stopwatch';
+  players: Array<{ id: string; nickname: string; avatar: string; isMe: boolean }>;
+  timeLimitMs?: number;
+  description?: string;
+  result?: {
+    winnerUserId?: string | null;
+    rewardBuff?: string | null;
+    rankings?: Array<{ userId: string; nickname: string; value: number; rank: number }>;
+  };
 }>();
 
-const emit = defineEmits(['close']);
+const emit = defineEmits<{
+  (e: 'submit', score: number): void;
+  (e: 'close'): void;
+}>();
 
-// 1. 플레이어 데이터 (테스트를 위해 3명으로 줄여봄, 나중엔 Store에서 가져옴)
-const players = ref([
-  { id: 'p1', nickname: '티라노(나)', avatar: '🦖', isMe: true },
-  { id: 'p2', nickname: '토끼', avatar: '🐰', isMe: false },
-  { id: 'p3', nickname: '여우', avatar: '🦊', isMe: false },
-  // { id: 'p4', nickname: '곰돌이', avatar: '🐻', isMe: false },
-]);
-
-const scores = ref<Record<string, number>>({});
-const isResultShown = ref(false);
+const isSubmitted = ref(false);
 const countdown = ref(3);
 const isStarted = ref(false);
 const showStartText = ref(false);
+const miniTimeLeft = ref(10);
+let miniTimer: number | null = null;
 
 // [핵심] 인덱스에 따라 위치와 스타일 클래스 반환
 const getPlayerStyle = (index: number) => {
@@ -35,33 +39,40 @@ const getPlayerStyle = (index: number) => {
   return positions[index] || '';
 };
 
-// 3. 게임 종료 핸들러
-const handleGameEnd = (myScore: number) => {
-  // 내 점수 기록
-  const myPlayer = players.value.find(p => p.isMe);
-  if (myPlayer) scores.value[myPlayer.id] = myScore;
-
-  // [수정] 플레이어 리스트를 돌면서 유동적으로 점수 생성 (하드코딩 제거)
-  players.value.forEach(player => {
-    if (!player.isMe) {
-      // 랜덤 점수 (1.000 ~ 2.000초 사이)
-      const randomScore = parseFloat((Math.random() + 1).toFixed(3));
-      scores.value[player.id] = randomScore;
-    }
+const resultScores = computed(() => {
+  const map: Record<string, number> = {};
+  props.result?.rankings?.forEach(rank => {
+    map[rank.userId] = rank.value;
   });
-  
-  isResultShown.value = true;
-  setTimeout(() => emit('close', myScore), 3000);
-};
-
-// 4. 승자 판독기
-const winnerId = computed(() => {
-  const keys = Object.keys(scores.value);
-  if (keys.length === 0) return null;
-  return keys.reduce((a, b) => 
-    (scores.value[a] ?? Infinity) < (scores.value[b] ?? Infinity) ? a : b
-  );
+  return map;
 });
+
+const isResultShown = computed(() => !!props.result?.rankings?.length);
+
+const effectiveTimeLimitMs = computed(() => {
+  if (props.gameType === 'mash') {
+    return 10000;
+  }
+  return props.timeLimitMs;
+});
+
+const showMiniTimer = computed(() =>
+  (props.gameType === 'mash' || props.gameType === 'sequence') &&
+  isStarted.value &&
+  !isResultShown.value
+);
+
+const winnerId = computed(() => {
+  if (props.result?.winnerUserId) return props.result.winnerUserId;
+  const top = props.result?.rankings?.[0];
+  return top?.userId ?? null;
+});
+
+const handleGameEnd = (myScore: number) => {
+  if (isSubmitted.value) return;
+  isSubmitted.value = true;
+  emit('submit', myScore);
+};
 
 onMounted(() => {
   const timer = setInterval(() => {
@@ -74,6 +85,31 @@ onMounted(() => {
     }
   }, 1000);
 });
+
+watch([isStarted, effectiveTimeLimitMs], ([started, limit]) => {
+  if (!started || props.gameType === 'stopwatch') return;
+  if (miniTimer) clearInterval(miniTimer);
+  miniTimeLeft.value = Math.max(1, Math.ceil((limit ?? 10000) / 1000));
+  miniTimer = window.setInterval(() => {
+    miniTimeLeft.value -= 1;
+    if (miniTimeLeft.value <= 0) {
+      if (miniTimer) clearInterval(miniTimer);
+      miniTimer = null;
+    }
+  }, 1000);
+});
+
+watch(isResultShown, (shown) => {
+  if (shown && miniTimer) {
+    clearInterval(miniTimer);
+    miniTimer = null;
+  }
+});
+
+onUnmounted(() => {
+  if (miniTimer) clearInterval(miniTimer);
+});
+
 </script>
 
 <template>
@@ -92,9 +128,11 @@ onMounted(() => {
           <div class="text-white font-bold">{{ player.nickname }}</div>
           
           <div v-if="isResultShown" class="text-xl font-black text-yellow-400">
-            {{ scores[player.id] ? Number(scores[player.id]).toFixed(3) + 's' : '' }}
+            {{ resultScores[player.id] ? resultScores[player.id] + '점' : '' }}
           </div>
-          <div v-else class="text-white/50 text-sm">플레이 중...</div>
+          <div v-else class="text-white/50 text-sm">
+            {{ isSubmitted && player.isMe ? '결과 집계 중...' : '플레이 중...' }}
+          </div>
         </div>
         
         <div v-if="isResultShown" class="animate-pop" :class="index % 2 !== 0 ? 'mr-auto' : 'ml-auto'">
@@ -113,8 +151,26 @@ onMounted(() => {
           <div class="text-8xl font-black text-[#00b894] animate-bounce-in">Go!</div>
         </div>
 
-        <MashGame v-if="gameType === 'mash'" :is-started="isStarted" @end="handleGameEnd" />
-        <SequenceGame v-if="gameType === 'sequence'" :is-started="isStarted" @end="handleGameEnd" />
+        <div v-if="description" class="absolute top-4 left-1/2 -translate-x-1/2 text-sm font-bold text-slate-500">
+          {{ description }}
+        </div>
+
+        <div v-if="showMiniTimer" class="absolute top-4 right-6 text-xl font-black text-slate-600">
+          {{ miniTimeLeft }}s
+        </div>
+
+        <MashGame
+          v-if="gameType === 'mash'"
+          :is-started="isStarted"
+          :time-limit-ms="effectiveTimeLimitMs"
+          @end="handleGameEnd"
+        />
+        <SequenceGame
+          v-if="gameType === 'sequence'"
+          :is-started="isStarted"
+          :time-limit-ms="effectiveTimeLimitMs"
+          @end="handleGameEnd"
+        />
         <StopwatchGame v-if="gameType === 'stopwatch'" :is-started="isStarted" @end="handleGameEnd" />
       </div>
 

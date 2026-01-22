@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 
-const props = defineProps<{ isStarted: boolean }>();
+const props = defineProps<{ isStarted: boolean; timeLimitMs?: number }>();
 const emit = defineEmits(['end']);
 
 const progress = ref(0);
@@ -15,6 +15,9 @@ let startTime = 0;
 let timer: number | null = null;
 
 const startGame = () => {
+  if (props.timeLimitMs) {
+    timeLeft.value = Math.max(1, Math.ceil(props.timeLimitMs / 1000));
+  }
   startTime = performance.now(); // [핵심] 시작 시간 기록
   window.addEventListener('keydown', handleKeydown);
   
