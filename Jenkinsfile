@@ -13,8 +13,8 @@ pipeline {
                 script {
                     // 이제 docker 명령어를 사용할 수 있습니다.
                     dir('deploy/compose') {
-                        sh 'docker compose down'
-                        sh 'docker compose up -d'
+                        sh 'docker-compose down'
+                        sh 'docker-compose up -d'
                     }
                 }
             }
