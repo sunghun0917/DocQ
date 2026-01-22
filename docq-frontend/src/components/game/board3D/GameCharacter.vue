@@ -88,13 +88,18 @@ if (!scene) {
   console.error('Character scene is null; check FBX load.')
 }
 
+// 상수로 관리하는 설정값들
+const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
+const MOVE_DURATION = 0.5   // 한 칸 이동 시간
+const Y_OFFSET = 0.45       // 바닥 아래로 보이는 현상 방지
+
 /* ===== 초기 위치 설정 ===== */
 if (scene) {
   // 시작점 3D 좌표 계산
   const startPos = get3DPos(props.x, props.y)
 
-  // Y축(높이)에 0.25를 더해 타일 위에 올라가게 함
-  scene.position.set(startPos[0], startPos[1] + 0.25, startPos[2])
+  // Y축(높이) 보정값 적용
+  scene.position.set(startPos[0], startPos[1] + Y_OFFSET, startPos[2])
 
   // 모델 크기 축소 (FBX 원본 크기에 맞춰 조절)
   scene.scale.set(0.01, 0.01, 0.01)
@@ -108,19 +113,15 @@ if (scene) {
 const animationTarget = scene ?? new THREE.Object3D()
 const { actions } = useAnimations(allClips, animationTarget as any)
 
-// 상수로 관리하는 설정값들
-const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
-const MOVE_DURATION = 0.5   // 한 칸 이동 시간
-const Y_OFFSET = 0.0        // Primitive는 바닥 기준이므로 0
-
 /*
  * 함수: 다음 이동할 칸을 바라보게 회전시키는 함수
  */
 const updateLookDirection = () => {
   if (!scene || !props.lookTarget) return
   const target3D = get3DPos(props.lookTarget.x, props.lookTarget.y)
-  // y를 현재 캐릭터 높이에 맞춰 고개 숙임 방지
-  scene.lookAt(target3D[0], scene.position.y, target3D[2])
+  const dx = target3D[0] - scene.position.x
+  const dz = target3D[2] - scene.position.z
+  scene.rotation.set(0, Math.atan2(dx, dz), 0)
 }
 
 /*
@@ -162,8 +163,9 @@ watch(
       // 이동 시작 시: 목적지 바라보기
       onStart: () => {
         const dest3D: [number, number, number] = get3DPos(newX, newY)
-        // 이동 시작 시에도 y를 고정해 앞쏠림 방지
-        scene.lookAt(dest3D[0], scene.position.y, dest3D[2])
+        const dx = dest3D[0] - scene.position.x
+        const dz = dest3D[2] - scene.position.z
+        scene.rotation.set(0, Math.atan2(dx, dz), 0)
       },
 
       // 이동 완료 시: 다음 타겟(Target+1) 바라보기
