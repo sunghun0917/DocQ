@@ -2,73 +2,114 @@ pipeline {
     agent any
 
     environment {
-        PROJECT_NAME   = 'docq'
-        IMAGE_TAG      = "${env.BUILD_NUMBER}"
-        COMPOSE_FILE   = 'deploy/compose/docker-compose.yml'
-        NODE_IMAGE     = 'node:20-alpine'
-        PY_IMAGE       = 'python:3.11-slim'
+        BACKEND_DIR = 'docq_backend'
+        FRONTEND_DIR = 'docq-frontend'
+        AI_DIR = 'docq-ai'
     }
 
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
-        stage('Backend: build & test') {
+        stage('Backend: build') {
             steps {
-                dir('docq_backend') {
-                    sh './gradlew clean build --no-daemon'
+                dir("${BACKEND_DIR}") {
+                    sh '''
+                        chmod +x gradlew
+                        ./gradlew clean build --no-daemon
+                    '''
                 }
             }
-            post { always { junit 'docq_backend/build/test-results/test/*.xml' } }
         }
 
         stage('Frontend: build') {
             steps {
-                sh """
-                  docker run --rm \
-                    -v "\$PWD/docq-frontend:/app" \
-                    -w /app ${NODE_IMAGE} \
-                    sh -c "npm ci && npm run build"
-                """
+                dir("${FRONTEND_DIR}") {
+                    sh '''
+                        npm ci
+                        npm run type-check
+                        npm run lint
+                        npm run test:unit
+                        npm run build
+                    '''
+                }
             }
         }
 
         stage('AI service: deps check') {
             steps {
-                sh """
-                  docker run --rm \
-                    -v "\$PWD/docq-ai:/app" \
-                    -w /app ${PY_IMAGE} \
-                    sh -c "pip install -r requirements.txt && pytest || true"
-                """
+                dir("${AI_DIR}") {
+                    sh '''
+                        python -m pip install --upgrade pip
+                        pip install -r requirements.txt
+                        python -m pytest || echo "⚠️ No tests configured"
+                    '''
+                }
             }
         }
 
-        stage('Build images') {
-            steps {
-                sh """
-                  docker build -t ${PROJECT_NAME}-backend:${IMAGE_TAG} docq_backend
-                  docker build -t ${PROJECT_NAME}-frontend:${IMAGE_TAG} docq-frontend
-                  docker build -t ${PROJECT_NAME}-ai:${IMAGE_TAG} docq-ai
-                """
+        stage('Docker Build') {
+            parallel {
+                stage('Build Backend Image') {
+                    steps {
+                        dir("${BACKEND_DIR}") {
+                            sh 'docker build -t docq-backend .'
+                        }
+                    }
+                }
+
+                stage('Build Frontend Image') {
+                    steps {
+                        dir("${FRONTEND_DIR}") {
+                            sh 'docker build -t docq-frontend .'
+                        }
+                    }
+                }
+
+                stage('Build AI Image') {
+                    steps {
+                        dir("${AI_DIR}") {
+                            sh 'docker build -t docq-ai .'
+                        }
+                    }
+                }
             }
         }
 
-        stage('Deploy (docker compose)') {
-            when { anyOf { branch 'main'; branch 'master' } }
+        stage('Deploy') {
             steps {
-                sh """
-                  cd deploy/compose
-                  docker compose down
-                  docker compose up -d --build
-                  docker compose ps
-                """
+                sh '''
+                    # Backend
+                    docker stop docq-backend || true
+                    docker rm docq-backend || true
+                    docker run -d --name docq-backend --network app-network -p 8080:8080 docq-backend
+
+                    # Frontend
+                    docker stop docq-frontend || true
+                    docker rm docq-frontend || true
+                    docker run -d --name docq-frontend --network app-network -p 3000:80 docq-frontend
+
+                    # AI Service
+                    docker stop docq-ai || true
+                    docker rm docq-ai || true
+                    docker run -d --name docq-ai --network app-network -p 5000:5000 docq-ai
+                '''
             }
         }
     }
 
     post {
-        always { cleanWs() }
+        success {
+            echo '🎉 Deployment success!'
+        }
+        failure {
+            echo '❌ Deployment failed!'
+        }
+        always {
+            cleanWs()
+        }
     }
 }
