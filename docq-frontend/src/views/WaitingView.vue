@@ -204,7 +204,11 @@ const handleStartGame = () => {
 };
 
 watchEffect(() => {
-  if (roomInfo.value.status === 'PLAYING') {
+  const status = roomInfo.value.status
+  if (!status) return
+
+  // 서버 상태가 STARTING/QUIZ_TIME/...로 바뀌면 게임 화면으로 이동
+  if (status !== 'WAITING' && status !== 'MINIGAME') {
     console.log('🎮 Game Started! redirecting to /game...')
     router.push('/game')
   }
@@ -290,9 +294,6 @@ onMounted(async () => {
       
       <header class="flex justify-between items-center mb-10 px-4">
         <div class="flex items-center gap-6">
-          <h1 class="text-4xl font-extrabold text-[#881337] tracking-tight drop-shadow-sm">
-            {{ roomInfo.title || '대기실' }}
-          </h1>
           <span class="bg-[#fff1f2] text-[#e11d48] border border-[#fecdd3] px-3 py-1.5 rounded-full text-sm font-bold tracking-wide shadow-sm flex items-center gap-1.5">
             <span class="material-symbols-outlined text-[18px]">
               {{ roomTypeIcon }}
@@ -301,6 +302,9 @@ onMounted(async () => {
               {{ roomInfo.isPrivate ? '비밀방' : '공개방' }}
             </span>
           </span>
+          <h1 class="text-4xl font-extrabold text-[#881337] tracking-tight drop-shadow-sm">
+            {{ roomInfo.title || '대기실' }}
+          </h1>
         </div>
         
         <div class="flex items-center gap-2 bg-white px-5 py-2.5 rounded-2xl font-bold text-[#e11d48] shadow-sm border border-[#ffe4e6]">
