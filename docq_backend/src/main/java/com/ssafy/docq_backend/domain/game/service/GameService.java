@@ -42,8 +42,8 @@ public class GameService {
 
     private static final long RESULT_DISPLAY_DELAY_MS = 2000;
     private static final long TURN_PREP_DELAY_MS = 1500;
-    private static final long ROULETTE_SPIN_MS = 3000;
-    private static final long MOVE_STEP_MS = 500;
+    private static final long ROULETTE_SPIN_MS = 1800;
+    private static final long MOVE_STEP_MS = 350;
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
 
     private static class MovePlan {
@@ -527,17 +527,20 @@ public class GameService {
 
             Long quizId = quizEntity.getQuizId();
 
+            LocalDateTime quizStartTime = LocalDateTime.now();
+
             GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
                     .quizId(quizId)
                     .question("Round " + room.getRound() + ": " + quizEntity.getQuestion())
                     .options(quizEntity.getOptions())
                     .timeLimit(5000L)
+                    .quizStartTime(quizStartTime)
                     .build();
 
             // Set Room State
             room.setCurrentQuizId(quizId);
             room.getQuizAnswers().clear();
-            room.setQuizStartTime(LocalDateTime.now());
+            room.setQuizStartTime(quizStartTime);
             room.setStatus(RoomStatus.QUIZ_TIME);
             roomRepository.save(room);
 
@@ -613,6 +616,16 @@ public class GameService {
 
         String correctAnswer = quizEntity.getAnswerText();
 
+        // 정답자 점수(맞춘 퀴즈 수) 누적
+        room.getQuizAnswers().forEach((userId, submit) -> {
+            if (submit != null && correctAnswer.equals(submit.getAnswer())) {
+                PlayerState ps = room.getPlayerStates().get(userId);
+                if (ps != null) {
+                    ps.setScore(ps.getScore() + 1);
+                }
+            }
+        });
+
         GameDto.SubmitAnswer turnUserSubmit = room.getQuizAnswers().get(turnUser);
         boolean isTurnUserCorrect =
                 turnUserSubmit != null && correctAnswer.equals(turnUserSubmit.getAnswer());
@@ -642,6 +655,8 @@ public class GameService {
         }
 
         MovePlan movePlan = null;
+        long moveAnimationMs = 0;
+        boolean finishPlanned = false;
 
         if (winnerUserId != null && moveValue != 0) {
             PlayerState winnerState = room.getPlayerStates().get(winnerUserId);
@@ -651,7 +666,7 @@ public class GameService {
             if (nextPos < 0) nextPos = 0;
             if (nextPos >= TARGET_POSITION) {
                 nextPos = TARGET_POSITION;
-                room.setStatus(RoomStatus.FINISHED);
+                finishPlanned = true;
             }
 
             List<GameDto.MoveAction> actions = new ArrayList<>();
@@ -663,33 +678,29 @@ public class GameService {
                     .after(nextPos)
                     .build());
 
-            // Buff 처리
-            if (winnerState.getHasBuff() != null) {
-                if ("DOUBLE_SCORE".equals(winnerState.getHasBuff())) {
-                    int before = nextPos;
-                    nextPos += moveValue;
+            boolean consumeBuff = winnerState.getHasBuff() != null;
+            if ("DOUBLE_SCORE".equals(winnerState.getHasBuff())) {
+                int before = nextPos;
+                nextPos += moveValue;
 
-                    actions.add(GameDto.MoveAction.builder()
-                            .type("BUFF")
-                            .buffType("DOUBLE_SCORE")
-                            .before(before)
-                            .after(nextPos)
-                            .build());
-                } else if ("PLUS_THREE".equals(winnerState.getHasBuff())) {
-                    int before = nextPos;
-                    nextPos += 3;
+                actions.add(GameDto.MoveAction.builder()
+                        .type("BUFF")
+                        .buffType("DOUBLE_SCORE")
+                        .before(before)
+                        .after(nextPos)
+                        .build());
+            } else if ("PLUS_THREE".equals(winnerState.getHasBuff())) {
+                int before = nextPos;
+                nextPos += 3;
 
-                    actions.add(GameDto.MoveAction.builder()
-                            .type("BUFF")
-                            .buffType("PLUS_THREE")
-                            .before(before)
-                            .after(nextPos)
-                            .build());
-                }
-                winnerState.setHasBuff(null);
+                actions.add(GameDto.MoveAction.builder()
+                        .type("BUFF")
+                        .buffType("PLUS_THREE")
+                        .before(before)
+                        .after(nextPos)
+                        .build());
             }
 
-            // 타일 이벤트
             if (room.getMapEvents().containsKey(nextPos)) {
                 String eventType = room.getMapEvents().get(nextPos);
                 int before = nextPos;
@@ -707,7 +718,6 @@ public class GameService {
                         .build());
             }
 
-            // 잡기 처리
             for (String pid : room.getPlayers()) {
                 if (pid.equals(winnerUserId)) continue;
 
@@ -719,30 +729,13 @@ public class GameService {
                             .before(other.getPosition())
                             .after(0)
                             .build());
-                    other.setPosition(0);
                 }
             }
 
-            winnerState.setPosition(nextPos);
+            movePlan = new MovePlan(winnerUserId, currentPos, nextPos, consumeBuff, actions);
 
-            if (room.getStatus() == RoomStatus.FINISHED) {
-                roomRepository.save(room);
-                messagingTemplate.convertAndSend(
-                        "/topic/game/" + room.getId() + "/finish",
-                        buildFinishResponse(room)
-                );
-                broadcastGameState(room);
-                return;
-            }
-
-            GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
-                    .userId(winnerUserId)
-                    .startPosition(currentPos)
-                    .endPosition(nextPos)
-                    .moveProcess(actions)
-                    .build();
-
-            messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/move", moveInfo);
+            int distance = Math.abs(nextPos - currentPos);
+            moveAnimationMs = (long) distance * MOVE_STEP_MS;
         }
 
         GameDto.RoundResult result = GameDto.RoundResult.builder()
@@ -753,28 +746,109 @@ public class GameService {
                 .rouletteType(rouletteType)
                 .build();
 
-        // 턴 넘기기
-        List<String> order = room.getTurnOrder();
-        int idx = order.indexOf(turnUser) + 1;
-
-        if (idx >= order.size()) {
-            if (room.getRound() % 2 != 0) {
-                miniGameServiceProvider.getObject().startMiniGame(roomId);
-                return;
-            }
-            idx = 0;
-            room.setRound(room.getRound() + 1);
-        }
-
-        room.setCurrentTurnUserId(order.get(idx));
-        room.setStatus(RoomStatus.STARTING);
-
+        room.setStatus(RoomStatus.JUDGMENT);
         roomRepository.save(room);
         broadcastGameState(room);
         messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/result", result);
 
-        scheduler.schedule(() -> startQuiz(roomId),
-                TURN_PREP_DELAY_MS, TimeUnit.MILLISECONDS);
+        final MovePlan plannedMove = movePlan;
+        final boolean finishPlannedFinal = finishPlanned;
+        final long plannedMoveAnimationMs = moveAnimationMs;
+
+        long rouletteDelayMs = plannedMove != null ? ROULETTE_SPIN_MS : 0;
+
+        if (plannedMove != null) {
+            scheduler.schedule(() -> {
+                try {
+                    Room latest = roomRepository.findById(roomId).orElse(null);
+                    if (latest == null || !quizId.equals(latest.getCurrentQuizId())) return;
+
+                    PlayerState winnerState = latest.getPlayerStates().get(plannedMove.winnerUserId);
+                    if (winnerState == null) return;
+
+                    if (plannedMove.consumeDoubleMove) {
+                        winnerState.setHasBuff(null);
+                    }
+
+                    winnerState.setPosition(plannedMove.endPosition);
+
+                    for (GameDto.MoveAction action : plannedMove.actions) {
+                        if ("CATCH".equals(action.getType())) {
+                            PlayerState other = latest.getPlayerStates().get(action.getTargetUserId());
+                            if (other != null) {
+                                other.setPosition(action.getAfter());
+                            }
+                        }
+                    }
+
+                    if (finishPlannedFinal) {
+                        latest.setStatus(RoomStatus.FINISHED);
+                        roomRepository.save(latest);
+                        messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move",
+                                GameDto.MoveInfo.builder()
+                                        .userId(plannedMove.winnerUserId)
+                                        .startPosition(plannedMove.startPosition)
+                                        .endPosition(plannedMove.endPosition)
+                                        .moveProcess(plannedMove.actions)
+                                        .build());
+                        messagingTemplate.convertAndSend(
+                                "/topic/game/" + latest.getId() + "/finish",
+                                buildFinishResponse(latest)
+                        );
+                        broadcastGameState(latest);
+                        return;
+                    }
+
+                    latest.setStatus(RoomStatus.MOVE);
+                    roomRepository.save(latest);
+
+                    GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                            .userId(plannedMove.winnerUserId)
+                            .startPosition(plannedMove.startPosition)
+                            .endPosition(plannedMove.endPosition)
+                            .moveProcess(plannedMove.actions)
+                            .build();
+
+                    messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move", moveInfo);
+                    broadcastGameState(latest);
+                } catch (Exception e) {
+                    log.error("Error sending move info", e);
+                }
+            }, RESULT_DISPLAY_DELAY_MS + rouletteDelayMs, TimeUnit.MILLISECONDS);
+        }
+
+        long clientRouletteMs = plannedMove != null ? ROULETTE_SPIN_MS : 0;
+        long turnDelayMs = RESULT_DISPLAY_DELAY_MS + rouletteDelayMs + clientRouletteMs + plannedMoveAnimationMs;
+
+        scheduler.schedule(() -> {
+            try {
+                if (finishPlannedFinal) return;
+                Room latest = roomRepository.findById(roomId).orElse(null);
+                if (latest == null || !quizId.equals(latest.getCurrentQuizId())) return;
+
+                List<String> order = latest.getTurnOrder();
+                int idx = order.indexOf(turnUser) + 1;
+
+                if (idx >= order.size()) {
+                    if (latest.getRound() % 2 != 0) {
+                        miniGameServiceProvider.getObject().startMiniGame(roomId);
+                        return;
+                    }
+                    idx = 0;
+                    latest.setRound(latest.getRound() + 1);
+                }
+
+                latest.setCurrentTurnUserId(order.get(idx));
+                latest.setStatus(RoomStatus.STARTING);
+                roomRepository.save(latest);
+                broadcastGameState(latest);
+
+                scheduler.schedule(() -> startQuiz(roomId),
+                        TURN_PREP_DELAY_MS, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                log.error("Error preparing next turn", e);
+            }
+        }, turnDelayMs, TimeUnit.MILLISECONDS);
 
     } catch (Exception e) {
         log.error("Error in processRoundResult", e);
@@ -788,11 +862,12 @@ public class GameService {
 
             log.info("Resuming Game after MiniGame for Room {}", roomId);
 
-            room.setStatus(RoomStatus.QUIZ_TIME);
-
             if (!room.getTurnOrder().isEmpty()) {
+                room.setRound(room.getRound() + 1);
                 room.setCurrentTurnUserId(room.getTurnOrder().get(0));
             }
+
+            room.setStatus(RoomStatus.QUIZ_TIME);
 
             roomRepository.save(room);
 
