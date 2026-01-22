@@ -25,6 +25,11 @@ public class GameController {
         gameService.joinGame(request);
     }
 
+    @MessageMapping("/game/leave")
+    public void leaveGame(GameDto.LeaveRequest request) {
+        gameService.leaveGame(request);
+    }
+
     @MessageMapping("/game/ready")
     public void readyGame(GameDto.ReadyRequest request) {
         gameService.readyGame(request);
@@ -36,6 +41,16 @@ public class GameController {
         String roomId = payload.get("roomId");
         String userId = payload.get("userId");
         gameService.startGame(roomId, userId);
+    }
+
+    @MessageMapping("/game/end")
+    public void endGame(GameDto.EndGameRequest request) {
+        gameService.endGame(request);
+    }
+
+    @MessageMapping("/game/restart")
+    public void restartGame(GameDto.RestartRequest request) {
+        gameService.restartGame(request);
     }
 
     @ResponseBody

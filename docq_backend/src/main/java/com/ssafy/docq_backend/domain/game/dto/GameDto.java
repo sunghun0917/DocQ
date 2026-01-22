@@ -33,6 +33,36 @@ public class GameDto {
     @ToString
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class LeaveRequest {
+        private String roomId;
+        private String userId;
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EndGameRequest {
+        private String roomId;
+        private String userId;
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RestartRequest {
+        private String roomId;
+        private String userId;
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ReadyRequest {
         private String roomId;
         private String userId;
@@ -98,6 +128,14 @@ public class GameDto {
     public static class ErrorResponse {
         private String code;
         private String message;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class RoomClosedResponse {
+        private String roomId;
+        private String reason; // HOST_END, HOST_LEFT, EMPTY
     }
 
     @Getter

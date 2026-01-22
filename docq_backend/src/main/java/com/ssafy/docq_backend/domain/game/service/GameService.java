@@ -36,6 +36,29 @@ public class GameService {
     private final AiClient aiClient;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
+    private static final long RESULT_DISPLAY_DELAY_MS = 2000;
+    private static final long TURN_PREP_DELAY_MS = 1500;
+    private static final long ROULETTE_SPIN_MS = 3000;
+    private static final long MOVE_STEP_MS = 500;
+    private static final long INTRO_CAMERA_DURATION_MS = 10000;
+
+    private static class MovePlan {
+        private final String winnerUserId;
+        private final int startPosition;
+        private final int endPosition;
+        private final boolean consumeDoubleMove;
+        private final List<GameDto.MoveAction> actions;
+
+        private MovePlan(String winnerUserId, int startPosition, int endPosition, boolean consumeDoubleMove,
+                List<GameDto.MoveAction> actions) {
+            this.winnerUserId = winnerUserId;
+            this.startPosition = startPosition;
+            this.endPosition = endPosition;
+            this.consumeDoubleMove = consumeDoubleMove;
+            this.actions = actions;
+        }
+    }
+
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
 
@@ -109,7 +132,7 @@ public class GameService {
                     sendError(request.getUserId(), ErrorCode.ROOM_FULL);
                     return;
                 }
-                if (room.getStatus() == RoomStatus.PLAYING) {
+                if (room.getStatus() != RoomStatus.WAITING) {
                     sendError(request.getUserId(), ErrorCode.GAME_ALREADY_STARTED);
                     return;
                 }
@@ -122,6 +145,50 @@ public class GameService {
         } catch (Exception e) {
             log.error("Unknown error in joinGame", e);
             sendError(request.getUserId(), ErrorCode.SERVER_ERROR);
+        }
+    }
+
+    public void leaveGame(GameDto.LeaveRequest request) {
+        log.info("Leave Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+
+        try {
+            Room room = roomRepository.findById(request.getRoomId())
+                    .orElse(null);
+            if (room == null) {
+                return;
+            }
+
+            String userId = request.getUserId();
+            boolean wasHost = userId.equals(room.getHostId());
+
+            if (room.getPlayers().contains(userId)) {
+                int removedIndex = room.getTurnOrder().indexOf(userId);
+                room.removePlayer(userId);
+                room.getPlayerAvatars().remove(userId);
+                room.getPlayerStates().remove(userId);
+                room.getCardDrawResult().remove(userId);
+                room.getQuizAnswers().remove(userId);
+                room.getTurnOrder().remove(userId);
+
+                if (userId.equals(room.getCurrentTurnUserId())) {
+                    if (!room.getTurnOrder().isEmpty()) {
+                        int nextIndex = removedIndex >= room.getTurnOrder().size() ? 0 : Math.max(removedIndex, 0);
+                        room.setCurrentTurnUserId(room.getTurnOrder().get(nextIndex));
+                    } else {
+                        room.setCurrentTurnUserId(null);
+                    }
+                }
+            }
+
+            if (wasHost || room.getPlayers().isEmpty()) {
+                closeRoom(room.getId(), wasHost ? "HOST_LEFT" : "EMPTY");
+                return;
+            }
+
+            roomRepository.save(room);
+            broadcastGameState(room);
+        } catch (Exception e) {
+            log.error("Error in leaveGame", e);
         }
     }
 
@@ -200,15 +267,57 @@ public class GameService {
             // 브로드캐스트
             broadcastGameState(room);
 
-            // 바로 퀴즈 시작 (또는 일정 딜레이 후 시작하도록 스케줄링 가능)
-            // 여기서는 간단히 바로 첫 퀴즈 출제
-            startQuiz(room.getId());
+            // 카메라 인트로 이후 퀴즈 시작
+            scheduler.schedule(() -> {
+                startQuiz(room.getId());
+            }, INTRO_CAMERA_DURATION_MS, TimeUnit.MILLISECONDS);
 
         } catch (DocqException e) {
             sendError(userId, e.getErrorCode());
         } catch (Exception e) {
             log.error("Unknown error in startGame", e);
             sendError(userId, ErrorCode.SERVER_ERROR);
+        }
+    }
+
+    public void endGame(GameDto.EndGameRequest request) {
+        log.info("End Game Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        try {
+            Room room = roomRepository.findById(request.getRoomId())
+                    .orElse(null);
+            if (room == null)
+                return;
+
+            if (!request.getUserId().equals(room.getHostId())) {
+                sendError(request.getUserId(), ErrorCode.ACCESS_DENIED);
+                return;
+            }
+
+            closeRoom(room.getId(), "HOST_END");
+        } catch (Exception e) {
+            log.error("Error in endGame", e);
+        }
+    }
+
+    public void restartGame(GameDto.RestartRequest request) {
+        log.info("Restart Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        try {
+            Room room = roomRepository.findById(request.getRoomId())
+                    .orElse(null);
+            if (room == null)
+                return;
+
+            if (!request.getUserId().equals(room.getHostId())) {
+                sendError(request.getUserId(), ErrorCode.ACCESS_DENIED);
+                return;
+            }
+
+            resetGameState(room);
+            room.setStatus(RoomStatus.WAITING);
+            roomRepository.save(room);
+            broadcastGameState(room);
+        } catch (Exception e) {
+            log.error("Error in restartGame", e);
         }
     }
 
@@ -317,6 +426,43 @@ public class GameService {
         messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/state", response);
     }
 
+    private void closeRoom(String roomId, String reason) {
+        try {
+            GameDto.RoomClosedResponse response = GameDto.RoomClosedResponse.builder()
+                    .roomId(roomId)
+                    .reason(reason)
+                    .build();
+            messagingTemplate.convertAndSend("/topic/game/" + roomId + "/closed", response);
+        } catch (Exception e) {
+            log.error("Error sending room closed message", e);
+        } finally {
+            roomRepository.deleteById(roomId);
+        }
+    }
+
+    private void resetGameState(Room room) {
+        room.setRound(1);
+        room.setCurrentTurnUserId(null);
+        room.setCurrentQuizId(null);
+        room.setQuizStartTime(null);
+        room.getQuizAnswers().clear();
+        room.getTurnOrder().clear();
+        room.getCardDrawResult().clear();
+        room.getMapEvents().clear();
+        room.getReadyPlayers().clear();
+        room.getPlayerStates().clear();
+
+        for (String pid : room.getPlayers()) {
+            PlayerState ps = PlayerState.builder()
+                    .userId(pid)
+                    .score(0)
+                    .position(0)
+                    .hasBuff(null)
+                    .build();
+            room.getPlayerStates().put(pid, ps);
+        }
+    }
+
     private void sendError(String userId, ErrorCode errorCode) {
         GameDto.ErrorResponse errorResponse = GameDto.ErrorResponse.builder()
                 .code(errorCode.getCode())
@@ -355,14 +501,24 @@ public class GameService {
             Room room = roomRepository.findById(roomId)
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
+            if (room.getStatus() == RoomStatus.WAITING || room.getStatus() == RoomStatus.FINISHED) {
+                log.info("Skipping quiz start for room {}. Status: {}", roomId, room.getStatus());
+                return;
+            }
+
             // 1. Validate Quiz List
             if (room.getQuizList() == null || room.getQuizList().isEmpty()) {
                 log.warn("No quizzes found in room {}", roomId);
                 return;
             }
 
-            // 2. Select Quiz (Round-Robin or fail if out of bounds)
-            int quizIndex = (room.getRound() - 1) % room.getQuizList().size();
+            // 2. Select Quiz (Rotate per turn to avoid repeating per round)
+            int turnIndex = 0;
+            if (room.getTurnOrder() != null && !room.getTurnOrder().isEmpty() && room.getCurrentTurnUserId() != null) {
+                turnIndex = Math.max(0, room.getTurnOrder().indexOf(room.getCurrentTurnUserId()));
+            }
+            int totalTurnIndex = (room.getRound() - 1) * Math.max(1, room.getTurnOrder().size()) + turnIndex;
+            int quizIndex = totalTurnIndex % room.getQuizList().size();
             Quiz quizEntity = room.getQuizList().get(quizIndex);
 
             Long quizId = quizEntity.getQuizId();
@@ -378,8 +534,13 @@ public class GameService {
             room.setCurrentQuizId(quizId);
             room.getQuizAnswers().clear();
             room.setQuizStartTime(LocalDateTime.now());
+            room.setStatus(RoomStatus.QUIZ_TIME);
+            roomRepository.save(room);
 
             log.info("Starting Quiz {} for Room {}", quizId, roomId);
+
+            // Broadcast State before Quiz
+            broadcastGameState(room);
 
             // Broadcast Quiz
             messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quiz);
@@ -435,6 +596,11 @@ public class GameService {
             Room room = roomRepository.findById(roomId).orElse(null);
             if (room == null)
                 return;
+
+            if (room.getStatus() != RoomStatus.QUIZ_TIME) {
+                log.info("Skipping result processing for room {}. Status: {}", roomId, room.getStatus());
+                return;
+            }
 
             // Validate if this is still the current quiz (avoid stale tasks)
             if (!quizId.equals(room.getCurrentQuizId())) {
@@ -508,35 +674,19 @@ public class GameService {
                 }
             }
 
-            // 결과 전송
-            GameDto.RoundResult result = GameDto.RoundResult.builder()
-                    .quizId(room.getCurrentQuizId())
-                    .correctAnswer(correctAnswer)
-                    .isTurnUserCorrect(isTurnUserCorrect)
-                    .winnerUserId(winnerUserId)
-                    .rouletteType(rouletteType)
-                    .build();
+            MovePlan movePlan = null;
+            long moveAnimationMs = 0;
 
-            messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/result", result);
-
-            // 이동 처리 및 전송 (if winner exists)
             if (winnerUserId != null && moveValue != 0) {
                 PlayerState winnerState = room.getPlayerStates().get(winnerUserId);
                 int currentPos = winnerState.getPosition();
                 int nextPos = currentPos + moveValue;
 
-                // 단순 맵 크기 제한 (e.g. 20칸)
                 if (nextPos < 0)
                     nextPos = 0;
-                // if (nextPos >= MAX) ...
 
-                // Update State (Initial Move)
-                // winnerState.setPosition(nextPos); // Defer update until end of chain
-
-                // Create Move Info
                 List<GameDto.MoveAction> actions = new ArrayList<>();
 
-                // 1. Roulette Action
                 actions.add(GameDto.MoveAction.builder()
                         .type("ROULETTE")
                         .value(moveValue)
@@ -544,11 +694,10 @@ public class GameService {
                         .after(nextPos)
                         .build());
 
-                // 2. Buff Action (Example: DOUBLE_MOVE)
-                // Assuming 'DOUBLE_MOVE' doubles the roulette value
+                boolean consumeDoubleMove = false;
                 if ("DOUBLE_MOVE".equals(winnerState.getHasBuff())) {
                     int beforeBuffPos = nextPos;
-                    nextPos += moveValue; // Add gain again (x2)
+                    nextPos += moveValue;
 
                     actions.add(GameDto.MoveAction.builder()
                             .type("BUFF")
@@ -557,40 +706,36 @@ public class GameService {
                             .after(nextPos)
                             .build());
 
-                    // Consume Buff
-                    winnerState.setHasBuff(null);
-                    log.info("User {} consumed buff DOUBLE_MOVE", winnerUserId);
+                    consumeDoubleMove = true;
                 }
 
-                // 3. Tile Effect (Map Event)
                 if (room.getMapEvents().containsKey(nextPos)) {
                     String eventType = room.getMapEvents().get(nextPos);
+                    int beforeEffectPos = nextPos;
+
+                    if ("TILE_X2".equals(eventType)) {
+                        nextPos += moveValue;
+                        if (nextPos < 0)
+                            nextPos = 0;
+                        log.info("User {} landed on {} and got effect {}", winnerUserId, beforeEffectPos, eventType);
+                    }
 
                     actions.add(GameDto.MoveAction.builder()
                             .type("TILE_EFFECT")
                             .effectType(eventType)
-                            .before(nextPos)
-                            .after(nextPos) // Position doesn't change for X2
+                            .before(beforeEffectPos)
+                            .after(nextPos)
                             .build());
-
-                    if ("TILE_X2".equals(eventType)) {
-                        log.info("User {} landed on {} and got effect {}", winnerUserId, nextPos, eventType);
-                    }
                 }
 
-                // 4. Collision / Catching Logic
-                // Check if any other player is at nextPos
                 for (String pid : room.getPlayers()) {
                     if (pid.equals(winnerUserId))
                         continue; // Skip self
 
                     PlayerState otherPs = room.getPlayerStates().get(pid);
-                    if (otherPs != null && otherPs.getPosition() == nextPos && nextPos != 0) { // Don't catch at
-                                                                                               // start(0)
-                        // Catch!
+                    if (otherPs != null && otherPs.getPosition() == nextPos && nextPos != 0) {
                         int caughtPos = 0;
                         int originalPos = otherPs.getPosition();
-                        otherPs.setPosition(caughtPos); // Send back to 0
 
                         actions.add(GameDto.MoveAction.builder()
                                 .type("CATCH")
@@ -603,54 +748,115 @@ public class GameService {
                     }
                 }
 
-                // Final Position Update
-                winnerState.setPosition(nextPos);
-                roomRepository.save(room); // Save state changes (position, buff consumption)
+                movePlan = new MovePlan(winnerUserId, currentPos, nextPos, consumeDoubleMove, actions);
 
-                GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
-                        .userId(winnerUserId)
-                        .startPosition(currentPos)
-                        .endPosition(nextPos)
-                        .moveProcess(actions)
-                        .build();
-
-                messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/move", moveInfo);
-
-                // Broadcast full state update as well
-                broadcastGameState(room);
+                if (nextPos > currentPos) {
+                    moveAnimationMs = ROULETTE_SPIN_MS + (long) (nextPos - currentPos) * MOVE_STEP_MS;
+                } else {
+                    moveAnimationMs = ROULETTE_SPIN_MS;
+                }
             }
 
-            // --- Prepare Next Turn / Round ---
+            GameDto.RoundResult result = GameDto.RoundResult.builder()
+                    .quizId(room.getCurrentQuizId())
+                    .correctAnswer(correctAnswer)
+                    .isTurnUserCorrect(isTurnUserCorrect)
+                    .winnerUserId(winnerUserId)
+                    .rouletteType(rouletteType)
+                    .build();
 
-            // 1. Find Current Turn Index
-            List<String> turnOrder = room.getTurnOrder();
-            int currentIndex = turnOrder.indexOf(turnUser);
-
-            // 2. Calculate Next Index
-            int nextIndex = currentIndex + 1;
-
-            // 3. Check for Round Change
-            if (nextIndex >= turnOrder.size()) {
-                // Round Over -> Next Round, Reset to First Player
-                nextIndex = 0;
-                room.setRound(room.getRound() + 1);
-                log.info("Room {} - Round {} Started", room.getId(), room.getRound());
-            }
-
-            // 4. Set Next Turn User
-            String nextTurnUser = turnOrder.get(nextIndex);
-            room.setCurrentTurnUserId(nextTurnUser);
+            room.setStatus(RoomStatus.JUDGMENT);
             roomRepository.save(room);
-
-            log.info("Pass Turn: {} -> {} (Round {})", turnUser, nextTurnUser, room.getRound());
-
-            // 5. Broadcast Updated State (Next Turn Info)
             broadcastGameState(room);
+            messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/result", result);
 
-            // 6. Schedule Next Quiz (Delay for Animation: e.g., 5 seconds)
+            final MovePlan plannedMove = movePlan;
+            final long plannedMoveAnimationMs = moveAnimationMs;
+
+            if (plannedMove != null) {
+                scheduler.schedule(() -> {
+                    try {
+                        Room latest = roomRepository.findById(roomId).orElse(null);
+                        if (latest == null || !quizId.equals(latest.getCurrentQuizId()))
+                            return;
+
+                        PlayerState winnerState = latest.getPlayerStates().get(plannedMove.winnerUserId);
+                        if (winnerState == null)
+                            return;
+
+                        if (plannedMove.consumeDoubleMove) {
+                            winnerState.setHasBuff(null);
+                            log.info("User {} consumed buff DOUBLE_MOVE", plannedMove.winnerUserId);
+                        }
+
+                        winnerState.setPosition(plannedMove.endPosition);
+
+                        for (GameDto.MoveAction action : plannedMove.actions) {
+                            if ("CATCH".equals(action.getType())) {
+                                PlayerState otherPs = latest.getPlayerStates().get(action.getTargetUserId());
+                                if (otherPs != null) {
+                                    otherPs.setPosition(action.getAfter());
+                                }
+                            }
+                        }
+
+                        latest.setStatus(RoomStatus.MOVE);
+                        roomRepository.save(latest);
+
+                        GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                                .userId(plannedMove.winnerUserId)
+                                .startPosition(plannedMove.startPosition)
+                                .endPosition(plannedMove.endPosition)
+                                .moveProcess(plannedMove.actions)
+                                .build();
+
+                        messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move", moveInfo);
+                        broadcastGameState(latest);
+                    } catch (Exception e) {
+                        log.error("Error sending move info", e);
+                    }
+                }, RESULT_DISPLAY_DELAY_MS, TimeUnit.MILLISECONDS);
+            }
+
+            long turnDelayMs = RESULT_DISPLAY_DELAY_MS + plannedMoveAnimationMs;
+
+            scheduler.schedule(() -> {
+                try {
+                    Room latest = roomRepository.findById(roomId).orElse(null);
+                    if (latest == null || !quizId.equals(latest.getCurrentQuizId()))
+                        return;
+
+                    List<String> turnOrder = latest.getTurnOrder();
+                    if (turnOrder == null || turnOrder.isEmpty())
+                        return;
+
+                    String currentTurnUserId = latest.getCurrentTurnUserId();
+                    int currentIndex = turnOrder.indexOf(currentTurnUserId);
+                    if (currentIndex < 0)
+                        return;
+
+                    int nextIndex = currentIndex + 1;
+                    if (nextIndex >= turnOrder.size()) {
+                        nextIndex = 0;
+                        latest.setRound(latest.getRound() + 1);
+                        log.info("Room {} - Round {} Started", latest.getId(), latest.getRound());
+                    }
+
+                    String nextTurnUser = turnOrder.get(nextIndex);
+                    latest.setCurrentTurnUserId(nextTurnUser);
+                    latest.setStatus(RoomStatus.STARTING);
+                    roomRepository.save(latest);
+
+                    log.info("Pass Turn: {} -> {} (Round {})", currentTurnUserId, nextTurnUser, latest.getRound());
+                    broadcastGameState(latest);
+                } catch (Exception e) {
+                    log.error("Error preparing next turn", e);
+                }
+            }, turnDelayMs, TimeUnit.MILLISECONDS);
+
             scheduler.schedule(() -> {
                 startQuiz(roomId);
-            }, 6000, TimeUnit.MILLISECONDS);
+            }, turnDelayMs + TURN_PREP_DELAY_MS, TimeUnit.MILLISECONDS);
 
         } catch (Exception e) {
             log.error("Error in processRoundResult", e);
