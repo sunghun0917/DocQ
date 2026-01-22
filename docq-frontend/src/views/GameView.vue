@@ -53,7 +53,7 @@ const submitAnswer = (index: number) => {
     // roomId is required. userStore doesn't have it? roomStore.roomInfo.roomId
     const roomId = roomStore.roomInfo.roomId
     if (roomId && myUserId.value) {
-        wsStore.submitAnswer(roomId, myUserId.value, currentQuiz.value.quizId, answerText)
+        wsStore.submitAnswer(roomId, myUserId.value, currentQuiz.value.quizId, answerText || "")
     }
 }
 </script>

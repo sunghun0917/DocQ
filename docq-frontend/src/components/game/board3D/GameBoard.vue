@@ -206,7 +206,7 @@ watch(() => gameStore.currentMove, async (move) => {
     isMovingGlobal.value = true
     
     // 1. 룰렛 돌리기 (있다면)
-    const rouletteStep = move.moveProcess.find(item => item.type === 'ROULETTE')
+    const rouletteStep = move.moveProcess.find((item: any) => item.type === 'ROULETTE')
     if (rouletteStep && rouletteStep.value) {
         isRouletteVisible.value = true
         await spinRouletteAnimation(rouletteStep.value)

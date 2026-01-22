@@ -25,12 +25,12 @@ const getIsMe = (userId: string) => {
 
 const winner = computed(() => {
     if (rankings.value.length === 0) return null
-    const w = rankings.value[0]
+    const w = rankings.value[0]!
     return {
         ...w,
-        avatar: getAvatar(w?.userId),
+        avatar: getAvatar(w.userId),
         rank: 1,
-        isMe: getIsMe(w?.userId)
+        isMe: getIsMe(w.userId)
     }
 })
 

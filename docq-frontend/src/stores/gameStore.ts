@@ -24,6 +24,7 @@ import { ref, computed } from 'vue'
 import { useRoomStore } from './roomStore'
 // import { useWebSocketStore } from './websocketStore' // Cyclic Dependency Risk
 import { mockQuizzes } from '@/mocks/quizzes'
+import type { Quiz } from '@/types/docq-api'
 
 // 게임 진행 상태 및 퀴즈 관리
 export const useGameStore = defineStore('game', () => {
@@ -33,7 +34,7 @@ export const useGameStore = defineStore('game', () => {
     const quizzes = ref(mockQuizzes)
     const currentQuizIndex = ref(0)
     // const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
-    const currentQuiz = ref<any>(null) // Live Quiz Object
+    const currentQuiz = ref<Quiz | null>(null) // Live Quiz Object
 
     // 게임 상태
     const gameStatus = ref<'waiting' | 'playing' | 'finished'>('waiting')
@@ -150,7 +151,7 @@ export const useGameStore = defineStore('game', () => {
 
         // 퀴즈 시작 (타이머)
         currentQuizIndex.value = 0 // Using single slot for now
-        timeRemaining.value = currentQuiz.value.timeLimit
+        timeRemaining.value = currentQuiz.value.timeLimit || 30
         gameStatus.value = 'playing'
         lastAnswerResult.value = null
         currentRoundResult.value = null // Reset previous result
