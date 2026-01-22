@@ -137,6 +137,7 @@ pipeline {
     post {
         success {
             echo 'Pipeline succeeded!'
+
             // 슬랙/이메일 알림 추가 가능
         }
         failure {
