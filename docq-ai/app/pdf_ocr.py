@@ -23,6 +23,10 @@ if platform.system() == "Windows":
         POPPLER_PATH = r"C:\poppler\Library\bin"
     if not TESSERACT_PATH:
         TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+else:
+    # On Linux/Docker, ignore .env Windows paths and use system PATH
+    POPPLER_PATH = None
+    TESSERACT_PATH = None
 
 # If TESSERACT_PATH is found (either from env or fallback), set it.
 # If it's None (Linux/Docker), tesseract_cmd defaults to 'tesseract' which works for PATH.
