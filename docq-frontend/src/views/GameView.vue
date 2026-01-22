@@ -3,9 +3,8 @@ import { ref, computed, watch, onMounted, watchEffect } from 'vue';
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
-import QuizOverlay from '@/components/game/QuizOverlay.vue';
-import AnswerFeedback from '@/components/game/AnswerFeedback.vue';
-import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
+import MiniGameModal from '@/components/minigame/MiniGameModal.vue';
+import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -20,12 +19,54 @@ const userStore = useUserStore()
 const myUserId = computed(() => userStore.userId)
 const currentQuiz = computed(() => gameStore.currentQuiz)
 const timeRemaining = computed(() => gameStore.timeRemaining)
-const gameStatus = computed(() => gameStore.gameStatus)
 const isGameFinished = computed(() => gameStore.isGameFinished)
 const gamePhase = computed(() => gameStore.gamePhase)
 const roomId = computed(() => roomStore.roomInfo.roomId)
 const isHost = computed(() => roomStore.isHost)
 const players = computed(() => gameStore.gameState.players || [])
+const miniGame = computed(() => gameStore.miniGame)
+const isMiniGameActive = computed(() => miniGame.value.phase === 'playing' || miniGame.value.phase === 'result')
+const showBuffRoulette = computed(() =>
+    miniGame.value.phase === 'result' &&
+    !!miniGame.value.result?.rewardBuff &&
+    miniGame.value.result.rewardBuff !== 'NONE'
+)
+const buffRouletteCode = computed(() => {
+    if (!showBuffRoulette.value) return null
+    return miniGame.value.result?.rewardBuff ?? null
+})
+
+const isBoardMoving = ref(false)
+const showMiniGameStartNotice = ref(false)
+const isMiniGameStarting = ref(false)
+
+const winnerName = computed(() => {
+    const winnerId = miniGame.value.result?.winnerUserId
+    if (!winnerId) return ''
+    return roomStore.users.find(u => u.id === winnerId)?.nickname || ''
+})
+
+const miniGamePlayers = computed(() =>
+    roomStore.users.map(user => ({
+        id: user.id,
+        nickname: user.nickname,
+        avatar: user.avatar || '🎮',
+        isMe: user.isMe
+    }))
+)
+
+const miniGameUiType = computed(() => {
+    switch (miniGame.value.gameType) {
+        case 'LEFT_RIGHT_MASH':
+            return 'mash'
+        case 'DIRECTION_MATCH':
+            return 'sequence'
+        case 'EXACT_TIME':
+            return 'stopwatch'
+        default:
+            return null
+    }
+})
 
 // 현재 턴인지 확인
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
@@ -38,6 +79,8 @@ const selectedOption = ref<number | null>(null)
 const isSubmitted = ref(false)
 const resultEffect = ref<{ text: 'WIN' | 'LOSE' | null } | null>(null)
 let resultEffectTimer: number | null = null
+const catchEffect = ref<string | null>(null)
+let catchEffectTimer: number | null = null
 
 // 퀴즈가 바뀌면 상태 초기화
 watch(currentQuiz, () => {
@@ -60,7 +103,38 @@ watch(
         resultEffectTimer = window.setTimeout(() => {
             resultEffect.value = null
             resultEffectTimer = null
+            gameStore.unlockMove()
         }, 2000)
+    }
+)
+
+watch(
+    () => gameStore.currentMove,
+    (move) => {
+        if (!move || !myUserId.value) return
+
+        const catchAction = move.moveProcess?.find((item: any) => item.type === 'CATCH')
+        if (!catchAction) return
+
+        if (catchEffectTimer !== null) {
+            clearTimeout(catchEffectTimer)
+            catchEffectTimer = null
+        }
+
+        if (catchAction.targetUserId === myUserId.value) {
+            catchEffect.value = '잡혔습니다. 출발지로 이동합니다.'
+        } else if (move.userId === myUserId.value) {
+            catchEffect.value = '잡았습니다. 출발지로 이동시킵니다.'
+        } else {
+            catchEffect.value = null
+        }
+
+        if (catchEffect.value) {
+            catchEffectTimer = window.setTimeout(() => {
+                catchEffect.value = null
+                catchEffectTimer = null
+            }, 2000)
+        }
     }
 )
 
@@ -111,15 +185,89 @@ watchEffect(() => {
         router.push(`/waiting/${roomId.value}`)
     }
 })
+
+watchEffect(() => {
+    if (miniGame.value.phase !== 'pending') {
+        showMiniGameStartNotice.value = false
+        isMiniGameStarting.value = false
+        return
+    }
+
+    if (isBoardMoving.value || isMiniGameStarting.value) return
+    isMiniGameStarting.value = true
+    showMiniGameStartNotice.value = true
+    window.setTimeout(() => {
+        showMiniGameStartNotice.value = false
+        gameStore.startMiniGame()
+        isMiniGameStarting.value = false
+    }, 1200)
+})
+
+const handleMiniGameSubmit = (score: number) => {
+    if (!roomId.value || !userStore.userId || !miniGame.value.gameType) return
+    // 점수는 높을수록 유리하도록 변환 (시간 기반 -> 역수 점수)
+    const safeScore = Math.max(score, 0.001)
+    const resultValue = Math.max(1, Math.round((1 / safeScore) * 1000))
+    wsStore.submitMiniGameResult(roomId.value, userStore.userId, miniGame.value.gameType, resultValue)
+}
+
+const handleMiniGameClose = () => {
+    gameStore.clearMiniGame()
+}
+
+const handleBuffRouletteDone = () => {
+    gameStore.clearMiniGame()
+}
+
+watch(
+    () => miniGame.value.result?.rewardBuff,
+    (rewardBuff) => {
+        if (!rewardBuff || rewardBuff === 'NONE') {
+            if (miniGame.value.phase === 'result') {
+                window.setTimeout(() => gameStore.clearMiniGame(), 1500)
+            }
+        }
+    }
+)
+
+onMounted(() => {
+    if (roomId.value) {
+        wsStore.subscribeMiniGame(roomId.value)
+    }
+})
 </script>
 
 <template>
   <div class="game-page">
     <!-- 3D 보드게임 컴포넌트 (배경) -->
-    <GameBoard />
+    <GameBoard @movement-change="(moving) => (isBoardMoving = moving)" />
+
+    <MiniGameModal
+      v-if="isMiniGameActive && miniGameUiType && !showBuffRoulette"
+      :game-type="miniGameUiType"
+      :time-limit-ms="miniGame.timeLimitMs ?? undefined"
+      :description="miniGame.description ?? undefined"
+      :players="miniGamePlayers"
+      :result="miniGame.result ?? undefined"
+      @submit="handleMiniGameSubmit"
+      @close="handleMiniGameClose"
+    />
+
+    <div v-if="showMiniGameStartNotice" class="minigame-start-notice">
+      <div class="minigame-start-card">
+        미니게임이 시작됩니다
+      </div>
+    </div>
+
+    <BuffRouletteOverlay
+      v-if="buffRouletteCode"
+      :buff-code="buffRouletteCode"
+      :winner-name="winnerName"
+      @done="handleBuffRouletteDone"
+    />
 
     <!-- UI 오버레이 -->
-    <div class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
+    <div v-if="!isMiniGameActive && !showMiniGameStartNotice" class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
       <div class="player-panel pointer-events-auto">
         <div class="player-panel-title">Players</div>
         <div class="player-panel-turn">
@@ -151,6 +299,14 @@ watchEffect(() => {
             :class="resultEffect.text === 'WIN' ? 'result-win' : 'result-lose'"
           >
             {{ resultEffect.text }}
+          </div>
+        </div>
+      </transition>
+
+      <transition name="result-pop">
+        <div v-if="catchEffect" class="catch-effect">
+          <div class="catch-effect-text">
+            {{ catchEffect }}
           </div>
         </div>
       </transition>
@@ -197,7 +353,7 @@ watchEffect(() => {
       </header>
 
       <!-- 퀴즈 영역 (중앙 하단) -->
-      <div v-if="currentQuiz && gamePhase === 'QUIZ_TIME'" class="quiz-container">
+      <div v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving" class="quiz-container">
          
          <!-- 퀴즈 풀기 (모든 플레이어 참여 가능 - 스틸 룰) -->
          <div class="bg-white rounded-2xl shadow-2xl p-6 w-[600px] pointer-events-auto animate-bounce-up border-4"
@@ -442,5 +598,53 @@ watchEffect(() => {
 .result-pop-leave-to {
   opacity: 0;
   transform: scale(0.9);
+}
+
+.catch-effect {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.catch-effect-text {
+  background: rgba(15, 23, 42, 0.85);
+  color: #f8fafc;
+  font-weight: 800;
+  font-size: 1.4rem;
+  padding: 14px 24px;
+  border-radius: 16px;
+  border: 2px solid rgba(148, 163, 184, 0.6);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.minigame-start-notice {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2400;
+  backdrop-filter: blur(4px);
+}
+
+.minigame-start-card {
+  background: white;
+  padding: 20px 32px;
+  border-radius: 16px;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #1f2937;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+  animation: popIn 0.25s ease-out;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 </style>

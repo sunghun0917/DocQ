@@ -167,10 +167,31 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 }
             })
 
-            roomStore.setUsers(nextUsers)
+            const userById = new Map(nextUsers.map((user: any) => [user.id, user]))
+            const hostUserId = nextUsers.find((user: any) => user.isHost)?.id
+            const orderedIds: string[] = []
+
+            if (hostUserId) {
+                orderedIds.push(hostUserId)
+            }
+
+            const turnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : []
+            turnOrder.forEach((id: string) => {
+                if (id && id !== hostUserId) orderedIds.push(id)
+            })
+
+            nextUsers.forEach((user: any) => {
+                if (!orderedIds.includes(user.id)) orderedIds.push(user.id)
+            })
+
+            const orderedUsers = orderedIds
+                .map(id => userById.get(id))
+                .filter((user): user is typeof nextUsers[number] => !!user)
+
+            roomStore.setUsers(orderedUsers)
             roomStore.setRoomInfo({
                 status: data.state || data.status || 'WAITING',
-                currentCount: nextUsers.length
+                currentCount: orderedUsers.length
             })
         })
 
@@ -216,6 +237,39 @@ export const useWebSocketStore = defineStore('websocket', () => {
             roomStore.leaveRoom()
             gameStore.reset()
             router.push('/')
+        })
+    }
+
+    /**
+     * 미니게임 이벤트 구독
+     */
+    const subscribeMiniGame = (roomId: string) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        const gameStore = useGameStore()
+
+        wsService.value.subscribe(`/topic/game/${roomId}/minigame`, (data: any) => {
+            console.log('📨 MiniGame Event:', data)
+
+            if (data?.type === 'START') {
+                gameStore.queueMiniGame({
+                    gameType: data.gameType,
+                    timeLimit: data.timeLimit,
+                    description: data.description
+                })
+                return
+            }
+
+            if (data?.type === 'RESULT') {
+                gameStore.setMiniGameResult({
+                    winnerUserId: data.winnerUserId,
+                    rewardBuff: data.rewardBuff,
+                    rankings: data.rankings || []
+                })
+            }
         })
     }
 
@@ -363,6 +417,23 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 미니게임 결과 제출
+     */
+    const submitMiniGameResult = (roomId: string, userId: string, gameType: string, resultValue: number) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/minigame/submit', {
+            roomId,
+            userId,
+            gameType,
+            resultValue
+        })
+    }
+
+    /**
      * 특정 경로 구독 해제
      */
     const unsubscribe = (destination: string) => {
@@ -392,6 +463,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         connect,
         disconnect,
         subscribeGameState,
+        subscribeMiniGame,
         subscribeErrors,
         joinGame,
         leaveGame,
@@ -401,6 +473,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         startGame,
         endGame,
         restartGame,
+        submitMiniGameResult,
         unsubscribe,
         cleanup
     }
