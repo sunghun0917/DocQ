@@ -1,16 +1,23 @@
 pipeline {
     agent any
 
+    environment {
+        COMPOSE_DIR = 'deploy/compose'
+    }
+
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Deploy') {
             steps {
-                sshagent(credentials: ['jenkins-ssh']) {
+                dir("${COMPOSE_DIR}") {
                     sh '''
-                        ssh -o StrictHostKeyChecking=no ubuntu@localhost "
-                            cd /home/ubuntu/S14P11D209/deploy/compose &&
-                            docker compose down &&
-                            docker compose up -d --build
-                        "
+                        docker compose down
+                        docker compose up -d --build
                     '''
                 }
             }
@@ -23,6 +30,9 @@ pipeline {
         }
         failure {
             echo '❌ 배포 실패'
+        }
+        always {
+            cleanWs()
         }
     }
 }
