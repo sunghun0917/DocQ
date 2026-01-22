@@ -8,6 +8,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { userLogin } from '@/services/api'
 
 // 타입 정의
 export interface UserProfile {
@@ -53,6 +54,32 @@ export const useUserStore = defineStore('user', () => {
             isAuthenticated.value = true
 
             // 로컬 스토리지에 저장
+            localStorage.setItem('user', JSON.stringify(currentUser.value))
+
+            return { success: true }
+        } catch (error) {
+            console.error('Login failed:', error)
+            return { success: false, error }
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    /**
+     * API 기반 로그인 (닉네임으로 userId 발급)
+     */
+    const loginWithApi = async (nickname: string) => {
+        isLoading.value = true
+        try {
+            const response = await userLogin(nickname)
+            currentUser.value = {
+                id: response.userId,
+                username: response.nickname,
+                avatar: getRandomAvatar(),
+                createdAt: new Date()
+            }
+
+            isAuthenticated.value = true
             localStorage.setItem('user', JSON.stringify(currentUser.value))
 
             return { success: true }
@@ -214,6 +241,7 @@ export const useUserStore = defineStore('user', () => {
 
         // Actions
         login,
+        loginWithApi,
         loginAsGuest,
         logout,
         updateUsername,

@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.time.LocalDateTime;
 
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 
@@ -52,6 +52,7 @@ public class GameDto {
         // Keeping them for "StarGame" transition context.
         private List<String> turnOrder;
         private Map<String, Integer> cardDrawResult;
+        private Map<Integer, String> mapEvents;
     }
 
     @Getter
@@ -98,8 +99,6 @@ public class GameDto {
         private String code;
         private String message;
     }
-
-    // --- Quiz & Game Logic DTOs ---
 
     @Getter
     @Builder
@@ -158,5 +157,7 @@ public class GameDto {
         private String effectType; // for TILE_EFFECT
         private Integer before;
         private Integer after;
+        private String targetUserId; // For CATCH effect
     }
+
 }

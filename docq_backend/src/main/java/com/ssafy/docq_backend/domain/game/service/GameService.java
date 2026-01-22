@@ -11,8 +11,12 @@ import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ssafy.docq_backend.domain.game.dto.QuizDto;
+import com.ssafy.docq_backend.domain.game.entity.Quiz;
+import com.ssafy.docq_backend.global.client.AiClient;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -29,6 +33,61 @@ public class GameService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final AiClient aiClient;
+
+    public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
+        log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
+
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        // AI Client 호출
+        List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
+        log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
+
+        // Quiz 엔티티 로 변환 및 저장
+        // Quiz 엔티티 로 변환 및 저장
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < quizResponses.size(); i++) {
+            QuizDto.Response dto = quizResponses.get(i);
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1)) // 1-based sequential ID
+                    .question(dto.getQuestion())
+                    .options(dto.getOptions())
+                    .answerIndex(dto.getAnswerIndex())
+                    .answerText(dto.getAnswerText())
+                    .build());
+        }
+
+        room.setQuizList(quizzes);
+
+        // 완료 알림 브로드캐스트
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+    }
+
+    public List<QuizDto.Response> getQuizzes(String roomId) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        if (room.getQuizList() == null) {
+            return Collections.emptyList();
+        }
+
+        return room.getQuizList().stream()
+                .map(q -> QuizDto.Response.builder()
+                        .quizId(q.getQuizId())
+                        .question(q.getQuestion())
+                        .options(q.getOptions())
+                        .answerIndex(q.getAnswerIndex())
+                        .answerText(q.getAnswerText())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     // Simple Scheduler for Quiz Timer
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
@@ -164,6 +223,18 @@ public class GameService {
                     .build();
             room.getPlayerStates().put(pid, ps);
         }
+
+        // 맵 특수 효과 배치 (Random 5 tiles with "TILE_X2")
+        room.getMapEvents().clear();
+        Random random = new Random();
+        Set<Integer> eventTiles = new HashSet<>();
+        while (eventTiles.size() < 5) {
+            int pos = random.nextInt(29) + 1; // 1 ~ 29 (0번은 시작점이라 제외)
+            if (eventTiles.add(pos)) {
+                room.getMapEvents().put(pos, "TILE_X2");
+            }
+        }
+        log.info("Map Events Initialized: {}", room.getMapEvents());
     }
 
     private void determineTurnOrder(Room room) {
@@ -225,6 +296,7 @@ public class GameService {
         String currentTurnUserId = room.getStatus() == RoomStatus.WAITING ? null : room.getCurrentTurnUserId();
         List<String> turnOrder = room.getStatus() == RoomStatus.WAITING ? null : room.getTurnOrder();
         Map<String, Integer> cardDrawResult = room.getStatus() == RoomStatus.WAITING ? null : room.getCardDrawResult();
+        Map<Integer, String> mapEvents = room.getStatus() == RoomStatus.WAITING ? null : room.getMapEvents();
 
         GameDto.GameStateResponse response = GameDto.GameStateResponse.builder()
                 .state(room.getStatus())
@@ -233,6 +305,7 @@ public class GameService {
                 .players(playerInfos)
                 .turnOrder(turnOrder)
                 .cardDrawResult(cardDrawResult)
+                .mapEvents(mapEvents)
                 .build();
 
         messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/state", response);
@@ -276,12 +349,22 @@ public class GameService {
             Room room = roomRepository.findById(roomId)
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            // Mock Quiz Data
-            long quizId = 101L + room.getRound(); // Simple ID generation
+            // 1. Validate Quiz List
+            if (room.getQuizList() == null || room.getQuizList().isEmpty()) {
+                log.warn("No quizzes found in room {}", roomId);
+                return;
+            }
+
+            // 2. Select Quiz (Round-Robin or fail if out of bounds)
+            int quizIndex = (room.getRound() - 1) % room.getQuizList().size();
+            Quiz quizEntity = room.getQuizList().get(quizIndex);
+
+            Long quizId = quizEntity.getQuizId();
+
             GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
                     .quizId(quizId)
-                    .question("Round " + room.getRound() + ": 다음 중 Java의 기본형이 아닌 것은?")
-                    .options(Arrays.asList("int", "double", "boolean", "String"))
+                    .question("Round " + room.getRound() + ": " + quizEntity.getQuestion())
+                    .options(quizEntity.getOptions())
                     .timeLimit(5000L)
                     .build();
 
@@ -341,7 +424,7 @@ public class GameService {
         }
     }
 
-    private void processRoundResult(String roomId, Long quizId) {
+    void processRoundResult(String roomId, Long quizId) {
         try {
             Room room = roomRepository.findById(roomId).orElse(null);
             if (room == null)
@@ -357,7 +440,25 @@ public class GameService {
             log.info("Processing Round Result for Room {}, Quiz {}", roomId, quizId);
 
             String turnUser = room.getCurrentTurnUserId();
-            String correctAnswer = "String"; // Mock Correct Answer
+            // Fetch Correct Answer from Quiz Entity
+            final String correctAnswer;
+            if (room.getQuizList() != null && !room.getQuizList().isEmpty()) {
+                // Find quiz by quizId to be safe, or use index if strict
+                // Using ID matching is safer if logic changes
+                Quiz quizEntity = room.getQuizList().stream()
+                        .filter(q -> q.getQuizId().equals(quizId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (quizEntity == null) {
+                    log.error("Quiz ID {} not found in room {}", quizId, roomId);
+                    return;
+                }
+                correctAnswer = quizEntity.getAnswerText();
+            } else {
+                log.error("Quiz list is empty during result processing for room {}", roomId);
+                return;
+            }
 
             boolean isTurnUserCorrect = false;
             GameDto.SubmitAnswer turnUserSubmit = room.getQuizAnswers().get(turnUser);
@@ -423,17 +524,82 @@ public class GameService {
                     nextPos = 0;
                 // if (nextPos >= MAX) ...
 
-                // Update State
-                winnerState.setPosition(nextPos);
+                // Update State (Initial Move)
+                // winnerState.setPosition(nextPos); // Defer update until end of chain
 
                 // Create Move Info
                 List<GameDto.MoveAction> actions = new ArrayList<>();
+
+                // 1. Roulette Action
                 actions.add(GameDto.MoveAction.builder()
                         .type("ROULETTE")
                         .value(moveValue)
                         .before(currentPos)
                         .after(nextPos)
                         .build());
+
+                // 2. Buff Action (Example: DOUBLE_MOVE)
+                // Assuming 'DOUBLE_MOVE' doubles the roulette value
+                if ("DOUBLE_MOVE".equals(winnerState.getHasBuff())) {
+                    int beforeBuffPos = nextPos;
+                    nextPos += moveValue; // Add gain again (x2)
+
+                    actions.add(GameDto.MoveAction.builder()
+                            .type("BUFF")
+                            .buffType("DOUBLE_MOVE")
+                            .before(beforeBuffPos)
+                            .after(nextPos)
+                            .build());
+
+                    // Consume Buff
+                    winnerState.setHasBuff(null);
+                    log.info("User {} consumed buff DOUBLE_MOVE", winnerUserId);
+                }
+
+                // 3. Tile Effect (Map Event)
+                if (room.getMapEvents().containsKey(nextPos)) {
+                    String eventType = room.getMapEvents().get(nextPos);
+
+                    actions.add(GameDto.MoveAction.builder()
+                            .type("TILE_EFFECT")
+                            .effectType(eventType)
+                            .before(nextPos)
+                            .after(nextPos) // Position doesn't change for X2
+                            .build());
+
+                    if ("TILE_X2".equals(eventType)) {
+                        log.info("User {} landed on {} and got effect {}", winnerUserId, nextPos, eventType);
+                    }
+                }
+
+                // 4. Collision / Catching Logic
+                // Check if any other player is at nextPos
+                for (String pid : room.getPlayers()) {
+                    if (pid.equals(winnerUserId))
+                        continue; // Skip self
+
+                    PlayerState otherPs = room.getPlayerStates().get(pid);
+                    if (otherPs != null && otherPs.getPosition() == nextPos && nextPos != 0) { // Don't catch at
+                                                                                               // start(0)
+                        // Catch!
+                        int caughtPos = 0;
+                        int originalPos = otherPs.getPosition();
+                        otherPs.setPosition(caughtPos); // Send back to 0
+
+                        actions.add(GameDto.MoveAction.builder()
+                                .type("CATCH")
+                                .targetUserId(pid)
+                                .before(originalPos)
+                                .after(caughtPos)
+                                .build());
+
+                        log.info("User {} CAUGHT User {} at position {}", winnerUserId, pid, nextPos);
+                    }
+                }
+
+                // Final Position Update
+                winnerState.setPosition(nextPos);
+                roomRepository.save(room); // Save state changes (position, buff consumption)
 
                 GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
                         .userId(winnerUserId)
@@ -448,8 +614,38 @@ public class GameService {
                 broadcastGameState(room);
             }
 
-            // Prepare Next Round / Turn (Next logic, maybe wait and then next turn)
-            // For now, logic ends here.
+            // --- Prepare Next Turn / Round ---
+
+            // 1. Find Current Turn Index
+            List<String> turnOrder = room.getTurnOrder();
+            int currentIndex = turnOrder.indexOf(turnUser);
+
+            // 2. Calculate Next Index
+            int nextIndex = currentIndex + 1;
+
+            // 3. Check for Round Change
+            if (nextIndex >= turnOrder.size()) {
+                // Round Over -> Next Round, Reset to First Player
+                nextIndex = 0;
+                room.setRound(room.getRound() + 1);
+                log.info("Room {} - Round {} Started", room.getId(), room.getRound());
+            }
+
+            // 4. Set Next Turn User
+            String nextTurnUser = turnOrder.get(nextIndex);
+            room.setCurrentTurnUserId(nextTurnUser);
+            roomRepository.save(room);
+
+            log.info("Pass Turn: {} -> {} (Round {})", turnUser, nextTurnUser, room.getRound());
+
+            // 5. Broadcast Updated State (Next Turn Info)
+            broadcastGameState(room);
+
+            // 6. Schedule Next Quiz (Delay for Animation: e.g., 5 seconds)
+            scheduler.schedule(() -> {
+                startQuiz(roomId);
+            }, 6000, TimeUnit.MILLISECONDS);
+
         } catch (Exception e) {
             log.error("Error in processRoundResult", e);
         }

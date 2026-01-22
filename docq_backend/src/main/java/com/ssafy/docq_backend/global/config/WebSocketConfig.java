@@ -11,11 +11,12 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // 1. 소켓 연결 엔드포인트 설정 (API 명세서: ws://{ip}:8080/ws-docq)
+        // 소켓 연결 엔드포인트 설정 (SockJS 지원 포함)
         registry.addEndpoint("/ws-docq")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
-        // SockJS 없이 순수 STOMP만 쓸 경우 아래 줄도 추가 (Postman 테스트용)
+
+        // SockJS 없이 순수 STOMP만 쓸 경우를 대비한 추가 엔드포인트 (필요 시)
         registry.addEndpoint("/ws-docq")
                 .setAllowedOriginPatterns("*");
     }

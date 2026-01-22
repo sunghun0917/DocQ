@@ -1,30 +1,58 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router'
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
 import QuizOverlay from '@/components/game/QuizOverlay.vue';
 import AnswerFeedback from '@/components/game/AnswerFeedback.vue';
-import RouletteOverlay from '@/components/game/RouletteOverlay.vue'; // [NEW]
-import { useRoomStore } from '@/stores/roomtStore'
+import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
+import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useWebSocketStore } from '@/stores/websocketStore'
+import { useUserStore } from '@/stores/userStore'
 
+const router = useRouter()
 const roomStore = useRoomStore()
 const gameStore = useGameStore()
+const wsStore = useWebSocketStore()
+const userStore = useUserStore()
 
-// 방 정보 가져오기
-const roomInfo = computed(() => roomStore.roomInfo)
-const users = computed(() => roomStore.users)
-const myUser = computed(() => roomStore.myUser)
-const myUserId = computed(() => myUser.value?.id || '')
-const isReady = computed(() => myUser.value?.isReady || false)
+const myUserId = computed(() => userStore.userId)
+const currentQuiz = computed(() => gameStore.currentQuiz)
+const timeRemaining = computed(() => gameStore.timeRemaining)
+const gameStatus = computed(() => gameStore.gameStatus)
+const isGameFinished = computed(() => gameStore.isGameFinished)
 
-// 게임 종료 상태 (테스트용: true로 두면 들어가자마자 모달 뜸)
-const isGameEnded = ref(false); 
-
-// 컴포넌트 마운트 시 게임 시작 (타이머 작동 확인용)
-onMounted(() => {
-  gameStore.startGame()
+// 현재 턴인지 확인
+const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
+const isMyTurn = computed(() => {
+    if (!currentTurnPlayer.value || !myUserId.value) return false
+    return currentTurnPlayer.value.userId === myUserId.value
 })
+
+const selectedOption = ref<number | null>(null)
+const isSubmitted = ref(false)
+
+// 퀴즈가 바뀌면 상태 초기화
+watch(currentQuiz, () => {
+    selectedOption.value = null
+    isSubmitted.value = false
+})
+
+const submitAnswer = (index: number) => {
+    if (isSubmitted.value) return
+    if (!currentQuiz.value) return
+    
+    selectedOption.value = index
+    isSubmitted.value = true
+    
+    const answerText = currentQuiz.value.options[index]
+    
+    const roomId = roomStore.roomInfo.roomId
+    if (roomId && myUserId.value) {
+        wsStore.submitAnswer(roomId, myUserId.value, currentQuiz.value.quizId, answerText || "")
+    }
+}
 </script>
 
 <template>
@@ -44,7 +72,7 @@ onMounted(() => {
       <RouletteOverlay />
 
       <!-- 결과 모달 -->
-      <ResultModal v-if="isGameEnded" class="pointer-events-auto" />
+      <ResultModal v-if="isGameFinished" class="pointer-events-auto" />
     </div>
   </div>
 </template>

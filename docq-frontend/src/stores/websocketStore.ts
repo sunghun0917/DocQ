@@ -3,7 +3,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { WebSocketService } from '@/services/websocket'
 import { useUserStore } from './userStore'
-import { useRoomStore } from './roomtStore'
+import { useRoomStore } from './roomStore'
+import { useGameStore } from './gameStore'
 
 // 백엔드 DTO 타입 정의
 export interface GameStateResponse {
@@ -15,13 +16,27 @@ export interface PlayerInfo {
     userId: string
     nickname: string
     isHost: boolean
+    host?: boolean // 서버에서 오는 필드명 대응
     connected: boolean
     isReady: boolean
+    ready?: boolean // 서버에서 오는 필드명 대응
+    avatarId?: number // 아바타 ID 추가
 }
 
 export interface ErrorResponse {
     code: string
     message: string
+}
+
+const AVATAR_MAP: Record<number, string> = {
+    0: '🐱',
+    1: '🐶',
+    2: '🦊',
+    3: '🐰',
+    4: '🐯',
+    5: '🐸',
+    6: '🐨',
+    7: '🐷'
 }
 
 export const useWebSocketStore = defineStore('websocket', () => {
@@ -55,7 +70,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         try {
             // WebSocket 서비스 생성
             wsService.value = new WebSocketService({
-                url: import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws-docq',
+                url: import.meta.env.VITE_WS_URL || '/ws-docq',
 
                 onConnect: () => {
                     isConnected.value = true
@@ -65,6 +80,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
                 onDisconnect: () => {
                     isConnected.value = false
+                    isConnecting.value = false
                     console.log('🔌 WebSocket Store: Disconnected')
                 },
 
@@ -94,6 +110,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
     }
 
+    // 아바타 정보 유실 방지를 위한 로컬 캐시
+    const avatarCache = ref<Record<string, string>>({})
+
     /**
      * 게임 상태 구독
      * @param roomId - 방 ID
@@ -105,20 +124,101 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
 
         const roomStore = useRoomStore()
+        const userStore = useUserStore()
+        const gameStore = useGameStore() // Inject GameStore
 
-        wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: GameStateResponse) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: any) => {
             console.log('📨 Game State Update:', data)
 
-            // Pinia 스토어 업데이트
-            // 플레이어 목록 동기화
-            roomStore.users = data.players.map(p => ({
-                id: p.userId,
-                username: p.nickname,
-                avatar: '🎮', // 기본 아바타
-                isReady: p.isReady,
-                isHost: p.isHost,
-                isMe: p.userId === useUserStore().userId
-            }))
+            // 1. GameStore 업데이트 (게임 진행 상태)
+            gameStore.setGameState(data)
+
+            // 2. RoomStore 업데이트 (로비/유저 목록 상태)
+            const players = Array.isArray(data.players) ? data.players : []
+            const nextUsers = players.map((player: any) => {
+                const isMe = player.userId === userStore.userId
+
+                // 백엔드 naming 이슈(isReady vs ready, isHost vs host)를 방어적으로 처리
+                const isReady = player.isReady !== undefined ? player.isReady : (player.ready !== undefined ? player.ready : false)
+                const isHost = player.isHost !== undefined ? player.isHost : (player.host !== undefined ? player.host : false)
+
+                // 아바타 결정 로직:
+                let avatar = '🎮'
+                const cachedAvatar = avatarCache.value[player.userId]
+
+                if (player.avatarId !== null && player.avatarId !== undefined) {
+                    avatar = AVATAR_MAP[player.avatarId] || '🎮'
+                    avatarCache.value[player.userId] = avatar // 캐시 업데이트
+                } else if (cachedAvatar) {
+                    avatar = cachedAvatar
+                } else if (isMe) {
+                    avatar = userStore.avatar
+                    avatarCache.value[player.userId] = avatar
+                }
+
+                return {
+                    id: player.userId,
+                    nickname: player.nickname,
+                    avatar: avatar,
+                    isReady: !!isReady,
+                    isHost: !!isHost,
+                    isMe
+                }
+            })
+
+            roomStore.setUsers(nextUsers)
+            roomStore.setRoomInfo({
+                status: data.state || data.status || 'WAITING',
+                currentCount: nextUsers.length
+            })
+        })
+
+        // 아바타 전용 구독 (경량 업데이트용)
+        wsService.value.subscribe(`/topic/game/${roomId}/avatar`, (data: any) => {
+            console.log('📨 Avatar Update:', data)
+            const emoji = AVATAR_MAP[data.avatarId] || '🎮'
+
+            // 캐시 먼저 업데이트
+            avatarCache.value[data.userId] = emoji
+
+            // 스토어 업데이트
+            roomStore.updateUser(data.userId, { avatar: emoji })
+
+            if (data.userId === userStore.userId) {
+                userStore.updateAvatar(emoji)
+            }
+        })
+
+        // 이동/룰렛 이벤트 구독
+        wsService.value.subscribe(`/topic/game/${roomId}/move`, (data: any) => {
+            console.log('📨 Move Event:', data)
+            gameStore.handleMove(data)
+        })
+
+        // 퀴즈 문제 수신
+        wsService.value.subscribe(`/topic/game/${roomId}/quiz`, (data: any) => {
+            console.log('📨 Quiz Received:', data)
+            gameStore.onQuizReceived(data)
+        })
+
+        // 라운드 결과 수신
+        wsService.value.subscribe(`/topic/game/${roomId}/result`, (data: any) => {
+            console.log('📨 Round Result:', data)
+            gameStore.onRoundResultReceived(data)
+        })
+    }
+
+    /**
+     * 정답 제출
+     */
+    const submitAnswer = (roomId: string, userId: string, quizId: number, answer: string) => {
+        if (!wsService.value) return
+
+        wsService.value.publish('/app/game/submit', {
+            roomId,
+            userId,
+            quizId,
+            answer
         })
     }
 
@@ -166,10 +266,43 @@ export const useWebSocketStore = defineStore('websocket', () => {
             return
         }
 
+        // 서버의 Jackson 매핑 이슈를 고려하여 둘 다 전송
         wsService.value.publish('/app/game/ready', {
             roomId,
             userId,
-            isReady
+            isReady: isReady, // Java 필드명
+            ready: isReady   // Jackson 기본 매핑용 키
+        })
+    }
+
+    /**
+     * 아바타 설정
+     */
+    const setAvatar = (roomId: string, userId: string, avatarId: number) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/avatar', {
+            roomId,
+            userId,
+            avatarId
+        })
+    }
+
+    /**
+     * 게임 시작 (Host Only)
+     */
+    const startGame = (roomId: string, userId: string) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/start', {
+            roomId,
+            userId
         })
     }
 
@@ -205,7 +338,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
         subscribeGameState,
         subscribeErrors,
         joinGame,
+        submitAnswer,
         setReady,
+        setAvatar,
+        startGame,
         unsubscribe,
         cleanup
     }

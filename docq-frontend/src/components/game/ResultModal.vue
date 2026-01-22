@@ -5,21 +5,43 @@ import { useRouter } from 'vue-router';
 // canvas-confetti란?
 // 폭죽 효과를 화면에 띄워주는 라이브러리
 import confetti from 'canvas-confetti';
+import { useGameStore } from '@/stores/gameStore';
+import { useRoomStore } from '@/stores/roomStore';
 
 const router = useRouter();
+const gameStore = useGameStore();
+const roomStore = useRoomStore();
 
-const gameResult = ref({
-  winner: '티라노',
-  players: [
-    { rank: 1, nickname: '티라노', avatar: '🐱', score: 150, isMe: false },
-    { rank: 2, nickname: '창민짱짱돌이', avatar: '🐶', score: 120, isMe: true },
-    { rank: 3, nickname: '머라카노', avatar: '🦊', score: 80, isMe: false },
-    // { rank: 4, nickname: '자바왕', avatar: '🐰', score: 45, isMe: false },
-  ]
-});
+// Store에서 랭킹 데이터 가져오기 (rankings getter 활용)
+const rankings = computed(() => gameStore.rankings)
 
-const winner = computed(() => gameResult.value.players.find(p => p.rank === 1));
-const others = computed(() => gameResult.value.players.filter(p => p.rank > 1));
+const getAvatar = (userId: string) => {
+    return roomStore.users.find(u => u.id === userId)?.avatar || '👤'
+}
+
+const getIsMe = (userId: string) => {
+    return roomStore.myUser?.id === userId
+}
+
+const winner = computed(() => {
+    if (rankings.value.length === 0) return null
+    const w = rankings.value[0]!
+    return {
+        ...w,
+        avatar: getAvatar(w.userId),
+        rank: 1,
+        isMe: getIsMe(w.userId)
+    }
+})
+
+const others = computed(() => {
+    return rankings.value.slice(1).map((p, index) => ({
+        ...p,
+        rank: index + 2,
+        avatar: getAvatar(p.userId),
+        isMe: getIsMe(p.userId)
+    }))
+})
 
 // 폭죽 효과 함수
 const launchConfetti = () => {
@@ -61,7 +83,11 @@ onMounted(() => {
 });
 
 const goHome = () => router.push('/');
-const goLobby = () => router.push('/waiting/A1B2'); 
+const goLobby = () => {
+    // If not in a room, just go home
+    if (!roomStore.roomInfo.roomId) router.push('/');
+    else router.push(`/waiting/${roomStore.roomInfo.roomId}`);
+} 
 </script>
 
 <template>

@@ -8,8 +8,8 @@ import axios, { type AxiosInstance } from 'axios'
 이 axios 인스턴스를 사용하는 모든 요청이
 “나는 JSON으로 말할게”라고 서버에 선언하는 것 */
 const apiClient: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
-    timeout: 10000,
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+    timeout: 120000,
     headers: {
         'Content-Type': 'application/json'
     }
@@ -147,6 +147,41 @@ export const verifyJoinRoom = async (data: JoinRoomRequest): Promise<JoinRoomRes
     return response.data
 }
 
+// ==================== 퀴즈 관련 API ====================
+
+export interface QuizResponse {
+    quizId: number
+    question: string
+    options: string[]
+    answerIndex: number
+    answerText: string
+}
+
+/**
+ * PDF 업로드 및 퀴즈 생성
+ * POST /api/game/{roomId}/quiz/generate
+ */
+export const generateQuiz = async (roomId: string, file: File): Promise<string> => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await apiClient.post(`/game/${roomId}/quiz/generate`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    })
+    return response.data
+}
+
+/**
+ * 생성된 퀴즈 조회
+ * GET /api/game/{roomId}/quiz
+ */
+export const getQuizzes = async (roomId: string): Promise<QuizResponse[]> => {
+    const response = await apiClient.get<QuizResponse[]>(`/game/${roomId}/quiz`)
+    return response.data
+}
+
 // ==================== 에러 처리 헬퍼 ====================
 
 /**
@@ -176,6 +211,8 @@ export default {
     getRoomById,
     getRoomByInviteCode,
     verifyJoinRoom,
+    generateQuiz,
+    getQuizzes,
     getErrorMessage,
     getErrorCode
 }

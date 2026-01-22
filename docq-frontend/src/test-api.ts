@@ -158,6 +158,19 @@ export const testAPI = {
         }
     },
 
+    // 10. 게임 시작 테스트
+    async testStartGame(roomId: string, userId: string) {
+        console.log('🧪 [TEST] 게임 시작 테스트')
+        try {
+            const wsStore = useWebSocketStore()
+            wsStore.startGame(roomId, userId)
+            console.log('✅ 게임 시작 메시지 전송 완료')
+        } catch (error) {
+            console.error('❌ 게임 시작 실패:', error)
+            throw error
+        }
+    },
+
     // 전체 플로우 테스트 (REST API + WebSocket)
     async testFullFlowWithWebSocket() {
         console.log('🚀 [TEST] 전체 플로우 테스트 (WebSocket 포함) 시작\n')
@@ -190,8 +203,14 @@ export const testAPI = {
             await this.testSetReady(room.roomId, user.userId, true)
             console.log('   준비 완료\n')
 
+            // 6. 게임 시작 (준비 완료 상태에서만 가능하므로 잠시 대기 후 실행)
+            console.log('6️⃣ 게임 시작...')
+            await new Promise(resolve => setTimeout(resolve, 2000)) // 2초 대기
+            await this.testStartGame(room.roomId, user.userId)
+            console.log('   게임 시작 요청 완료\n')
+
             console.log('✅ 전체 플로우 테스트 성공!')
-            console.log('💡 콘솔에서 게임 상태 업데이트 메시지를 확인하세요!')
+            console.log('💡 콘솔에서 게임 상태 업데이트 메시지(status: "PLAYING")를 확인하세요!')
 
             return { user, room }
 

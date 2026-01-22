@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
-import { useRoomStore } from '@/stores/roomtStore';
+import { useRoomStore } from '@/stores/roomStore';
 
 const gameStore = useGameStore();
 const roomStore = useRoomStore();
@@ -94,7 +94,7 @@ watch(() => gameStore.rouletteTargetId, (newVal) => {
   <div v-if="shouldMount && isVisible" class="roulette-overlay">
     <div class="roulette-modal">
         <div class="modal-header">
-            <h3>{{ targetUser?.username || 'Unknown' }}님의 결과 확인</h3>
+            <h3>{{ targetUser?.nickname || 'Unknown' }}님의 결과 확인</h3>
         </div>
         <div class="modal-body">
              <div class="roulette-container">

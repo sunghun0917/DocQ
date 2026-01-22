@@ -28,42 +28,61 @@ const { get3DPos } = useIsometric()
 const idleFbx = null
 const idleClips: any[] = []
 
-/* ===== 캐릭터 대체 모델 (Primitives) 생성 ===== */
-const scene = new THREE.Group()
+/* ===== 씬 복제 (Independent Instances) ===== */
+// 원본 씬을 그대로 쓰면 모든 플레이어가 똑같이 움직이므로, clone()으로 복제해서 사용
+// [TS] 타입 단언(as THREE.Group)을 사용하여 타입 에러 방지
+let scene: THREE.Group | null = null
+if (idleSceneRaw) {
+  scene = (typeof idleSceneRaw.clone === 'function' ? clone(idleSceneRaw) : idleSceneRaw) as THREE.Group
+}
 
-// 1. 몸통 (원기둥)
-const bodyGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.6, 16)
-const bodyMat = new THREE.MeshStandardMaterial({ color: props.color })
-const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat)
-bodyMesh.position.y = 0.3 // 중심점 조정
-bodyMesh.castShadow = true
-scene.add(bodyMesh)
+/* ===== 색상 적용 (Material Clone) ===== */
+// 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
+if (scene) {
+  scene.traverse((child: any) => {
+    // Mesh인 경우에만 재질 변경
+    if (child.isMesh && child.material) {
+      const mesh = child as THREE.Mesh
+      // 재질을 복제하여 독립적인 색상 적용 가능하게 함
+      if (Array.isArray(mesh.material)) {
+        mesh.material = mesh.material.map(m => m.clone())
+      } else {
+        mesh.material = mesh.material.clone()
+        if ('color' in mesh.material) {
+            (mesh.material as THREE.MeshStandardMaterial).color.setStyle(props.color)
+        }
+      }
+    }
+  })
+}
 
-// 2. 머리 (구)
-const headGeo = new THREE.SphereGeometry(0.15, 16, 16)
-const headMat = new THREE.MeshStandardMaterial({ color: '#ffeaa7' }) // 피부색?
-const headMesh = new THREE.Mesh(headGeo, headMat)
-headMesh.position.y = 0.7 // 몸통 위에
-headMesh.castShadow = true
-scene.add(headMesh)
+// 애니메이션 클립 준비 (첫 번째 클립이 걷기 동작이라고 가정)
+const idleClip = idleClips[0] || null
+const allClips = shallowRef(idleClip ? [idleClip] : [])
 
-// 3. 눈 (방향 표시용)
-const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8)
-const eyeMat = new THREE.MeshBasicMaterial({ color: 'black' })
-const leftEye = new THREE.Mesh(eyeGeo, eyeMat)
-leftEye.position.set(0.1, 0.75, 0.1)
-const rightEye = new THREE.Mesh(eyeGeo, eyeMat)
-rightEye.position.set(0.1, 0.75, -0.1)
-scene.add(leftEye)
-scene.add(rightEye)
+// 로드 실패 시 에러 로그
+if (!scene) {
+  console.error('Character scene is null; check FBX load.')
+}
 
-// 크기 및 위치 초기화
-const startPos = get3DPos(props.x, props.y)
-scene.position.set(startPos[0], startPos[1], startPos[2])
-// scene.scale.set(0.5, 0.5, 0.5) // Primitive는 크기가 적당하므로 스케일 조정 불필요 or 미세조정
+/* ===== 초기 위치 설정 ===== */
+if (scene) {
+  // 시작점 3D 좌표 계산
+  const startPos = get3DPos(props.x, props.y)
 
-/* ===== 애니메이션 액션 (비활성화) ===== */
-const { actions } = { actions: {} as any } // Dummy
+  // Y축(높이)에 0.25를 더해 타일 위에 올라가게 함
+  scene.position.set(startPos[0], startPos[1] + 0.25, startPos[2])
+
+  // 모델 크기 축소 (FBX 원본 크기에 맞춰 조절)
+  scene.scale.set(0.01, 0.01, 0.01)
+
+  // 기본 회전값 (모델이 뒷면을 보고 있다면 180도 회전)
+  scene.rotation.y = Math.PI
+}
+
+/* ===== 애니메이션 액션 설정 ===== */
+// scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
+const { actions } = useAnimations(allClips, scene || new THREE.Object3D())
 
 // 상수로 관리하는 설정값들
 const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
@@ -83,7 +102,14 @@ const updateLookDirection = () => {
  * 라이프사이클
  */
 onMounted(() => {
-  // 애니메이션 없음 (Primitive)
+  if (idleClip && actions[idleClip.name]) {
+    const action = actions[idleClip.name]
+    // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
+    action.setEffectiveTimeScale(2.0)
+    // 페이드인과 함께 재생
+    action.reset().fadeIn(FADE_TIME).play()
+  }
+  // 초기 시선 처리
   updateLookDirection()
 })
 

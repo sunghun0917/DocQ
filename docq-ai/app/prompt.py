@@ -1,4 +1,4 @@
-﻿FAST_MULTI_QUIZ_PROMPT ="""
+FAST_MULTI_QUIZ_PROMPT ="""
 당신은 'DocQ' 학습 게임의 **전문 출제위원**입니다.
 제공된 [학습 내용]을 꼼꼼히 분석하여, 학습 효과를 높일 수 있는 **고품질 객관식 문제 {count}개**를 출제하세요.
 

@@ -1,36 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
-import { useRoomStore } from '@/stores/roomtStore'
+import { useRoomStore } from '@/stores/roomStore'
 
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
 const quiz = computed(() => gameStore.currentQuiz)
 const myUserId = computed(() => roomStore.myUser?.id || '')
-const isMyTurn = computed(() => gameStore.currentTurnUserId === myUserId.value)
-
-// 이미 답을 제출했는지 확인
-const mySubmission = computed(() => 
-  myUserId.value ? gameStore.quizSubmissions[myUserId.value] : null
-)
-
-const hasSubmitted = computed(() => !!mySubmission.value)
-
-const isRoulettePhase = computed(() => !!gameStore.rouletteTargetId)
+const isMyTurn = computed(() => {
+  if (!gameStore.currentTurnPlayer || !myUserId.value) return false
+  return gameStore.currentTurnPlayer.userId === myUserId.value
+})
 
 // 타이머 (Progress Bar Width%)
-const timePercentage = computed(() => (gameStore.timeRemaining / 5) * 100)
+const timePercentage = computed(() => {
+  const limit = quiz.value?.timeLimit || 30
+  return (gameStore.timeRemaining / limit) * 100
+})
 
-// 답안 제출 핸들러
-const handleAnswer = (index: number) => {
-  if (!myUserId.value || hasSubmitted.value) return
-  gameStore.submitAnswer(myUserId.value, index)
-}
+// 답안 제출 핸들러 (WebSocket 버전은 GameView에서 처리)
+// 이 컴포넌트는 UI만 담당
 </script>
 
 <template>
-  <div v-if="quiz && !gameStore.rouletteTargetId" class="quiz-overlay-container">
+  <div v-if="quiz && gameStore.gameStatus === 'playing'" class="quiz-overlay-container">
     
     <!-- 타이머 + 역할 메시지 -->
     <div class="status-header">
@@ -46,7 +40,7 @@ const handleAnswer = (index: number) => {
         <div 
           class="timer-bar" 
           :style="{ width: `${timePercentage}%` }"
-          :class="{ 'urgent': gameStore.timeRemaining <= 2 }"
+          :class="{ 'urgent': gameStore.timeRemaining <= 5 }"
         ></div>
       </div>
     </div>
@@ -54,21 +48,18 @@ const handleAnswer = (index: number) => {
     <!-- 문제 카드 -->
     <div class="question-card">
       <div class="header-badge">
-         <span class="round-badge">Round {{ gameStore.currentQuizIndex + 1 }}</span>
+         <span class="round-badge">Round {{ gameStore.gameState.round || 1 }}</span>
       </div>
       <h2 class="question-text">{{ quiz.question }}</h2>
       <div class="timer-text-display">남은 시간: {{ gameStore.timeRemaining.toFixed(1) }}s</div>
     </div>
 
-    <!-- 보기 버튼 영역 -->
+    <!-- 보기 버튼 영역 (실제 제출은 GameView에서 처리) -->
     <div class="options-grid">
       <button
         v-for="(option, idx) in quiz.options"
         :key="idx"
         class="option-btn"
-        :class="{ 'selected': mySubmission?.answer === idx, 'disabled': hasSubmitted }"
-        @click="handleAnswer(idx)"
-        :disabled="hasSubmitted"
       >
         {{ option }}
       </button>
@@ -86,7 +77,7 @@ const handleAnswer = (index: number) => {
   height: 100%;
   pointer-events: auto;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.3); /* 배경 어둡게 */
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .status-header {
@@ -154,6 +145,13 @@ const handleAnswer = (index: number) => {
   line-height: 1.4;
 }
 
+.timer-text-display {
+  margin-top: 10px;
+  font-size: 1rem;
+  color: #636e72;
+  font-weight: bold;
+}
+
 .options-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -175,29 +173,11 @@ const handleAnswer = (index: number) => {
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-.option-btn:hover:not(.disabled) {
+.option-btn:hover {
   background: #74b9ff;
   border-color: #74b9ff;
   color: white;
   transform: translateY(-3px);
   box-shadow: 0 7px 14px rgba(0,0,0,0.2);
-}
-
-.option-btn:active:not(.disabled) {
-  transform: translateY(1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.option-btn.selected {
-  background: #ffeaa7;
-  border-color: #fdcb6e;
-  color: #d35400;
-}
-
-.option-btn.disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-  box-shadow: none !important;
 }
 </style>
