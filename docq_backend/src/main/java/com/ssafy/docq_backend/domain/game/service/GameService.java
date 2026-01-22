@@ -16,6 +16,7 @@ import com.ssafy.docq_backend.domain.game.entity.Quiz;
 import com.ssafy.docq_backend.domain.minigame.service.MiniGameService;
 import com.ssafy.docq_backend.global.client.AiClient;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,7 +36,7 @@ public class GameService {
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final AiClient aiClient;
-    private final MiniGameService miniGameService;
+    private final ObjectProvider<MiniGameService> miniGameServiceProvider;
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
@@ -758,7 +759,7 @@ public class GameService {
 
         if (idx >= order.size()) {
             if (room.getRound() % 2 != 0) {
-                miniGameService.startMiniGame(roomId);
+                miniGameServiceProvider.getObject().startMiniGame(roomId);
                 return;
             }
             idx = 0;
@@ -777,6 +778,105 @@ public class GameService {
 
     } catch (Exception e) {
         log.error("Error in processRoundResult", e);
+    }
+}
+
+    public void resumeAfterMiniGame(String roomId) {
+        try {
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+            log.info("Resuming Game after MiniGame for Room {}", roomId);
+
+            room.setStatus(RoomStatus.QUIZ_TIME);
+
+            if (!room.getTurnOrder().isEmpty()) {
+                room.setCurrentTurnUserId(room.getTurnOrder().get(0));
+            }
+
+            roomRepository.save(room);
+
+            broadcastGameState(room);
+
+            scheduler.schedule(() -> {
+                startQuiz(roomId);
+            }, 5000, TimeUnit.MILLISECONDS);
+
+        } catch (Exception e) {
+            log.error("Error resuming game after mini-game", e);
+        }
+    }
+
+    private GameDto.FinishResponse buildFinishResponse(Room room) {
+        List<GameDto.FinishRank> rankings = buildFinishRankings(room);
+        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getUserId();
+
+        return GameDto.FinishResponse.builder()
+                .type("FINISH")
+                .winnerUserId(winnerUserId)
+                .rankings(rankings)
+                .build();
+    }
+
+    private List<GameDto.FinishRank> buildFinishRankings(Room room) {
+        return room.getPlayerStates().values().stream()
+                .map(state -> {
+                    User user = userRepository.findById(state.getUserId()).orElse(null);
+                    String nickname = user != null ? user.getNickname() : "Unknown";
+                    int position = state.getPosition();
+                    int remaining = Math.max(TARGET_POSITION - position, 0);
+                    int score = state.getScore();
+                    return new Object[] { state.getUserId(), nickname, position, remaining, score };
+                })
+                .sorted((a, b) -> {
+                    int remainingA = (int) a[3];
+                    int remainingB = (int) b[3];
+                    if (remainingA != remainingB) {
+                        return Integer.compare(remainingA, remainingB);
+                    }
+                    int scoreA = (int) a[4];
+                    int scoreB = (int) b[4];
+                    return Integer.compare(scoreB, scoreA);
+                })
+                .collect(Collectors.collectingAndThen(Collectors.toList(), list -> {
+                    List<GameDto.FinishRank> ranks = new ArrayList<>();
+                    for (int i = 0; i < list.size(); i++) {
+                        Object[] item = list.get(i);
+                        ranks.add(GameDto.FinishRank.builder()
+                                .userId((String) item[0])
+                                .nickname((String) item[1])
+                                .position((int) item[2])
+                                .remaining((int) item[3])
+                                .score((int) item[4])
+                                .rank(i + 1)
+                                .build());
+                    }
+                    return ranks;
+                }));
+    }
+
+    private List<Quiz> buildDefaultQuizzes(int count) {
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            int a = i;
+            int b = i + 1;
+            int correct = a + b;
+
+            List<String> options = new ArrayList<>();
+            options.add(String.valueOf(correct));
+            options.add(String.valueOf(correct + 1));
+            options.add(String.valueOf(correct + 2));
+            options.add(String.valueOf(correct + 3));
+
+            quizzes.add(Quiz.builder()
+                    .quizId((long) i)
+                    .question("Sample Q" + i + ": " + a + " + " + b + " = ?")
+                    .options(options)
+                    .answerIndex(0)
+                    .answerText(options.get(0))
+                    .build());
+        }
+        return quizzes;
     }
 }
 
