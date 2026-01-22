@@ -30,4 +30,8 @@ public class RoomRepository {
                 .filter(room -> room.getInviteCode().equals(inviteCode))
                 .findFirst();
     }
+
+    public void deleteById(String id) {
+        store.remove(id);
+    }
 }

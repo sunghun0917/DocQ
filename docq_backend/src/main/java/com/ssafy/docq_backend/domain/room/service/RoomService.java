@@ -111,7 +111,7 @@ public class RoomService {
         }
 
         // 2. 이미 시작된 게임 확인
-        if (room.getStatus() == RoomStatus.PLAYING) {
+        if (room.getStatus() != RoomStatus.WAITING) {
             throw new DocqException(ErrorCode.GAME_ALREADY_STARTED); // R003
         }
 

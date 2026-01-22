@@ -23,14 +23,28 @@ const props = withDefaults(defineProps<{
 // 3D 좌표 변환 훅 가져오기
 const { get3DPos } = useIsometric()
 
+let sharedFbx: any | null = null
+let sharedClips: any[] = []
+let sharedLoadPromise: Promise<any> | null = null
+
+const loadSharedFbx = async () => {
+  if (sharedFbx) return sharedFbx
+  if (!sharedLoadPromise) {
+    sharedLoadPromise = useFBX('/assets/character/Walking.fbx')
+  }
+  sharedFbx = await sharedLoadPromise
+  const state = (sharedFbx as any).state?.value || sharedFbx
+  sharedClips = state.animations || []
+  return sharedFbx
+}
+
 /* ===== FBX 모델 로드 (단일 애니메이션: Walking.fbx 사용) ===== */
-// public/assets/characters/Walking.fbx 파일을 비동기로 로드
-const idleFbx = await useFBX('/assets/character/Walking.fbx')
+const idleFbx = await loadSharedFbx()
 
 // 로드된 FBX 객체에서 상태, 씬, 애니메이션 클립 추출
 const idleState = (idleFbx as any).state?.value || idleFbx
 const idleSceneRaw = idleState.scene || idleState
-const idleClips = idleState.animations || []
+const idleClips = sharedClips
 
 /* ===== 씬 복제 (Independent Instances) ===== */
 // 원본 씬을 그대로 쓰면 모든 플레이어가 똑같이 움직이므로, clone()으로 복제해서 사용

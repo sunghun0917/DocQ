@@ -161,9 +161,14 @@ watchEffect(() => {
 
 const leaveRoom = () => {
   if (confirm("정말 방을 나가시겠습니까?")) {
-    wsStore.cleanup()
-    roomStore.leaveRoom()
-    router.push('/');
+    if (userStore.userId && roomId.value) {
+      wsStore.leaveGame(roomId.value, userStore.userId)
+    }
+    setTimeout(() => {
+      wsStore.cleanup()
+      roomStore.leaveRoom()
+      router.push('/');
+    }, 150)
   }
 };
 
@@ -271,24 +276,27 @@ onMounted(async () => {
             <div v-if="isHost" class="border-t pt-4">
               <h3 class="text-sm font-bold text-[#636e72] mb-3">📄 퀴즈 설정</h3>
               
-              <div class="flex flex-col gap-2">
-                 <input 
-                   type="file" 
-                   accept="application/pdf"
-                   @change="handleFileChange"
-                   class="mb-2 text-xs text-slate-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-xs file:font-semibold
-                    file:bg-violet-50 file:text-violet-700
-                    hover:file:bg-violet-100"
-                 />
+              <div class="flex flex-col gap-3">
+                 <label class="flex items-center justify-between gap-3 bg-[#f8fafc] border border-[#dfe6e9] rounded-xl px-4 py-3 text-xs text-[#636e72]">
+                   <span class="font-bold">PDF 선택</span>
+                   <input 
+                     type="file" 
+                     accept="application/pdf"
+                     @change="handleFileChange"
+                     class="text-xs text-slate-500
+                      file:mr-2 file:py-2 file:px-3
+                      file:rounded-full file:border-0
+                      file:text-xs file:font-semibold
+                      file:bg-violet-50 file:text-violet-700
+                      hover:file:bg-violet-100"
+                   />
+                 </label>
                  
                  <div class="flex gap-2">
                     <button 
                       @click="handleUploadPdf"
                       :disabled="!selectedFile || isGenerating"
-                      class="flex-1 py-2 rounded-lg bg-blue-100 text-blue-700 font-bold text-xs hover:bg-blue-200 disabled:opacity-50"
+                      class="flex-1 py-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold text-xs hover:bg-blue-200 disabled:opacity-50"
                     >
                       <span v-if="isGenerating">생성 중...</span>
                       <span v-else>퀴즈 생성</span>
@@ -296,7 +304,7 @@ onMounted(async () => {
                     
                     <button 
                       @click="openQuizModal"
-                      class="flex-1 py-2 rounded-lg bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200"
+                      class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200"
                     >
                       목록 보기
                     </button>
@@ -313,43 +321,56 @@ onMounted(async () => {
                 </button>
             </div>
 
-          </div>
-          
-          <div class="flex flex-col gap-2 justify-end min-h-[6rem]">
-            
-            <template v-if="isHost">
-              <div v-if="!isAllReady" class="text-red-500 text-xs font-bold text-center animate-pulse">
-                📢 모두 준비완료가 되어야 합니다.
+            <div class="mt-6 border-t border-[#dfe6e9] pt-6">
+              <div class="flex flex-col items-center gap-4">
+                <template v-if="isHost">
+                  <div v-if="!isAllReady" class="text-red-500 text-xs font-bold text-center animate-pulse">
+                    📢 모두 준비완료가 되어야 합니다.
+                  </div>
+                  
+                  <button 
+                    @click="handleStartGame"
+                    :disabled="!isAllReady"
+                    class="w-full h-20 rounded-[24px] font-black text-2xl text-white transition-all 
+                           flex items-center justify-center gap-3 border-b-0"
+                    :class="isAllReady 
+                      ? 'bg-[#6c5ce7] shadow-[0_8px_0_0_#5f3dc4] hover:bg-[#5f3dc4] active:translate-y-[8px] active:shadow-none' 
+                      : 'bg-[#b2bec3] cursor-not-allowed shadow-none opacity-50'"
+                  >
+                    GAME START
+                  </button>
+                </template>
+                
+                <button 
+                  v-else
+                  @click="toggleReady"
+                  class="w-full h-20 rounded-[24px] font-black text-2xl transition-all 
+                         active:shadow-none active:translate-y-[8px] 
+                         flex flex-col items-center justify-center border-b-0"
+                  :class="myUser?.isReady 
+                    ? 'bg-[#00b894] text-white shadow-[0_8px_0_0_#00896f]' 
+                    : 'bg-white text-[#636e72] border-4 border-[#b2bec3] shadow-[0_8px_0_0_#636e72]'"
+                >
+                  <span class="text-sm font-extrabold opacity-80 mb-1 tracking-wider">
+                    {{ myUser?.isReady ? 'ALL SET!' : 'ARE YOU READY?' }}
+                  </span>
+                  <span>{{ myUser?.isReady ? '준비완료' : '준비하기' }}</span>
+                </button>
               </div>
-              
-              <button 
-                @click="handleStartGame"
-                :disabled="!isAllReady"
-                class="w-full h-20 rounded-[24px] font-black text-2xl text-white transition-all 
-                       flex items-center justify-center gap-3 border-b-0"
-                :class="isAllReady 
-                  ? 'bg-[#6c5ce7] shadow-[0_8px_0_0_#5f3dc4] hover:bg-[#5f3dc4] active:translate-y-[8px] active:shadow-none' 
-                  : 'bg-[#b2bec3] cursor-not-allowed shadow-none opacity-50'"
-              >
-                GAME START
-              </button>
-            </template>
-            
-            <button 
-              v-else
-              @click="toggleReady"
-              class="w-full h-20 rounded-[24px] font-black text-2xl transition-all 
-                     active:shadow-none active:translate-y-[8px] 
-                     flex flex-col items-center justify-center border-b-0"
-              :class="myUser?.isReady 
-                ? 'bg-[#00b894] text-white shadow-[0_8px_0_0_#00896f]' 
-                : 'bg-white text-[#636e72] border-4 border-[#b2bec3] shadow-[0_8px_0_0_#636e72]'"
-            >
-              <span class="text-sm font-extrabold opacity-80 mb-1 tracking-wider">
-                {{ myUser?.isReady ? 'ALL SET!' : 'ARE YOU READY?' }}
-              </span>
-              <span>{{ myUser?.isReady ? '준비완료' : '준비하기' }}</span>
-            </button>
+
+              <div class="mt-5 flex flex-col items-center gap-3">
+                <button @click="copyRoomCode" class="px-6 py-3 rounded-lg font-bold bg-white border-2 border-[#dfe6e9] text-[#636e72] hover:bg-[#f1f2f6] transition flex items-center gap-2">
+                  Code: <span class="text-[#2d3436] font-black">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
+                </button>
+                
+                <button 
+                  @click="leaveRoom" 
+                  class="px-10 py-4 rounded-2xl font-black text-lg bg-[#ffeded] text-[#ff4d4f] border-2 border-[#ffb3b3] hover:bg-[#ffe1e1] transition shadow-lg"
+                >
+                  나가기
+                </button>
+              </div>
+            </div>
           </div>
         </aside>
       </div>
@@ -396,22 +417,9 @@ onMounted(async () => {
        </div>
     </div>
 
-      <footer class="mt-12 px-8 flex justify-between items-center border-t border-[#dfe6e9] pt-8">
+      <footer class="mt-12 px-8 border-t border-[#dfe6e9] pt-8">
         <div class="text-[#b2bec3] text-sm font-bold">
           DocQ - 문서 기반 퀴즈 게임
-        </div>
-        
-        <div class="flex gap-4">
-          <button @click="copyRoomCode" class="px-6 py-3 rounded-lg font-bold bg-white border-2 border-[#dfe6e9] text-[#636e72] hover:bg-[#f1f2f6] transition flex items-center gap-2">
-            Code: <span class="text-[#2d3436] font-black">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
-          </button>
-          
-          <button 
-            @click="leaveRoom" 
-            class="px-8 py-3 rounded-lg font-bold bg-[#fff5f5] text-[#ff6b6b] border-2 border-transparent hover:border-[#ff6b6b] transition shadow-sm"
-          >
-            나가기
-          </button>
         </div>
       </footer>
       
