@@ -33,6 +33,36 @@ public class GameDto {
     @ToString
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class LeaveRequest {
+        private String roomId;
+        private String userId;
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EndGameRequest {
+        private String roomId;
+        private String userId;
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RestartRequest {
+        private String roomId;
+        private String userId;
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ReadyRequest {
         private String roomId;
         private String userId;
@@ -103,6 +133,14 @@ public class GameDto {
     @Getter
     @Builder
     @AllArgsConstructor
+    public static class RoomClosedResponse {
+        private String roomId;
+        private String reason; // HOST_END, HOST_LEFT, EMPTY
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
     @NoArgsConstructor
     public static class QuizMessage {
         private Long quizId;
@@ -158,6 +196,27 @@ public class GameDto {
         private Integer before;
         private Integer after;
         private String targetUserId; // For CATCH effect
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class FinishResponse {
+        private String type; // "FINISH"
+        private String winnerUserId;
+        private List<FinishRank> rankings;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class FinishRank {
+        private String userId;
+        private String nickname;
+        private int position;
+        private int remaining;
+        private int score;
+        private int rank;
     }
 
 }

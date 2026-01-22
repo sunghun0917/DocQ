@@ -18,7 +18,8 @@ const { get3DPos, TILE_SIZE } = useIsometric()
 const COLORS: Record<number, string> = {
     0: '#888',     // 회색 (빈 공간)
     1: '#fff',     // 흰색 (경로)
-    2: '#ffd54f',  // 노란색 (특수 지점)
+    2: '#ffd54f',  // 노란색 (시작/도착)
+    3: '#8b5cf6'   // 보라색 (특수 이벤트 타일)
 }
 
 // 현재 타일 타입에 맞는 색상 계산

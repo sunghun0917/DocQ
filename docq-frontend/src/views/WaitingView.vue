@@ -5,7 +5,6 @@ import { useRouter, useRoute } from 'vue-router';
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
-// [통합] API 함수들 합침
 import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, type QuizResponse } from '@/services/api'
 import AlertModal from '@/components/common/AlertModal.vue';
 import ExitConfirmModal from '@/components/common/ExitConfirmModal.vue';
@@ -52,7 +51,6 @@ const handleUploadPdf = async () => {
   isGenerating.value = true
   try {
     await generateQuiz(roomId.value, selectedFile.value)
-    // 디자인 통일성을 위해 alert 대신 토스트 사용 권장 (여기선 로직 유지를 위해 유지하되 스타일 적용 가능)
     toastMessage.value = '퀴즈 생성이 시작되었습니다! 잠시 후 완료됩니다.';
     toastType.value = 'success';
     isToastOpen.value = true;
@@ -67,7 +65,6 @@ const handleUploadPdf = async () => {
     isGenerating.value = false
   }
 }
-// ... 기존 import 문 아래 ...
 
 // [추가] 드래그 상태 관리
 const isDragging = ref(false);
@@ -88,21 +85,18 @@ const onDrop = (e: DragEvent) => {
   e.preventDefault();
   isDragging.value = false;
   
-  // e.dataTransfer가 존재하는지 확실히 체크
   if (e.dataTransfer && e.dataTransfer.files.length > 0) {
     const file = e.dataTransfer.files[0];
-    
-    // file 변수가 확실히 File 객체인지 확인
     if (file && file.type === 'application/pdf') {
       selectedFile.value = file;
     } else {
-      // PDF가 아닐 경우 알림
       toastMessage.value = 'PDF 파일만 업로드 가능합니다.';
       toastType.value = 'error';
       isToastOpen.value = true;
     }
   }
 };
+
 // [추가] 클릭 시 파일 탐색기 열기
 const triggerFileInput = () => {
   fileInputRef.value?.click();
@@ -216,14 +210,26 @@ watchEffect(() => {
   }
 })
 
+// [병합 로직] 디자인을 위해 Modal을 띄우는 함수
 const leaveRoom = () => {
   showExitModal.value = true; 
 };
 
+// [병합 로직] Modal 확인 버튼 클릭 시 실행되는 실제 로직
 const handleExitConfirm = () => {
-  wsStore.cleanup();
-  roomStore.leaveRoom();
-  router.push('/');
+  // 1. 게임 서버에 나감 알림
+  if (userStore.userId && roomId.value) {
+     wsStore.leaveGame(roomId.value, userStore.userId)
+  }
+  
+  // 2. 약간의 지연 후 클라이언트 정리 및 이동 (안정성 확보)
+  setTimeout(() => {
+    wsStore.cleanup();
+    roomStore.leaveRoom();
+    router.push('/');
+  }, 150)
+  
+  showExitModal.value = false;
 };
 
 onMounted(async () => {
@@ -280,7 +286,7 @@ onMounted(async () => {
       </div>
     </div>
     
-    <div class="w-full max-w-7xl bg-white/60 backdrop-blur-xl rounded-[12px] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.15)] py-12 px-12 border border-white relative z-10">      
+    <div class="w-full max-w-7xl bg-white/60 backdrop-blur-xl rounded-[12px] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.15)] py-12 px-12 border border-white relative z-10">       
       
       <header class="flex justify-between items-center mb-10 px-4">
         <div class="flex items-center gap-6">
@@ -354,122 +360,122 @@ onMounted(async () => {
               </h3>
 
               <div v-if="isHost" class="flex flex-col gap-4">
-                 
-                 <div 
-                   @dragover="onDragOver"
-                   @dragleave="onDragLeave"
-                   @drop="onDrop"
-                   @click="triggerFileInput"
-                   class="relative w-full h-32 rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
-                   :class="[
-                     isDragging 
-                       ? 'border-[#e11d48] bg-[#fff1f2] scale-[1.02]' 
-                       : selectedFile
-                         ? 'border-[#00b894] bg-[#f0fff4]'
-                         : 'border-[#fecdd3] bg-white hover:border-[#e11d48] hover:bg-[#fff1f2]'
-                   ]"
-                 >
-                   <input 
-                     ref="fileInputRef"
-                     type="file" 
-                     accept="application/pdf"
-                     @change="handleFileChange"
-                     class="hidden"
-                   />
+                  
+                  <div 
+                    @dragover="onDragOver"
+                    @dragleave="onDragLeave"
+                    @drop="onDrop"
+                    @click="triggerFileInput"
+                    class="relative w-full h-32 rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
+                    :class="[
+                      isDragging 
+                        ? 'border-[#e11d48] bg-[#fff1f2] scale-[1.02]' 
+                        : selectedFile
+                          ? 'border-[#00b894] bg-[#f0fff4]'
+                          : 'border-[#fecdd3] bg-white hover:border-[#e11d48] hover:bg-[#fff1f2]'
+                    ]"
+                  >
+                    <input 
+                      ref="fileInputRef"
+                      type="file" 
+                      accept="application/pdf"
+                      @change="handleFileChange"
+                      class="hidden"
+                    />
 
-                   <div v-if="!selectedFile" class="flex flex-col items-center text-center p-4 pointer-events-none">
-                     <div class="w-10 h-10 rounded-full bg-[#fff1f2] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                        <span class="material-symbols-outlined text-[#e11d48] text-2xl">cloud_upload</span>
-                     </div>
-                     <p class="text-sm font-bold text-[#881337]">PDF 드래그 또는 클릭</p>
-                     <p class="text-xs text-[#fda4af] mt-1 font-medium">퀴즈로 만들 문서를 올려주세요</p>
-                   </div>
+                    <div v-if="!selectedFile" class="flex flex-col items-center text-center p-4 pointer-events-none">
+                      <div class="w-10 h-10 rounded-full bg-[#fff1f2] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                         <span class="material-symbols-outlined text-[#e11d48] text-2xl">cloud_upload</span>
+                      </div>
+                      <p class="text-sm font-bold text-[#881337]">PDF 드래그 또는 클릭</p>
+                      <p class="text-xs text-[#fda4af] mt-1 font-medium">퀴즈로 만들 문서를 올려주세요</p>
+                    </div>
 
-                   <div v-else class="flex flex-col items-center text-center p-4 w-full animate-bounce-short">
-                      <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
-                        <span class="material-symbols-outlined text-[#00b894] text-2xl">description</span>
-                     </div>
-                     <p class="text-sm font-black text-[#00b894] truncate max-w-[90%]">{{ selectedFile.name }}</p>
-                     <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">변경하려면 클릭하세요</p>
+                    <div v-else class="flex flex-col items-center text-center p-4 w-full animate-bounce-short">
+                       <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
+                         <span class="material-symbols-outlined text-[#00b894] text-2xl">description</span>
+                      </div>
+                      <p class="text-sm font-black text-[#00b894] truncate max-w-[90%]">{{ selectedFile.name }}</p>
+                      <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">변경하려면 클릭하세요</p>
+                      
+                      <button 
+                        @click.stop="selectedFile = null" 
+                        class="absolute top-2 right-2 text-[#00b894] hover:text-red-500 transition-colors p-1"
+                      >
+                         <span class="material-symbols-outlined text-lg">close</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex gap-3 mt-4">
+                     <button 
+                       @click="handleUploadPdf"
+                       :disabled="!selectedFile || isGenerating"
+                       class="flex-1 h-14 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm border-b-4 active:border-b-0 active:translate-y-1"
+                       :class="(!selectedFile || isGenerating) 
+                         ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                         : 'bg-[#e11d48] text-white border-[#9f1239] hover:bg-[#be123c]'"
+                     >
+                       <span v-if="isGenerating" class="flex items-center gap-2">
+                         <span class="material-symbols-outlined text-xl animate-spin">progress_activity</span>
+                         생성 중...
+                       </span>
+                       <span v-else class="flex items-center gap-2">
+                         <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">auto_fix</span>
+                         퀴즈 생성
+                       </span>
+                     </button>
                      
                      <button 
-                       @click.stop="selectedFile = null" 
-                       class="absolute top-2 right-2 text-[#00b894] hover:text-red-500 transition-colors p-1"
+                       @click="openQuizModal"
+                       class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
                      >
-                        <span class="material-symbols-outlined text-lg">close</span>
+                       <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">list_alt</span>
+                       목록
                      </button>
-                   </div>
-                 </div>
-                 <div class="flex gap-3 mt-4">
-                    <button 
-                      @click="handleUploadPdf"
-                      :disabled="!selectedFile || isGenerating"
-                      class="flex-1 h-14 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm border-b-4 active:border-b-0 active:translate-y-1"
-                      :class="(!selectedFile || isGenerating) 
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                        : 'bg-[#e11d48] text-white border-[#9f1239] hover:bg-[#be123c]'"
-                    >
-                      <span v-if="isGenerating" class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-xl animate-spin">progress_activity</span>
-                        생성 중...
-                      </span>
-                      <span v-else class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">auto_fix</span>
-                        퀴즈 생성
-                      </span>
-                    </button>
-                    
-                    <button 
-                      @click="openQuizModal"
-                      class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
-                    >
-                      <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">list_alt</span>
-                      목록
-                    </button>
-                 </div>
+                  </div>
               </div>
 
-<div v-else class="flex flex-col gap-4">
-                 
-                 <div 
-                   class="w-full h-32 rounded-2xl border-2 transition-all duration-500 flex flex-col items-center justify-center overflow-hidden relative"
-                   :class="generatedQuizzes.length > 0 
-                     ? 'border-[#00b894] bg-[#f0fff4]'  /* 퀴즈 있음: 초록색 성공 스타일 */
-                     : 'border-dashed border-[#fecdd3] bg-[#fff1f2]/50' /* 퀴즈 없음: 대기 스타일 */"
-                 >
-                    <div v-if="generatedQuizzes.length > 0" class="flex flex-col items-center animate-bounce-short">
-                      <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
-                        <span class="material-symbols-outlined text-[#00b894] text-2xl">check_circle</span>
-                      </div>
-                      <p class="text-sm font-black text-[#00b894]">PDF 업로드 완료</p>
-                      <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">총 {{ generatedQuizzes.length }}문제 생성됨</p>
-                    </div>
-
-                    <div v-else class="flex flex-col items-center text-center p-4">
-                       <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-2 animate-pulse">
-                          <span class="material-symbols-outlined text-[#fda4af] text-2xl">hourglass_top</span>
+              <div v-else class="flex flex-col gap-4">
+                  
+                  <div 
+                    class="w-full h-32 rounded-2xl border-2 transition-all duration-500 flex flex-col items-center justify-center overflow-hidden relative"
+                    :class="generatedQuizzes.length > 0 
+                      ? 'border-[#00b894] bg-[#f0fff4]'  /* 퀴즈 있음: 초록색 성공 스타일 */
+                      : 'border-dashed border-[#fecdd3] bg-[#fff1f2]/50' /* 퀴즈 없음: 대기 스타일 */"
+                  >
+                     <div v-if="generatedQuizzes.length > 0" class="flex flex-col items-center animate-bounce-short">
+                       <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
+                         <span class="material-symbols-outlined text-[#00b894] text-2xl">check_circle</span>
                        </div>
-                       <p class="text-sm font-bold text-[#9f1239] animate-pulse">방장이 문서를 준비 중입니다</p>
-                       <p class="text-xs text-[#fda4af] mt-1 font-medium">잠시만 기다려주세요...</p>
-                    </div>
-                 </div>
+                       <p class="text-sm font-black text-[#00b894]">PDF 업로드 완료</p>
+                       <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">총 {{ generatedQuizzes.length }}문제 생성됨</p>
+                     </div>
 
-                 <button 
-                   @click="openQuizModal"
-                   :disabled="generatedQuizzes.length === 0"
-                   class="w-full h-14 rounded-2xl border-2 border-b-[5px] font-black text-base flex items-center justify-center gap-2 transition-all shadow-sm group relative"
-                   :class="generatedQuizzes.length > 0
-                     ? 'bg-[#fff1f2] text-[#e11d48] border-[#fecdd3] hover:bg-[#ffe4e6] hover:border-[#e11d48] active:border-b-2 active:translate-y-[3px] cursor-pointer'
-                     : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'"
-                 >
-                   <span class="material-symbols-outlined text-xl" 
-                         :class="generatedQuizzes.length > 0 ? 'group-hover:scale-110 transition-transform' : ''">
-                     visibility
-                   </span>
-                   
-                   <span v-if="generatedQuizzes.length > 0">생성된 퀴즈 확인하기</span>
-                   <span v-else>퀴즈 대기 중...</span>
-                 </button>
+                     <div v-else class="flex flex-col items-center text-center p-4">
+                        <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-2 animate-pulse">
+                           <span class="material-symbols-outlined text-[#fda4af] text-2xl">hourglass_top</span>
+                        </div>
+                        <p class="text-sm font-bold text-[#9f1239] animate-pulse">방장이 문서를 준비 중입니다</p>
+                        <p class="text-xs text-[#fda4af] mt-1 font-medium">잠시만 기다려주세요...</p>
+                     </div>
+                  </div>
+
+                  <button 
+                    @click="openQuizModal"
+                    :disabled="generatedQuizzes.length === 0"
+                    class="w-full h-14 rounded-2xl border-2 border-b-[5px] font-black text-base flex items-center justify-center gap-2 transition-all shadow-sm group relative"
+                    :class="generatedQuizzes.length > 0
+                      ? 'bg-[#fff1f2] text-[#e11d48] border-[#fecdd3] hover:bg-[#ffe4e6] hover:border-[#e11d48] active:border-b-2 active:translate-y-[3px] cursor-pointer'
+                      : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'"
+                  >
+                    <span class="material-symbols-outlined text-xl" 
+                          :class="generatedQuizzes.length > 0 ? 'group-hover:scale-110 transition-transform' : ''">
+                      visibility
+                    </span>
+                    
+                    <span v-if="generatedQuizzes.length > 0">생성된 퀴즈 확인하기</span>
+                    <span v-else>퀴즈 대기 중...</span>
+                  </button>
               </div>
             </div>
           </div>
@@ -486,7 +492,7 @@ onMounted(async () => {
                 @click="handleStartGame"
                 :disabled="!isAllReady"
                 class="w-full h-20 rounded-[12px] font-black text-2xl text-white transition-all 
-                      flex items-center justify-center gap-3 shadow-lg"
+                       flex items-center justify-center gap-3 shadow-lg"
                 :class="isAllReady 
                   ? 'bg-gradient-to-r from-[#e11d48] to-[#be123c] shadow-rose-500/30 hover:shadow-[0_0_25px_rgba(225,29,72,0.4)] hover:scale-[1.02] active:scale-[0.98]' 
                   : 'bg-gray-300 cursor-not-allowed shadow-none opacity-50'"
@@ -500,7 +506,7 @@ onMounted(async () => {
               v-else
               @click="toggleReady"
               class="w-full h-20 rounded-[12px] font-black text-2xl transition-all 
-                    active:scale-[0.98] flex flex-col items-center justify-center shadow-lg"
+                     active:scale-[0.98] flex flex-col items-center justify-center shadow-lg"
               :class="myUser?.isReady 
                 ? 'bg-[#e11d48] text-white shadow-rose-500/30 ring-4 ring-rose-100' 
                 : 'bg-white text-[#9f1239] border-2 border-[#e11d48] hover:bg-[#fff1f2]'"

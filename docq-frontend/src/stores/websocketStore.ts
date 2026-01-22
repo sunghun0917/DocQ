@@ -5,6 +5,7 @@ import { WebSocketService } from '@/services/websocket'
 import { useUserStore } from './userStore'
 import { useRoomStore } from './roomStore'
 import { useGameStore } from './gameStore'
+import router from '@/router'
 
 // 백엔드 DTO 타입 정의
 export interface GameStateResponse {
@@ -206,6 +207,16 @@ export const useWebSocketStore = defineStore('websocket', () => {
             console.log('📨 Round Result:', data)
             gameStore.onRoundResultReceived(data)
         })
+
+        // 방 종료/삭제 알림
+        wsService.value.subscribe(`/topic/game/${roomId}/closed`, (data: any) => {
+            console.log('📨 Room Closed:', data)
+            alert('방이 종료되었습니다.')
+            cleanup()
+            roomStore.leaveRoom()
+            gameStore.reset()
+            router.push('/')
+        })
     }
 
     /**
@@ -254,6 +265,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
             roomId,
             userId,
             nickname
+        })
+    }
+
+    /**
+     * 게임 나가기
+     */
+    const leaveGame = (roomId: string, userId: string) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/leave', {
+            roomId,
+            userId
         })
     }
 
@@ -307,6 +333,36 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 게임 종료 (Host Only)
+     */
+    const endGame = (roomId: string, userId: string) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/end', {
+            roomId,
+            userId
+        })
+    }
+
+    /**
+     * 게임 재시작 (Host Only)
+     */
+    const restartGame = (roomId: string, userId: string) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/restart', {
+            roomId,
+            userId
+        })
+    }
+
+    /**
      * 특정 경로 구독 해제
      */
     const unsubscribe = (destination: string) => {
@@ -338,10 +394,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
         subscribeGameState,
         subscribeErrors,
         joinGame,
+        leaveGame,
         submitAnswer,
         setReady,
         setAvatar,
         startGame,
+        endGame,
+        restartGame,
         unsubscribe,
         cleanup
     }

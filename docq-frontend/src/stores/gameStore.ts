@@ -33,10 +33,15 @@ export const useGameStore = defineStore('game', () => {
         players: any[],
         currentTurnUserId: string | null,
         round: number | null,
+        state?: string | null,
+        mapEvents?: Record<string, string> | null,
+        // ... other fields from backend
     }>({
         players: [],
         currentTurnUserId: null,
-        round: 1
+        round: 1,
+        state: null,
+        mapEvents: null
     })
 
     const currentMove = ref<any>(null)
@@ -77,8 +82,11 @@ export const useGameStore = defineStore('game', () => {
         }
 
         if (newState.state) {
-            if (newState.state === 'PLAYING') gameStatus.value = 'playing'
-            else if (newState.state === 'WAITING') gameStatus.value = 'waiting'
+            if (newState.state === 'WAITING') {
+                gameStatus.value = 'waiting'
+            } else {
+                gameStatus.value = 'playing'
+            }
         }
     }
 
@@ -165,11 +173,13 @@ export const useGameStore = defineStore('game', () => {
         gameStatus.value = 'waiting'
         timeRemaining.value = 30
         lastAnswerResult.value = null
-        gameState.value = { players: [], currentTurnUserId: null, round: 1 }
+        gameState.value = { players: [], currentTurnUserId: null, round: 1, state: 'WAITING' }
         currentMove.value = null
         rouletteTargetId.value = null
         rouletteResult.value = null
     }
+
+    const gamePhase = computed(() => gameState.value.state || null)
 
     return {
         quizzes,
@@ -181,12 +191,7 @@ export const useGameStore = defineStore('game', () => {
         gameState,
         currentMove,
         currentRoundResult,
-        timeRemaining,
-        gameStatus,
-
-        // [ADDED] Roulette
-        rouletteTargetId,
-        rouletteResult,
+        gamePhase,
 
         // Getters
         totalQuizCount,
