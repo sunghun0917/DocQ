@@ -1,7 +1,7 @@
 // src/composables/useIsometric.js
 
 // 보드의 전체 가로/세로 칸 수 (반드시 Board.vue의 GRID_SIZE와 일치해야 함)
-const GRID_SIZE = 12
+const GRID_SIZE = 10
 // 타일 하나의 물리적 크기 (1.0이면 간격 없이 딱 붙음, 0.5 등으로 축소 가능)
 const TILE_SIZE = 0.5
 
