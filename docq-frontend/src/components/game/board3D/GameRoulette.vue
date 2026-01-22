@@ -16,23 +16,34 @@ defineEmits(['spin']);
  * props.rotation 값에 따라 CSS transform을 적용함
  * isSpinning이 true일 때만 transition(부드러운 움직임)을 줌
  */
-const wheelStyle = computed(() => ({
-  transform: `rotate(${props.rotation}deg)`,
-  transition: props.isSpinning ? 'transform 3s cubic-bezier(0.1, 0, 0.1, 1)' : 'none',
-}));
+const segmentCount = computed(() => Math.max(props.labelByIndex.length, 1))
+const sectionAngle = computed(() => 360 / segmentCount.value)
+const startAngle = computed(() => -sectionAngle.value / 2)
 
-/*
- * 각 조각(Section)의 스타일
- * 원형을 6등분(60도)하여 배치함
- */
-const sectionStyle = (n:number) => {
-  const sectionAngle = 360 / 6;
-  const startAngle = -30; // 0도를 12시 방향에 맞추기 위한 보정값 (조각 모양에 따라 다름)
-  const angle = startAngle + (n - 1) * sectionAngle;
+const wheelStyle = computed(() => {
+  const light = '#4b5563'
+  const dark = '#374151'
+  const step = sectionAngle.value
+  const stops: string[] = []
+  for (let i = 0; i < segmentCount.value; i++) {
+    const color = i % 2 === 0 ? light : dark
+    const from = i * step
+    const to = (i + 1) * step
+    stops.push(`${color} ${from}deg ${to}deg`)
+  }
+  return {
+    transform: `rotate(${props.rotation}deg)`,
+    transition: props.isSpinning ? 'transform 3s cubic-bezier(0.1, 0, 0.1, 1)' : 'none',
+    background: `conic-gradient(${stops.join(',')})`
+  }
+})
+
+const labelStyle = (index: number) => {
+  const angle = (index * sectionAngle.value) + (sectionAngle.value / 2)
   return {
     transform: `rotate(${angle}deg)`
-  };
-};
+  }
+}
 </script>
 
 <template>
@@ -42,15 +53,13 @@ const sectionStyle = (n:number) => {
 
     <!-- 돌아가는 룰렛 원판 -->
     <div class="roulette-wheel" :style="wheelStyle">
-      <!-- 6개의 숫자 칸 생성 -->
       <div
-        v-for="i in 6"
-        :key="i"
+        v-for="(label, idx) in labelByIndex"
+        :key="`${label}-${idx}`"
         class="wheel-section"
-        :style="sectionStyle(i)"
+        :style="labelStyle(idx)"
       >
-        <!-- 실제 숫자는 props로 받은 labelByIndex 배열을 참조 -->
-        <span class="section-label">{{ labelByIndex[i - 1] }}</span>
+        <span class="section-label">{{ label }}</span>
       </div>
     </div>
 
@@ -68,8 +77,9 @@ const sectionStyle = (n:number) => {
 <style scoped>
 .roulette-container {
   position: absolute;
-  left: 50px;
-  top: 50px;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -87,7 +97,6 @@ const sectionStyle = (n:number) => {
   height: 200px;
   border-radius: 50%;
   border: 6px solid #ffffff;
-  background-color: #333;
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
@@ -97,13 +106,7 @@ const sectionStyle = (n:number) => {
   width: 100%;
   height: 100%;
   transform-origin: 50% 50%;
-  clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 21%);
-}
-.wheel-section:nth-child(odd) {
-  background-color: #4b5563;
-}
-.wheel-section:nth-child(even) {
-  background-color: #374151;
+  pointer-events: none;
 }
 .section-label {
   position: absolute;

@@ -2,15 +2,15 @@
 <template>
   <div class="board-container">
     <TresCanvas shadows alpha clear-color="#222222">
-      <TresOrthographicCamera
-        :position="[10, 20, 10]"
-        :look-at="[0, 0, 0]"
-        :zoom="0.2"
+    <TresOrthographicCamera
+        :position="cameraPosition"
+        :look-at="cameraTarget"
+        :zoom="cameraZoom"
         :near="-100"
         :far="100"
       />
 
-      <OrbitControls :enableZoom="true" />
+      <OrbitControls :enableZoom="true" :enabled="controlsEnabled" />
 
       <TresAmbientLight :intensity="1.2" />
       <TresDirectionalLight
@@ -42,26 +42,19 @@
       </Suspense>
     </TresCanvas>
 
-    <!-- Turn Info -->
-    <div v-if="currentTurnPlayer" class="turn-info">
-        <h2 :style="{ color: getPlayerColor(currentTurnPlayer.userId) }">
-            Current Turn: {{ currentTurnPlayer.nickname }}
-        </h2>
-    </div>
-
     <!-- Roulette (Visual Only) -->
     <GameRoulette
       v-if="isRouletteVisible"
       :rotation="rouletteRotation"
       :isMoving="isMovingGlobal"
       :isSpinning="isSpinning"
-      :labelByIndex="[1,2,3,4,5,6]" 
+      :labelByIndex="rouletteLabels"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls } from '@tresjs/cientos'
 import Tile3D from '@/components/game/board3D/Tile3D.vue'
@@ -70,6 +63,7 @@ import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import type { Player } from '@/types/docq-api'
+import { useIsometric } from '@/composables/useIsometric'
 
 // === Imports & Types ===
 interface GridItem {
@@ -85,6 +79,13 @@ interface AnimatingPlayer {
 
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
+const { get3DPos } = useIsometric()
+
+const cameraPosition = ref<[number, number, number]>([10, 20, 10])
+const cameraTarget = ref<[number, number, number]>([0, 0, 0])
+const cameraZoom = ref(0.2)
+const controlsEnabled = ref(true)
+const introPlayed = ref(false)
 
 // === Grid & Path Logic (Deterministic) ===
 const GRID_SIZE = 12
@@ -92,6 +93,7 @@ const PATH_LENGTH = 31
 
 const grid = ref<GridItem[]>([])
 const pathCoords = ref<PathCoord[]>([])
+const rouletteLabels = ref<number[]>([1, 2, 3, 4])
 
 // 고정된 시드(혹은 단순화된 로직)로 항상 같은 맵 생성
 function generateDeterministicPath(): PathCoord[] {
@@ -144,9 +146,30 @@ function initGrid() {
 
 initGrid()
 
+function applySpecialTiles(mapEvents: Record<string, string> | null | undefined) {
+    const path = pathCoords.value
+    path.forEach((p, idx) => {
+        const tile = grid.value.find(t => t.x === p.x && t.y === p.y)
+        if (tile) tile.type = (idx === 0 || idx === path.length - 1) ? 2 : 1
+    })
+
+    if (!mapEvents) return
+    Object.keys(mapEvents).forEach((key) => {
+        const index = Number(key)
+        if (Number.isNaN(index)) return
+        const coord = path[index]
+        if (!coord) return
+        const tile = grid.value.find(t => t.x === coord.x && t.y === coord.y)
+        if (tile && tile.type === 1) {
+            tile.type = 3
+        }
+    })
+}
+
 // === Player State ===
 const players = computed(() => gameStore.gameState.players)
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
+const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string, string> | undefined)
 
 // 애니메이션 상태 관리
 const animatingPlayers = ref<Record<string, number>>({}) // userId -> currentPathIndex
@@ -164,6 +187,26 @@ watch(() => players.value, (newPlayers) => {
         }
     })
 }, { immediate: true, deep: true })
+
+watch(
+    () => gameStore.gamePhase,
+    (phase) => {
+        if (phase === 'WAITING') {
+            introPlayed.value = false
+        }
+        if (phase === 'STARTING' && !introPlayed.value && players.value.length > 0) {
+            introPlayed.value = true
+            setTimeout(() => {
+                runIntroCamera()
+            }, 2000)
+        }
+    },
+    { immediate: true }
+)
+
+watch(mapEvents, (events) => {
+    applySpecialTiles(events)
+}, { immediate: true })
 
 
 // === Helpers ===
@@ -193,6 +236,94 @@ function isPlayerMoving(userId: string) {
     return isMovingGlobal.value && gameStore.currentMove?.userId === userId
 }
 
+function lerp(a: number, b: number, t: number) {
+    return a + (b - a) * t
+}
+
+function easeInOut(t: number) {
+    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
+}
+
+function animate(duration: number, update: (t: number) => void) {
+    return new Promise<void>(resolve => {
+        const start = performance.now()
+        const step = (now: number) => {
+            const t = Math.min(1, (now - start) / duration)
+            update(t)
+            if (t < 1) {
+                requestAnimationFrame(step)
+            } else {
+                resolve()
+            }
+        }
+        requestAnimationFrame(step)
+    })
+}
+
+async function runIntroCamera() {
+    controlsEnabled.value = false
+
+    const center: [number, number, number] = [0, 0, 0]
+    cameraTarget.value = center
+
+    const orbitRadius = 22
+    const orbitHeight = 20
+    await animate(2800, (t) => {
+        const p = easeInOut(t)
+        const angle = p * Math.PI * 2
+        cameraPosition.value = [
+            center[0] + Math.cos(angle) * orbitRadius,
+            orbitHeight,
+            center[2] + Math.sin(angle) * orbitRadius
+        ]
+        cameraZoom.value = lerp(0.18, 0.22, p)
+    })
+
+    const focusTargetPlayer = currentTurnPlayer.value || players.value[0]
+    if (focusTargetPlayer) {
+        const coords = getPlayerDisplayCoords(focusTargetPlayer)
+        const target3D = get3DPos(coords.x, coords.y)
+        const startPos = cameraPosition.value.slice() as [number, number, number]
+        const startZoom = cameraZoom.value
+        const focusPos: [number, number, number] = [target3D[0] + 6, target3D[1] + 10, target3D[2] + 6]
+
+        await animate(1400, (t) => {
+            const p = easeInOut(t)
+            cameraTarget.value = [
+                lerp(center[0], target3D[0], p),
+                lerp(center[1], target3D[1], p),
+                lerp(center[2], target3D[2], p)
+            ]
+            cameraPosition.value = [
+                lerp(startPos[0], focusPos[0], p),
+                lerp(startPos[1], focusPos[1], p),
+                lerp(startPos[2], focusPos[2], p)
+            ]
+            cameraZoom.value = lerp(startZoom, 0.3, p)
+        })
+    }
+
+    const returnStart = cameraPosition.value.slice() as [number, number, number]
+    const returnZoom = cameraZoom.value
+    const defaultPos: [number, number, number] = [10, 20, 10]
+    await animate(1400, (t) => {
+        const p = easeInOut(t)
+        cameraTarget.value = [
+            lerp(cameraTarget.value[0], center[0], p),
+            lerp(cameraTarget.value[1], center[1], p),
+            lerp(cameraTarget.value[2], center[2], p)
+        ]
+        cameraPosition.value = [
+            lerp(returnStart[0], defaultPos[0], p),
+            lerp(returnStart[1], defaultPos[1], p),
+            lerp(returnStart[2], defaultPos[2], p)
+        ]
+        cameraZoom.value = lerp(returnZoom, 0.2, p)
+    })
+
+    controlsEnabled.value = true
+}
+
 // === Animation Logic ===
 const isMovingGlobal = ref(false)
 const isSpinning = ref(false)
@@ -208,8 +339,9 @@ watch(() => gameStore.currentMove, async (move) => {
     // 1. 룰렛 돌리기 (있다면)
     const rouletteStep = move.moveProcess.find((item: any) => item.type === 'ROULETTE')
     if (rouletteStep && rouletteStep.value) {
+        rouletteLabels.value = getRouletteLabels(rouletteStep.value, move.userId)
         isRouletteVisible.value = true
-        await spinRouletteAnimation(rouletteStep.value)
+        await spinRouletteAnimation(rouletteStep.value, rouletteLabels.value)
         isRouletteVisible.value = false
     }
 
@@ -234,24 +366,37 @@ watch(() => gameStore.currentMove, async (move) => {
     // 애니메이션 끝난 후 스토어 상태가 완료된 것과 일치하는지 확인 (자동으로 watch가 맞춰줌)
 })
 
-function spinRouletteAnimation(resultValue: number) {
+async function spinRouletteAnimation(resultValue: number, labels: number[]) {
+    isSpinning.value = true
+    await nextTick()
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+
+    const totalSpins = 360 * 3
+    const targetIndex = labels.indexOf(resultValue)
+    const safeIndex = targetIndex >= 0 ? targetIndex : 0
+    const sectionAngle = 360 / Math.max(labels.length, 1)
+    const targetRotation = -((safeIndex * sectionAngle) + (sectionAngle / 2))
+    const current = ((rouletteRotation.value % 360) + 360) % 360
+    let delta = targetRotation - current
+    if (delta < -180) delta += 360
+    if (delta > 180) delta -= 360
+
+    rouletteRotation.value += totalSpins + delta
+
     return new Promise<void>(resolve => {
-        isSpinning.value = true
-        // ... 회전 계산 로직 (기존 코드 재사용/간소화)
-        const totalSpins = 360 * 3
-        // resultValue (1~6)에 매핑되는 각도
-        // labelByIndex = [1,2,3,4,5,6] -> index = resultValue - 1
-        const targetIndex = resultValue - 1
-        const sectionAngle = 60
-        const targetRotation = -(targetIndex * sectionAngle)
-        
-        rouletteRotation.value += totalSpins + targetRotation // 누적
-        
         setTimeout(() => {
             isSpinning.value = false
             resolve()
         }, 3000)
     })
+}
+
+function getRouletteLabels(resultValue: number, winnerUserId: string) {
+    if (resultValue < 0) {
+        return [-2, -1, 1, 2]
+    }
+    const isTurnWinner = winnerUserId === gameStore.gameState.currentTurnUserId
+    return isTurnWinner ? [1, 2, 3, 4] : [-2, -1, 1, 2]
 }
 
 function sleep(ms: number) {
@@ -269,15 +414,5 @@ onMounted(() => {
   height: 100vh;
   position: relative;
   overflow: hidden;
-}
-.turn-info {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    background: rgba(0,0,0,0.5);
-    padding: 10px 20px;
-    border-radius: 15px;
-    color: white;
-    z-index: 10;
 }
 </style>
