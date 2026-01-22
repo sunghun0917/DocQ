@@ -1,13 +1,7 @@
-<!-- src/components/game/board3d/Board.vue -->
+<!-- src/components/game/board3d/GameBoard.vue -->
 <template>
   <div class="board-container">
-    <!-- 3D 캔버스 초기화: 그림자(shadows) 활성화, 투명 배경(alpha) -->
     <TresCanvas shadows alpha clear-color="#222222">
-      <!--
-        OrthographicCamera (직교 카메라):
-        원근감이 없는 쿼터뷰 시점을 제공하여 보드게임판처럼 보이게 함
-        zoom: 확대 배율, position: 카메라 위치
-      -->
       <TresOrthographicCamera
         :position="[10, 20, 10]"
         :look-at="[0, 0, 0]"
@@ -16,10 +10,8 @@
         :far="100"
       />
 
-      <!-- 개발용 마우스 컨트롤 (줌/회전 가능) -->
       <OrbitControls :enableZoom="true" />
 
-      <!-- 조명 설정: 전체적으로 밝게(Ambient) + 그림자용(Directional) -->
       <TresAmbientLight :intensity="1.2" />
       <TresDirectionalLight
         :position="[10, 15, 10]"
@@ -27,11 +19,7 @@
         cast-shadow
       />
 
-      <!--
-        맵 타일 렌더링:
-        v-for를 사용해 grid 배열의 모든 타일을 3D로 그림
-        type 0: 빈칸, 1: 길, 2: 시작/끝
-      -->
+      <!-- Grid Tiles -->
       <Tile3D
         v-for="tile in grid"
         :key="`${tile.x}-${tile.y}`"
@@ -40,403 +28,256 @@
         :type="tile.type"
       />
 
-      <!--
-        플레이어 캐릭터 렌더링:
-        Suspense 컴포넌트는 비동기 모델 로딩(FBX)을 기다려줌
-      -->
+      <!-- Players -->
       <Suspense>
         <GameCharacter
-          v-for="(p, idx) in players"
-          :key="p.id"
-          :x="playerCoords(idx).x"
-          :y="playerCoords(idx).y"
-          :isMoving="isMoving && currentTurn === idx"
-          :lookTarget="playerNextTarget(idx)"
-          :color="p.color"
+          v-for="p in players"
+          :key="p.userId"
+          :x="getPlayerDisplayCoords(p).x"
+          :y="getPlayerDisplayCoords(p).y"
+          :isMoving="isPlayerMoving(p.userId)"
+          :lookTarget="getPlayerFaceTarget(p)"
+          :color="getPlayerColor(p.userId)"
         />
       </Suspense>
     </TresCanvas>
 
-    <!-- UI: 현재 누구 턴인지 표시 -->
-    <div v-if="gameStarted" class="turn-info">
-      <h2>Current Turn: Player {{ currentTurn + 1 }}</h2>
+    <!-- Turn Info -->
+    <div v-if="currentTurnPlayer" class="turn-info">
+        <h2 :style="{ color: getPlayerColor(currentTurnPlayer.userId) }">
+            Current Turn: {{ currentTurnPlayer.nickname }}
+        </h2>
     </div>
 
-    <!-- UI: 게임 시작 전 인원수 선택 화면 -->
-    <div v-if="!gameStarted" class="start-screen">
-      <h1>Select Player Count</h1>
-      <div class="buttons">
-        <!-- 인원수 버튼 (2~4명) -->
-        <button @click="startGame(2)">2 Players</button>
-        <button @click="startGame(3)">3 Players</button>
-        <button @click="startGame(4)">4 Players</button>
-      </div>
-    </div>
-
-    <!-- UI: 룰렛 컴포넌트 -->
+    <!-- Roulette (Visual Only) -->
     <GameRoulette
-      v-if="gameStarted"
-      :rotation="rotation"
-      :isMoving="isMoving"
+      v-if="isRouletteVisible"
+      :rotation="rouletteRotation"
+      :isMoving="isMovingGlobal"
       :isSpinning="isSpinning"
-      :labelByIndex="labelByIndex"
-      @spin="spinRoulette"
+      :labelByIndex="[1,2,3,4,5,6]" 
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls } from '@tresjs/cientos'
-
-// [컴포넌트 Import]
-// 주의: 파일명을 GameCharacter.vue 등으로 바꿨다면 경로 수정 필요
 import Tile3D from '@/components/game/board3D/Tile3D.vue'
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
 import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
+import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
+import type { Player } from '@/types/docq-api'
 
-/* ========== [TS] 인터페이스 정의 (TypeScript 빨간 줄 해결용) ========== */
-
-// 플레이어 정보 타입
-interface Player {
-  id: number           // 플레이어 고유 번호 (0, 1, 2...)
-  currentIndex: number // 현재 위치한 경로상의 인덱스 (0 = 시작점)
-  color: string        // 캐릭터 색상 (Hex 코드)
-}
-
-// 그리드 타일 정보 타입
+// === Imports & Types ===
 interface GridItem {
-  x: number     // 그리드 X 좌표
-  y: number     // 그리드 Y 좌표
-  type: number  // 0: 빈칸, 1: 일반 길, 2: 특수(시작/끝)
+  x: number; y: number; type: number;
 }
-
-// 경로 좌표 타입 (X, Y 쌍)
 interface PathCoord {
-  x: number
-  y: number
+  x: number; y: number;
 }
+interface AnimatingPlayer {
+    userId: string
+    currentPathIndex: number // 애니메이션 중의 임시 위치
+} 
 
-// 이동 방향 벡터 타입
-interface Dir {
-  dx: number
-  dy: number
-}
+const gameStore = useGameStore()
+const roomStore = useRoomStore()
 
-/* ========== 게임 설정 상수 ========== */
-const GRID_SIZE = 12       // 보드판 크기 (12x12)
-const PATH_LENGTH = 31     // 생성할 경로의 총 길이 (칸 수)
+// === Grid & Path Logic (Deterministic) ===
+const GRID_SIZE = 12
+const PATH_LENGTH = 31
 
-/* ========== 그리드 초기화 ========== */
-// 12x12 격자를 모두 0(빈칸)으로 초기화
 const grid = ref<GridItem[]>([])
+const pathCoords = ref<PathCoord[]>([])
 
-for (let x = 0; x < GRID_SIZE; x++) {
-  for (let y = 0; y < GRID_SIZE; y++) {
-    grid.value.push({ x, y, type: 0 })
-  }
+// 고정된 시드(혹은 단순화된 로직)로 항상 같은 맵 생성
+function generateDeterministicPath(): PathCoord[] {
+    // 'ㄹ'자 혹은 나선형으로 단순 생성 (MVP)
+    // 실제로는 복잡한 알고리즘이 필요할 수 있으나 동기화 이슈 방지를 위해 고정함
+    const path: PathCoord[] = []
+    let cx = 11, cy = 11
+    // 단순화된 고정 경로 예시
+    const moves = [
+        {dx:0, dy:-1, c:5}, {dx:-1, dy:0, c:5}, 
+        {dx:0, dy:1, c:4}, {dx:1, dy:0, c:4},
+        {dx:0, dy:-1, c:3}, {dx:-1, dy:0, c:3},
+    ] // 총 24칸 + ... 
+    
+    // (MVP) 더 확실한 고정 경로 (Start: 11,11 -> End: 0,0)
+    // 11,11 -> 11,6 -> 6,6 -> 6,1 -> 1,1 -> 1,0 -> 0,0
+    path.push({x:11, y:11})
+    for(let i=0; i<5; i++) path.push({x:11, y:10-i}) // up
+    for(let i=0; i<5; i++) path.push({x:10-i, y:6}) // left
+    for(let i=0; i<5; i++) path.push({x:6, y:5-i})  // up
+    for(let i=0; i<5; i++) path.push({x:5-i, y:1})  // left
+    for(let i=0; i<5; i++) path.push({x:1, y:2+i})  // down (twist)
+    // ... 대충 채움 (31칸 맞추기)
+    while(path.length < PATH_LENGTH) {
+        const last = path[path.length-1]
+        if (!last) break // Safety check
+        
+        if(last.x > 0) path.push({x:last.x-1, y:last.y})
+        else if(last.y > 0) path.push({x:last.x, y:last.y-1})
+        else break
+    }
+    return path.slice(0, PATH_LENGTH)
 }
 
-/* ========== 랜덤 경로 생성 로직 (DFS 알고리즘) ========== */
-const pathCoords = ref<PathCoord[]>([]) // 실제 생성된 경로 좌표들을 저장할 배열
-
-/**
- * 랜덤 경로 생성 함수 (DFS 사용)
- * (11,11)에서 시작하여 (0,0)까지 이어지는 랜덤한 길을 만듭니다.
- *
- * @param gridSize 그리드 크기
- * @param targetLength 목표 경로 길이
- * @returns 생성된 경로 좌표 배열 (실패 시 null)
- */
-function generateRandomPath(gridSize: number, targetLength: number): PathCoord[] | null {
-  const start = { x: 11, y: 11 } // 시작점
-  const end = { x: 0, y: 0 }     // 도착점
-
-  // 상하좌우 이동 방향
-  const dirs: Dir[] = [
-    { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
-    { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
-  ]
-
-  // 재귀적 DFS 함수
-  function dfs(current: PathCoord, path: PathCoord[], visited: Set<string>): PathCoord[] | null {
-    // 1. 기저 조건: 도착점에 도달했을 때
-    if (current.x === end.x && current.y === end.y) {
-      if (path.length === targetLength) return path // 목표 길이와 딱 맞으면 성공!
-      else return null
-    }
-
-    // 2. 가지치기 (Pruning): 남은 거리가 필요한 스텝 수보다 멀면 포기
-    const distToEnd = Math.abs(current.x - end.x) + Math.abs(current.y - end.y)
-    const remainingSteps = targetLength - path.length
-    if (distToEnd > remainingSteps) return null
-
-    // 3. 랜덤성 부여: 이동 방향을 무작위로 섞음
-    const shuffledDirs = [...dirs].sort(() => Math.random() - 0.5)
-
-    for (const dir of shuffledDirs) {
-      const nx = current.x + dir.dx
-      const ny = current.y + dir.dy
-      const key = `${nx},${ny}`
-
-      // 유효성 검사: 보드 범위 내 && 방문하지 않음
-      if (
-        nx >= 0 && nx < gridSize &&
-        ny >= 0 && ny < gridSize &&
-        !visited.has(key)
-      ) {
-        // [중요] 인접 체크: 길이 꼬여서 자기 자신과 붙는 것을 방지
-        // 현재 진행방향을 제외하고 이미 방문한 타일이 주변에 1개보다 많으면 안됨
-        let visitedNeighbors = 0
-        for (const checkDir of dirs) {
-          const cx = nx + checkDir.dx
-          const cy = ny + checkDir.dy
-          if (visited.has(`${cx},${cy}`)) visitedNeighbors++
+function initGrid() {
+    grid.value = []
+    for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+            grid.value.push({ x, y, type: 0 })
         }
-
-        if (visitedNeighbors > 1) continue
-
-        // 경로에 추가하고 재귀 호출
-        visited.add(key)
-        path.push({ x: nx, y: ny })
-
-        const result = dfs({ x: nx, y: ny }, path, visited)
-        if (result) return result // 성공한 경로를 찾았으면 바로 반환
-
-        // 실패 시 백트래킹 (경로에서 제거하고 다시 시도)
-        path.pop()
-        visited.delete(key)
-      }
     }
-    return null
-  }
-
-  // DFS 시작
-  return dfs(start, [{ x: 11, y: 11 }], new Set(['11,11']))
+    const path = generateDeterministicPath()
+    pathCoords.value = path
+    
+    path.forEach((p, idx) => {
+        const tile = grid.value.find(t => t.x === p.x && t.y === p.y)
+        if (tile) tile.type = (idx === 0 || idx === path.length - 1) ? 2 : 1
+    })
 }
 
-// 그리드 타입 리셋 함수 (새 게임 시작 시)
-function resetGridTypes() {
-  grid.value.forEach((t) => (t.type = 0))
-}
+initGrid()
 
-/* ========== 플레이어 및 게임 상태 관리 ========== */
-const players = ref<Player[]>([])     // 플레이어 목록
-const currentTurn = ref(0)            // 현재 턴 (0 ~ players.length-1)
-const gameStarted = ref(false)        // 게임 시작 여부
+// === Player State ===
+const players = computed(() => gameStore.gameState.players)
+const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
 
-// 플레이어별 색상 정의 (빨강, 초록, 파랑, 노랑)
+// 애니메이션 상태 관리
+const animatingPlayers = ref<Record<string, number>>({}) // userId -> currentPathIndex
+
+// 초기화 시 서버 위치로 동기화
+watch(() => players.value, (newPlayers) => {
+    newPlayers.forEach(p => {
+        if (animatingPlayers.value[p.userId] === undefined) {
+            animatingPlayers.value[p.userId] = p.position 
+        } else {
+             // 애니메이션 중이 아닐 때만 강제 동기화 (오차 수정)
+             if (!isMovingGlobal.value) {
+                 animatingPlayers.value[p.userId] = p.position
+             }
+        }
+    })
+}, { immediate: true, deep: true })
+
+
+// === Helpers ===
 const PLAYER_COLORS = ['#ff4444', '#44ff44', '#4444ff', '#ffff44']
 
-/**
- * 맵을 생성하고 grid 데이터에 반영하는 함수
- */
-function buildPathOnGrid() {
-  resetGridTypes()
-  let path: PathCoord[] | null = null
-
-  // 유효한 경로가 나올 때까지 반복 시도
-  while (!path) {
-    path = generateRandomPath(GRID_SIZE, PATH_LENGTH)
-  }
-  pathCoords.value = path
-
-  // 생성된 경로를 화면(grid)에 표시
-  // 시작점(index 0)과 끝점(마지막)은 type 2 (노란색), 나머지는 type 1 (흰색)
-  path.forEach((p, index) => {
-    const tile = grid.value.find((t) => t.x === p.x && t.y === p.y)
-    if (!tile) return
-    tile.type = (index === 0 || index === (path?.length ?? 0) - 1) ? 2 : 1
-  })
+function getPlayerColor(userId: string) {
+    // userId 해시 또는 순서 기반 색상
+    const idx = gameStore.gameState.players.findIndex(p => p.userId === userId)
+    return PLAYER_COLORS[idx % 4] || '#ffffff'
 }
 
-/**
- * 게임 시작 함수
- * @param count 선택한 플레이어 수
- */
-const startGame = (count: number) => {
-  buildPathOnGrid() // 맵 생성
-
-  // 플레이어 초기화
-  players.value = []
-  for (let i = 0; i < count; i++) {
-    players.value.push({
-      id: i,
-      currentIndex: 0, // 모두 시작점에서 출발
-      color: PLAYER_COLORS[i % PLAYER_COLORS.length] ?? '#ffffff'
-    })
-  }
-
-  currentTurn.value = 0
-  gameStarted.value = true
+function getPlayerDisplayCoords(p: Player) {
+    const idx = animatingPlayers.value[p.userId] ?? p.position
+    return pathCoords.value[idx] || { x: 0, y: 0 }
 }
 
-/* [헬퍼 함수] 플레이어의 현재/다음 좌표 계산 */
-
-// 현재 플레이어가 위치한 그리드 좌표(x,y) 반환
-const playerCoords = (idx: number): PathCoord => {
-  if (!players.value[idx]) return { x: 0, y: 0 }
-  const pIdx = players.value[idx].currentIndex
-  return pathCoords.value[pIdx] || (pathCoords.value[0] ?? { x: 0, y: 0 })
+function getPlayerFaceTarget(p: Player) {
+    const idx = animatingPlayers.value[p.userId] ?? p.position
+    // 다음 칸을 바라봄
+    if (idx < pathCoords.value.length - 1) {
+        return pathCoords.value[idx+1] || pathCoords.value[idx] || { x: 0, y: 0 }
+    }
+    return pathCoords.value[idx] || { x: 0, y: 0 }
 }
 
-// 현재 플레이어가 이동 시 바라봐야 할 다음 좌표 반환 (시선 처리용)
-const playerNextTarget = (idx: number): PathCoord => {
-  if (!players.value[idx]) return { x: 0, y: 0 }
-  const pIdx = players.value[idx].currentIndex
-  // 마지막 칸이면 제자리, 아니면 다음 칸 리턴
-  if (pIdx >= pathCoords.value.length - 1) {
-    return pathCoords.value[pIdx] ?? { x: 0, y: 0 }
-  }
-  return pathCoords.value[pIdx + 1] ?? { x: 0, y: 0 }
+function isPlayerMoving(userId: string) {
+    return isMovingGlobal.value && gameStore.currentMove?.userId === userId
 }
 
-/* ========== 룰렛 및 이동 로직 ========== */
-const isMoving = ref(false)     // 말이 이동 중인지 (이동 중엔 룰렛 클릭 방지)
-const isSpinning = ref(false)   // 룰렛이 도는 중인지
-const rotation = ref(0)         // 룰렛 회전 각도 (애니메이션용)
-const labelByIndex: number[] = [1, 2, 3, 4, 5, 6] // 룰렛 숫자 배열
+// === Animation Logic ===
+const isMovingGlobal = ref(false)
+const isSpinning = ref(false)
+const rouletteRotation = ref(0)
+const isRouletteVisible = ref(false) // 룰렛 HUD 표시 여부
 
-/**
- * 룰렛 돌리기 함수
- */
-const spinRoulette = () => {
-  if (isMoving.value || isSpinning.value) return // 이미 동작 중이면 무시
+// gameStore.currentMove 감지하여 애니메이션 실행
+watch(() => gameStore.currentMove, async (move) => {
+    if (!move) return
 
-  isSpinning.value = true
-
-  // 1~6 랜덤값 생성
-  const result = Math.floor(Math.random() * 6) + 1
-  const targetIndex = labelByIndex.indexOf(result)
-
-  // 회전 애니메이션 각도 계산
-  const sectionAngle = 360 / 6
-  const totalSpins = 360 * 5 // 최소 5바퀴 회전
-
-  const currentDegrees = ((rotation.value % 360) + 360) % 360
-  const extraToZero = (360 - currentDegrees) % 360
-  const targetRotation = -(targetIndex * sectionAngle)
-
-  // 실제 회전 값 적용 (Vue가 감지하여 CSS 애니메이션 발생)
-  rotation.value += totalSpins + extraToZero + targetRotation
-
-  // 회전 종료 후(3.2초 뒤) 이동 로직 실행
-  setTimeout(() => {
-    isSpinning.value = false
-    moveStep(result)
-  }, 3200)
-}
-
-/**
- * 말 이동 로직 (한 칸씩 점프)
- * @param steps 이동할 칸 수
- */
-const moveStep = async (steps: number) => {
-  isMoving.value = true
-
-  const activePlayer = players.value[currentTurn.value]
-
-    // [중요] activePlayer가 없을 경우를 대비해 예외 처리 (이게 빨간 줄 해결!)
-  if (!activePlayer) {
-    console.error("No active player found!")
-    isMoving.value = false
-    return
-  }
-
-  // 한 칸씩 차례대로 이동
-  for (let i = 0; i < steps; i++) {
-    // 도착점에 도달하면 멈춤
-    if (activePlayer.currentIndex >= pathCoords.value.length - 1) break
-    await jumpStep(activePlayer)
-  }
-
-  isMoving.value = false
-
-  /* [규칙] 잡기(Knockback) 로직 */
-  // 이동이 끝난 후, 도착한 자리에 다른 플레이어가 있는지 확인
-  if (activePlayer.currentIndex > 0 && activePlayer.currentIndex < pathCoords.value.length - 1) {
-    players.value.forEach((p) => {
-      // 나 자신이 아니고, 같은 위치에 있는 플레이어라면?
-      if (p.id !== activePlayer.id && p.currentIndex === activePlayer.currentIndex) {
-        console.log(`Player ${p.id + 1} caught!`)
-        p.currentIndex = 0 // 태초마을(0번 인덱스)로 강제 이동시킴
-      }
-    })
-  }
-
-  // 턴 넘기기
-  currentTurn.value = (currentTurn.value + 1) % players.value.length
-}
-
-// 한 칸 이동 애니메이션 (Promise로 비동기 대기)
-const jumpStep = (player: Player) =>
-  new Promise<void>((resolve) => {
-    if (player.currentIndex >= pathCoords.value.length - 1) {
-      resolve()
-      return
+    isMovingGlobal.value = true
+    
+    // 1. 룰렛 돌리기 (있다면)
+    const rouletteStep = move.moveProcess.find((item: any) => item.type === 'ROULETTE')
+    if (rouletteStep && rouletteStep.value) {
+        isRouletteVisible.value = true
+        await spinRouletteAnimation(rouletteStep.value)
+        isRouletteVisible.value = false
     }
 
-    player.currentIndex++
+    // 2. 이동 애니메이션
+    const start = move.startPosition
+    const end = move.endPosition
+    const userId = move.userId
 
-    // 애니메이션 시간만큼 대기 (Character.vue의 이동 시간과 합을 맞춰야 함)
-    setTimeout(() => {
-      setTimeout(resolve, 100)
-    }, 600)
-  })
+    // 한 칸씩 이동
+    if (end > start) {
+        for (let i = start + 1; i <= end; i++) {
+            animatingPlayers.value[userId] = i
+            await sleep(500) // 캐릭터 점프 시간
+        }
+    } else if (end < start) {
+        // 뒤로 가기 or 태초마을 (순간이동 처리 or 역방향)
+        // MVP: 일단 순간이동/빠른이동
+        animatingPlayers.value[userId] = end
+    }
+
+    isMovingGlobal.value = false
+    // 애니메이션 끝난 후 스토어 상태가 완료된 것과 일치하는지 확인 (자동으로 watch가 맞춰줌)
+})
+
+function spinRouletteAnimation(resultValue: number) {
+    return new Promise<void>(resolve => {
+        isSpinning.value = true
+        // ... 회전 계산 로직 (기존 코드 재사용/간소화)
+        const totalSpins = 360 * 3
+        // resultValue (1~6)에 매핑되는 각도
+        // labelByIndex = [1,2,3,4,5,6] -> index = resultValue - 1
+        const targetIndex = resultValue - 1
+        const sectionAngle = 60
+        const targetRotation = -(targetIndex * sectionAngle)
+        
+        rouletteRotation.value += totalSpins + targetRotation // 누적
+        
+        setTimeout(() => {
+            isSpinning.value = false
+            resolve()
+        }, 3000)
+    })
+}
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+onMounted(() => {
+    // 
+})
 </script>
 
 <style scoped>
-/* 화면 전체를 가득 채우는 컨테이너 */
 .board-container {
   width: 100vw;
   height: 100vh;
   position: relative;
   overflow: hidden;
 }
-
-/* 시작 화면(인원 선택) 오버레이 */
-.start-screen {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.8);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  color: white;
-  z-index: 100;
-}
-
-/* 현재 턴 표시 UI */
 .turn-info {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  color: white;
-  z-index: 10;
-}
-
-.buttons {
-  display: flex;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-/* 버튼 스타일 */
-button {
-  padding: 15px 30px;
-  font-size: 1.2rem;
-  background: white;
-  color: black;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-button:hover {
-  background: #ddd;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0,0,0,0.5);
+    padding: 10px 20px;
+    border-radius: 15px;
+    color: white;
+    z-index: 10;
 }
 </style>

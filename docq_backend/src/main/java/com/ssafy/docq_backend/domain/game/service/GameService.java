@@ -37,6 +37,7 @@ public class GameService {
     private final AiClient aiClient;
     private final MiniGameService miniGameService;
     private static final int TARGET_POSITION = 30;
+    private static final int DEFAULT_QUIZ_COUNT = 30;
 
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
@@ -76,8 +77,9 @@ public class GameService {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-        if (room.getQuizList() == null) {
-            return Collections.emptyList();
+        if (room.getQuizList() == null || room.getQuizList().isEmpty()) {
+            room.setQuizList(buildDefaultQuizzes(DEFAULT_QUIZ_COUNT));
+            roomRepository.save(room);
         }
 
         return room.getQuizList().stream()
@@ -189,6 +191,10 @@ public class GameService {
 
             // 게임 상태 초기화
             initGameData(room);
+
+            if (room.getQuizList() == null || room.getQuizList().isEmpty()) {
+                room.setQuizList(buildDefaultQuizzes(DEFAULT_QUIZ_COUNT));
+            }
 
             // 상태 변경
             room.setStatus(RoomStatus.STARTING);
@@ -763,5 +769,29 @@ public class GameService {
                     }
                     return ranks;
                 }));
+    }
+
+    private List<Quiz> buildDefaultQuizzes(int count) {
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            int a = i;
+            int b = i + 1;
+            int correct = a + b;
+
+            List<String> options = new ArrayList<>();
+            options.add(String.valueOf(correct));
+            options.add(String.valueOf(correct + 1));
+            options.add(String.valueOf(correct + 2));
+            options.add(String.valueOf(correct + 3));
+
+            quizzes.add(Quiz.builder()
+                    .quizId((long) i)
+                    .question("Sample Q" + i + ": " + a + " + " + b + " = ?")
+                    .options(options)
+                    .answerIndex(0)
+                    .answerText(options.get(0))
+                    .build());
+        }
+        return quizzes;
     }
 }

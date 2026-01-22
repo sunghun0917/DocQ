@@ -22,7 +22,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRoomStore } from './roomStore'
+// import { useWebSocketStore } from './websocketStore' // Cyclic Dependency Risk
 import { mockQuizzes } from '@/mocks/quizzes'
+import type { Quiz } from '@/types/docq-api'
 
 // 게임 진행 상태 및 퀴즈 관리
 export const useGameStore = defineStore('game', () => {
@@ -31,7 +33,8 @@ export const useGameStore = defineStore('game', () => {
     // 퀴즈 관련
     const quizzes = ref(mockQuizzes)
     const currentQuizIndex = ref(0)
-    const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
+    // const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value])
+    const currentQuiz = ref<Quiz | null>(null) // Live Quiz Object
 
     // 게임 상태
     const gameStatus = ref<'waiting' | 'playing' | 'finished'>('waiting')
@@ -42,6 +45,20 @@ export const useGameStore = defineStore('game', () => {
 
     // 현재 퀴즈 정답 여부 (UI 피드백용)
     const lastAnswerResult = ref<boolean | null>(null)
+
+    // === Added for GameBoard.vue support ===
+    const gameState = ref<{
+        players: any[],
+        currentTurnUserId: string | null,
+        round: number | null,
+        // ... other fields from backend
+    }>({
+        players: [],
+        currentTurnUserId: null,
+        round: 1
+    })
+
+    const currentMove = ref<any>(null)
 
     // Getters
 
@@ -62,6 +79,12 @@ export const useGameStore = defineStore('game', () => {
 
     // 게임 종료 여부
     const isGameFinished = computed(() => gameStatus.value === 'finished')
+
+    // 현재 턴 플레이어
+    const currentTurnPlayer = computed(() => {
+        if (!gameState.value.currentTurnUserId) return null
+        return gameState.value.players.find(p => p.userId === gameState.value.currentTurnUserId)
+    })
 
     // Actions
 
@@ -85,47 +108,78 @@ export const useGameStore = defineStore('game', () => {
         startTimer()
     }
 
-    // 다음 퀴즈
-    const nextQuiz = () => {
-        stopTimer()
+    const setGameState = (newState: any) => {
+        // 병합 또는 교체
+        gameState.value = {
+            ...gameState.value,
+            ...newState,
+            players: newState.players || []
+        }
+
+        // Update local scores if needed
+        if (newState.players) {
+            newState.players.forEach((p: any) => {
+                scores.value[p.userId] = p.score || 0
+            })
+        }
+
+        // Sync Status
+        if (newState.state) {
+            if (newState.state === 'PLAYING') gameStatus.value = 'playing'
+            else if (newState.state === 'WAITING') gameStatus.value = 'waiting'
+            // ...
+        }
+    }
+
+    const handleMove = (moveInfo: any) => {
+        currentMove.value = moveInfo
+        // 애니메이션 후 처리는 watch에서 담당하거나 여기서 delay 줄 수 있음
+    }
+
+    // === Live Game Logic ===
+    const currentRoundResult = ref<any>(null)
+
+    const onQuizReceived = (quizData: any) => {
+        // 백엔드 QuizMessage: { quizId, question, options, timeLimit }
+        currentQuiz.value = {
+            quizId: quizData.quizId,
+            question: quizData.question,
+            options: quizData.options,
+            timeLimit: quizData.timeLimit ? Math.floor(quizData.timeLimit / 1000) : 30, // ms to sec
+            answer: -1 // 정답은 모름 (보안)
+        }
+
+        // 퀴즈 시작 (타이머)
+        currentQuizIndex.value = 0 // Using single slot for now
+        timeRemaining.value = currentQuiz.value.timeLimit || 30
+        gameStatus.value = 'playing'
         lastAnswerResult.value = null
+        currentRoundResult.value = null // Reset previous result
 
-        if (currentQuizIndex.value < quizzes.value.length - 1) {
-            currentQuizIndex.value++
-            timeRemaining.value = currentQuiz.value?.timeLimit || 30
-            startTimer()
-        } else {
-            endGame()
-        }
+        startTimer()
     }
 
-    // 답안 제출
-    const submitAnswer = (userId: string, answerIndex: number) => {
-        if (!currentQuiz.value) return
+    const onRoundResultReceived = (resultData: any) => {
+        // 백엔드 RoundResult: { quizId, correctAnswer, isTurnUserCorrect, winnerUserId, rouletteType }
+        stopTimer()
+        currentRoundResult.value = resultData
 
-        // 정답 확인
-        const isCorrect = currentQuiz.value.answer === answerIndex
-        lastAnswerResult.value = isCorrect
+        // 정답 공개 처리
+        // currentQuiz.value.answerText = resultData.correctAnswer
 
-        if (isCorrect) {
-            // 기본 점수
-            let points = 10
-
-            // 시간 보너스 (남은 시간에 비례)
-            const timeBonus = Math.floor(timeRemaining.value / 3)
-            points += timeBonus
-
-            // 점수 추가
-            scores.value[userId] = (scores.value[userId] || 0) + points
-        }
-
-        // 다음 퀴즈로 (약간의 딜레이 후)
-        setTimeout(() => {
-            nextQuiz()
-        }, 1200) // 피드백 볼 시간 약간 확보 (1초 -> 1.2초)
+        // UI 효과를 위해 잠시 대기 후 모달 표시 등은 View에서 처리
     }
 
-    // 점수 업데이트
+    // 다음 퀴즈 (Local Mock Logic - Deprecated for Live)
+    // const nextQuiz = () => { ... }
+
+    // 답안 제출 (WebSocket)
+    const submitAnswer = (userId: string, answerText: string) => {
+        // WebSocket logic is handled in View or WebSocketStore to avoid cyclic dependency
+        // View에서 websocketStore.submitAnswer()를 직접 호출합니다.
+    }
+
+    // 점수 업데이트 (Server Sync)
     const updateScore = (userId: string, score: number) => {
         scores.value[userId] = score
     }
@@ -145,7 +199,7 @@ export const useGameStore = defineStore('game', () => {
                 timeRemaining.value--
             } else {
                 // 시간 초과 시 자동으로 다음 퀴즈
-                nextQuiz()
+                // nextQuiz() // Deprecated: Server drives the game flow
             }
         }, 1000)
     }
@@ -166,7 +220,10 @@ export const useGameStore = defineStore('game', () => {
         gameStatus.value = 'waiting'
         timeRemaining.value = 30
         lastAnswerResult.value = null
+        gameState.value = { players: [], currentTurnUserId: null, round: 1 }
+        currentMove.value = null
     }
+
     return {
         // State
         quizzes,
@@ -176,15 +233,24 @@ export const useGameStore = defineStore('game', () => {
         timeRemaining,
         scores,
         lastAnswerResult,
+        gameState,
+        currentMove,
+        currentRoundResult,
 
         // Getters
         totalQuizCount,
         rankings,
         isGameFinished,
+        currentTurnPlayer,
 
         // Actions
         startGame,
-        nextQuiz,
+        setGameState,
+        handleMove,
+        onQuizReceived,
+        onRoundResultReceived,
+        // @ts-ignore
+        // nextQuiz,
         submitAnswer,
         updateScore,
         endGame,

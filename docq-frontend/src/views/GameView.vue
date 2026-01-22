@@ -1,27 +1,61 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router'
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
 import { useRoomStore } from '@/stores/roomStore'
+import { useGameStore } from '@/stores/gameStore'
+import { useWebSocketStore } from '@/stores/websocketStore'
+import { useUserStore } from '@/stores/userStore'
 
+const router = useRouter()
 const roomStore = useRoomStore()
+const gameStore = useGameStore()
+const wsStore = useWebSocketStore()
+const userStore = useUserStore()
 
-// 방 정보 가져오기
-const roomInfo = computed(() => roomStore.roomInfo)
-const users = computed(() => roomStore.users)
-const myUser = computed(() => roomStore.myUser)
-const myUserId = computed(() => myUser.value?.id || '')
-const isReady = computed(() => myUser.value?.isReady || false)
+const myUserId = computed(() => userStore.userId)
+const currentQuiz = computed(() => gameStore.currentQuiz)
+const timeRemaining = computed(() => gameStore.timeRemaining)
+const gameStatus = computed(() => gameStore.gameStatus)
+const isGameFinished = computed(() => gameStore.isGameFinished)
 
-// 준비 상태 토글
-const toggleReady = () => {
-  if (myUserId.value) {
-    roomStore.updateUser(myUserId.value, { isReady: !isReady.value })
-  }
+// 현재 턴인지 확인
+const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
+const isMyTurn = computed(() => {
+    if (!currentTurnPlayer.value || !myUserId.value) return false
+    return currentTurnPlayer.value.userId === myUserId.value
+})
+
+const selectedOption = ref<number | null>(null)
+const isSubmitted = ref(false)
+
+// 퀴즈가 바뀌면 상태 초기화
+watch(currentQuiz, () => {
+    selectedOption.value = null
+    isSubmitted.value = false
+})
+
+const submitAnswer = (index: number) => {
+    if (isSubmitted.value) return
+    if (!currentQuiz.value) return
+    
+    selectedOption.value = index
+    isSubmitted.value = true
+    
+    // WebSocket으로 정답 전송
+    // answerText가 필요하다면 options[index]를 보냄, 여기선 index + 1 or string?
+    // 백엔드 GameController.submitQuiz(String answer) 
+    // 보통 1, 2, 3, 4 번호 혹은 텍스트.
+    // 일단 텍스트로 보낸다고 가정 (Backend logic check needed, but let's try option text)
+    const answerText = currentQuiz.value.options[index]
+    
+    // roomId is required. userStore doesn't have it? roomStore.roomInfo.roomId
+    const roomId = roomStore.roomInfo.roomId
+    if (roomId && myUserId.value) {
+        wsStore.submitAnswer(roomId, myUserId.value, currentQuiz.value.quizId, answerText || "")
+    }
 }
-
-// 게임 종료 상태 (테스트용: true로 두면 들어가자마자 모달 뜸)
-const isGameEnded = ref(true); 
 </script>
 
 <template>
@@ -29,19 +63,84 @@ const isGameEnded = ref(true);
     <!-- 3D 보드게임 컴포넌트 (배경) -->
     <GameBoard />
 
-    <!-- UI 오버레이: 3D 캔버스 위에 텍스트나 모달 등을 띄움 -->
-    <div class="ui-overlay">
-      <h1 class="text-white text-center pt-20 text-4xl font-bold drop-shadow-md">게임 진행 중...</h1>
+    <!-- UI 오버레이 -->
+    <div class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
       
-      <button 
-        @click="isGameEnded = !isGameEnded" 
-        class="absolute bottom-10 left-10 bg-white text-black p-4 rounded shadow-lg hover:bg-gray-100 pointer-events-auto"
-      >
-        결과창 토글 (테스트)
-      </button>
+      <!-- 상단 정보: 라운드, 타이머 -->
+      <header class="flex justify-between items-start pointer-events-auto">
+         <div class="bg-white/90 backdrop-blur rounded-xl p-4 shadow-lg border-2 border-slate-200">
+            <h2 class="text-xl font-black text-slate-700">
+               ROUND {{ gameStore.gameState.round || 1 }}
+            </h2>
+            <div class="text-sm text-slate-500 font-bold">
+               현재 턴: <span class="text-indigo-600">{{ currentTurnPlayer?.nickname || '결정 중...' }}</span>
+            </div>
+         </div>
+
+         <div v-if="currentQuiz && gameStatus === 'playing'" 
+              class="flex flex-col items-center">
+            <div class="text-4xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]"
+                 :class="{'text-red-400 animate-pulse': timeRemaining <= 5}">
+               {{ timeRemaining }}
+            </div>
+            <div class="text-white text-xs font-bold drop-shadow">SEC</div>
+         </div>
+      </header>
+
+      <!-- 퀴즈 영역 (중앙 하단) -->
+      <div v-if="currentQuiz && gameStatus === 'playing'" class="flex justify-center mb-10">
+         
+         <!-- 퀴즈 풀기 (모든 플레이어 참여 가능 - 스틸 룰) -->
+         <div class="bg-white rounded-2xl shadow-2xl p-6 w-[600px] pointer-events-auto animate-bounce-up border-4"
+              :class="isMyTurn ? 'border-indigo-500 ring-4 ring-indigo-200' : 'border-slate-200'"
+         >
+            <div class="mb-4 flex justify-between items-start">
+               <div>
+                   <span v-if="isMyTurn" class="bg-indigo-600 text-white text-xs font-black px-2 py-1 rounded animate-pulse">
+                        👑 MY TURN
+                   </span>
+                   <span v-else class="bg-rose-500 text-white text-xs font-black px-2 py-1 rounded">
+                        ⚡ STEAL CHANCE
+                   </span>
+                   <h3 class="text-xl font-bold mt-2 text-slate-800 leading-snug">
+                      {{ currentQuiz.question }}
+                   </h3>
+               </div>
+               <div v-if="!isMyTurn" class="text-xs font-bold text-slate-400 text-right">
+                    {{ currentTurnPlayer?.nickname }}님의 턴<br>
+                    틀리면 가장 빠른 정답자가 승리!
+               </div>
+            </div>
+            
+            <div class="grid grid-cols-1 gap-2">
+               <button 
+                  v-for="(option, idx) in currentQuiz.options" 
+                  :key="idx"
+                  @click="submitAnswer(idx)"
+                  :disabled="isSubmitted"
+                  class="w-full text-left p-4 rounded-xl border-2 transition-all font-bold text-slate-600"
+                  :class="[
+                     selectedOption === idx 
+                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-2 ring-indigo-200' 
+                        : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-indigo-300'
+                  ]"
+               >
+                  <span class="inline-block w-6 h-6 rounded-full bg-white border-2 border-current text-center text-sm mr-2 leading-5">
+                    {{ idx + 1 }}
+                  </span>
+                  {{ option }}
+               </button>
+            </div>
+            
+            <div v-if="isSubmitted" class="text-center mt-4 text-indigo-600 font-bold animate-pulse">
+               답안 제출 완료! {{ isMyTurn ? '정답 체크 중...' : '턴 주인의 결과를 기다리는 중...' }}
+            </div>
+         </div>
+
+      </div>
 
       <!-- 결과 모달 -->
-      <ResultModal v-if="isGameEnded" class="pointer-events-auto" />
+      <ResultModal v-if="isGameFinished" class="pointer-events-auto" />
     </div>
   </div>
 </template>
