@@ -186,9 +186,10 @@ export class CursorTrail {
 
     private handleMouseMove = (e: MouseEvent | TouchEvent) => {
         if (e instanceof TouchEvent) {
-            if (e.touches.length > 0) {
-                this.pos.x = e.touches[0].pageX;
-                this.pos.y = e.touches[0].pageY;
+            const touch = e.touches[0];
+            if (touch) {
+                this.pos.x = touch.pageX;
+                this.pos.y = touch.pageY;
             }
         } else {
             this.pos.x = e.clientX;
