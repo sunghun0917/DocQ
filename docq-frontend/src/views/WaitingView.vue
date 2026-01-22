@@ -270,6 +270,7 @@ onMounted(async () => {
   await wsStore.connect()
   wsStore.subscribeErrors(userStore.userId)
   wsStore.subscribeGameState(roomId.value)
+  wsStore.subscribeMiniGame(roomId.value)
   wsStore.joinGame(roomId.value, userStore.userId, userStore.username)
 })
 </script>

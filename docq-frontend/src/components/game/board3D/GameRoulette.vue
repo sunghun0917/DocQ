@@ -33,7 +33,7 @@ const wheelStyle = computed(() => {
   }
   return {
     transform: `rotate(${props.rotation}deg)`,
-    transition: props.isSpinning ? 'transform 3s cubic-bezier(0.1, 0, 0.1, 1)' : 'none',
+    transition: props.isSpinning ? 'transform 1.8s cubic-bezier(0.1, 0, 0.1, 1)' : 'none',
     background: `conic-gradient(${stops.join(',')})`
   }
 })

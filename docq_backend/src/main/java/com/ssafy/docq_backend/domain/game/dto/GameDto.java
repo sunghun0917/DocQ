@@ -147,6 +147,7 @@ public class GameDto {
         private String question;
         private List<String> options; // 4 options
         private long timeLimit; // ms
+        private LocalDateTime quizStartTime;
     }
 
     @Getter

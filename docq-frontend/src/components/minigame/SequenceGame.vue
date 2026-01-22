@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 
-const props = defineProps<{ isStarted: boolean }>();
+const props = defineProps<{ isStarted: boolean; timeLimitMs?: number }>();
 const emit = defineEmits(['end']);
 
 const directions = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
@@ -13,11 +13,24 @@ const targetSequence = ref<string[]>(
 const currentIndex = ref(0);
 const isWrong = ref(false);
 const isEnded = ref(false);
+const timeLeft = ref(10);
 let startTime = 0;
+let timer: number | null = null;
 
 const startGame = () => {
+  if (isEnded.value) return;
   startTime = performance.now();
   window.addEventListener('keydown', handleKeydown);
+
+  const limitMs = props.timeLimitMs ?? 10000;
+  timeLeft.value = Math.max(1, Math.ceil(limitMs / 1000));
+  if (timer) clearInterval(timer);
+  timer = window.setInterval(() => {
+    timeLeft.value -= 1;
+    if (timeLeft.value <= 0) {
+      endGame(false);
+    }
+  }, 1000);
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -29,10 +42,7 @@ const handleKeydown = (e: KeyboardEvent) => {
     
     // 성공 체크
     if (currentIndex.value === targetSequence.value.length) {
-      isEnded.value = true;
-      window.removeEventListener('keydown', handleKeydown);
-      const elapsedTime = (performance.now() - startTime) / 1000;
-      emit('end', elapsedTime);
+      endGame(true);
     }
   } 
   // 2. 오답 로직 (단, 방향키를 눌렀을 때만)
@@ -46,6 +56,23 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 };
 
+const endGame = (success: boolean) => {
+  if (isEnded.value) return;
+  isEnded.value = true;
+  window.removeEventListener('keydown', handleKeydown);
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+
+  if (success) {
+    const elapsedTime = (performance.now() - startTime) / 1000;
+    emit('end', elapsedTime);
+  } else {
+    emit('end', 999);
+  }
+};
+
 watch(() => props.isStarted, (newValue) => {
   if (newValue) startGame();
 });
@@ -54,7 +81,10 @@ onMounted(() => {
   if (props.isStarted) startGame();
 });
 
-onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+  if (timer) clearInterval(timer);
+});
 
 const icons: Record<string, string> = { ArrowUp: '⇧', ArrowDown: '⇩', ArrowLeft: '⇦', ArrowRight: '⇨' };
 </script>

@@ -80,6 +80,10 @@ interface PathCoord {
   x: number; y: number;
 }
 
+const emit = defineEmits<{
+  (e: 'movement-change', moving: boolean): void
+}>()
+
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
 const { get3DPos } = useIsometric()
@@ -164,10 +168,21 @@ const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string,
 
 // 애니메이션 상태 관리
 const animatingPlayers = ref<Record<string, number>>({})
+const lastStablePositions = ref<Record<string, number>>({})
+const isMovePending = computed(() => gameStore.gamePhase === 'MOVE' && !gameStore.currentMove)
 
 // 초기화 시 서버 위치로 동기화
 watch(() => players.value, (newPlayers) => {
+    if (isMovePending.value) {
+        return
+    }
+
+    const movingUserId = gameStore.currentMove?.userId || null
     newPlayers.forEach(p => {
+        if (movingUserId && isMovingGlobal.value && p.userId === movingUserId) {
+            return
+        }
+        lastStablePositions.value[p.userId] = p.position
         if (animatingPlayers.value[p.userId] === undefined) {
             animatingPlayers.value[p.userId] = p.position 
         } else {
@@ -208,7 +223,9 @@ function getPlayerColor(userId: string) {
 }
 
 function getPlayerDisplayCoords(p: Player) {
-    const idx = animatingPlayers.value[p.userId] ?? p.position
+    const idx = animatingPlayers.value[p.userId]
+        ?? lastStablePositions.value[p.userId]
+        ?? p.position
     return pathCoords.value[idx] || { x: 0, y: 0 }
 }
 
@@ -317,12 +334,24 @@ const isMovingGlobal = ref(false)
 const isSpinning = ref(false)
 const rouletteRotation = ref(0)
 const isRouletteVisible = ref(false)
+const ROULETTE_SPIN_MS = 1800
+const MOVE_STEP_MS = 350
 
 // gameStore.currentMove 감지하여 애니메이션 실행
+const waitForMoveUnlock = async () => {
+    while (gameStore.moveLocked) {
+        await sleep(100)
+    }
+}
+
 watch(() => gameStore.currentMove, async (move) => {
     if (!move) return
 
+    await waitForMoveUnlock()
+
     isMovingGlobal.value = true
+    gameStore.setMovementInProgress(true)
+    emit('movement-change', true)
     
     // 1. 룰렛 돌리기
     const rouletteStep = move.moveProcess.find((item: any) => item.type === 'ROULETTE')
@@ -341,13 +370,23 @@ watch(() => gameStore.currentMove, async (move) => {
     if (end > start) {
         for (let i = start + 1; i <= end; i++) {
             animatingPlayers.value[userId] = i
-            await sleep(500)
+            await sleep(MOVE_STEP_MS)
         }
     } else if (end < start) {
         animatingPlayers.value[userId] = end
     }
 
+    // 3. 잡기 처리: 잡힌 플레이어는 즉시 출발지로 이동
+    const catchActions = move.moveProcess?.filter((item: any) => item.type === 'CATCH') || []
+    catchActions.forEach((action: any) => {
+        if (action.targetUserId !== undefined && action.after !== undefined) {
+            animatingPlayers.value[action.targetUserId] = action.after
+        }
+    })
+
     isMovingGlobal.value = false
+    gameStore.setMovementInProgress(false)
+    emit('movement-change', false)
 })
 
 async function spinRouletteAnimation(resultValue: number, labels: number[]) {
@@ -371,7 +410,7 @@ async function spinRouletteAnimation(resultValue: number, labels: number[]) {
         setTimeout(() => {
             isSpinning.value = false
             resolve()
-        }, 3000)
+        }, ROULETTE_SPIN_MS)
     })
 }
 

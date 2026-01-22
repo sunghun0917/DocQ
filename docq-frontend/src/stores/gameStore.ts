@@ -18,6 +18,7 @@ export const useGameStore = defineStore('game', () => {
     // 게임 상태
     const isGameEnded = ref(false)
     const timeRemaining = ref(30) // Default 30 seconds
+    const quizEndAt = ref<number | null>(null)
     const timerInterval = ref<number | null>(null)
 
     // 점수 및 결과
@@ -27,6 +28,7 @@ export const useGameStore = defineStore('game', () => {
     // [ADDED] Roulette State (for Overlay support)
     const rouletteTargetId = ref<string | null>(null)
     const rouletteResult = ref<number | null>(null)
+    const moveLocked = ref(false)
 
     // === GameBoard.vue support ===
     const gameState = ref<{
@@ -46,6 +48,30 @@ export const useGameStore = defineStore('game', () => {
 
     const currentMove = ref<any>(null)
     const currentRoundResult = ref<any>(null)
+    const movementInProgress = ref(false)
+    const pendingQuiz = ref<any | null>(null)
+    const miniGame = ref<{
+        phase: 'idle' | 'pending' | 'playing' | 'result'
+        gameType: string | null
+        timeLimitMs: number | null
+        description: string | null
+        result: null | {
+            winnerUserId?: string | null
+            rewardBuff?: string | null
+            rankings?: Array<{
+                userId: string
+                nickname: string
+                value: number
+                rank: number
+            }>
+        }
+    }>({
+        phase: 'idle',
+        gameType: null,
+        timeLimitMs: null,
+        description: null,
+        result: null
+    })
 
     // Getters
     const totalQuizCount = computed(() => quizzes.value.length)
@@ -87,19 +113,38 @@ export const useGameStore = defineStore('game', () => {
             } else {
                 gameStatus.value = 'playing'
             }
+
+            // 퀴즈 진행 상태가 아니면 타이머를 정지
+            if (newState.state !== 'QUIZ_TIME') {
+                stopTimer()
+            }
+
+            // 미니게임 진입 시 퀴즈 상태를 정리
+            if (newState.state === 'MINIGAME') {
+                currentQuiz.value = null
+                currentRoundResult.value = null
+            }
         }
     }
 
     const handleMove = (moveInfo: any) => {
         currentMove.value = moveInfo
+        setMovementInProgress(true)
     }
 
-    const onQuizReceived = (quizData: any) => {
+    const applyQuiz = (quizData: any) => {
+        const timeLimitMs = quizData.timeLimit ? Number(quizData.timeLimit) : 30000
+        const startAt = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
+        const effectiveStart = startAt ?? Date.now()
+        const endAt = effectiveStart + timeLimitMs
+        quizEndAt.value = endAt
+        const remainingMs = Math.max(0, endAt - Date.now())
+
         currentQuiz.value = {
             quizId: quizData.quizId,
             question: quizData.question,
             options: quizData.options,
-            timeLimit: quizData.timeLimit ? Math.floor(quizData.timeLimit / 1000) : 30,
+            timeLimit: Math.max(1, Math.ceil(remainingMs / 1000)),
             answer: -1
         }
 
@@ -108,8 +153,17 @@ export const useGameStore = defineStore('game', () => {
         gameStatus.value = 'playing'
         lastAnswerResult.value = null
         currentRoundResult.value = null
+        moveLocked.value = true
 
         startTimer()
+    }
+
+    const onQuizReceived = (quizData: any) => {
+        if (movementInProgress.value) {
+            pendingQuiz.value = quizData
+            return
+        }
+        applyQuiz(quizData)
     }
 
     const onRoundResultReceived = (resultData: any) => {
@@ -151,12 +205,13 @@ export const useGameStore = defineStore('game', () => {
     const startTimer = () => {
         stopTimer()
         timerInterval.value = window.setInterval(() => {
-            if (timeRemaining.value > 0) {
-                timeRemaining.value--
-            } else {
+            if (!quizEndAt.value) return
+            const remainingMs = Math.max(0, quizEndAt.value - Date.now())
+            timeRemaining.value = Math.max(0, Math.ceil(remainingMs / 1000))
+            if (remainingMs <= 0) {
                 stopTimer()
             }
-        }, 1000)
+        }, 250)
     }
 
     const stopTimer = () => {
@@ -172,11 +227,84 @@ export const useGameStore = defineStore('game', () => {
         scores.value = {}
         gameStatus.value = 'waiting'
         timeRemaining.value = 30
+        quizEndAt.value = null
         lastAnswerResult.value = null
         gameState.value = { players: [], currentTurnUserId: null, round: 1, state: 'WAITING' }
         currentMove.value = null
         rouletteTargetId.value = null
         rouletteResult.value = null
+        moveLocked.value = false
+        movementInProgress.value = false
+        pendingQuiz.value = null
+    }
+
+    const reset = () => {
+        resetTimer()
+        isGameEnded.value = false
+        currentQuiz.value = null
+        lastAnswerResult.value = null
+        currentRoundResult.value = null
+        quizEndAt.value = null
+        miniGame.value = {
+            phase: 'idle',
+            gameType: null,
+            timeLimitMs: null,
+            description: null,
+            result: null
+        }
+    }
+
+    const unlockMove = () => {
+        moveLocked.value = false
+    }
+
+    const setMovementInProgress = (isMoving: boolean) => {
+        movementInProgress.value = isMoving
+        if (!isMoving && pendingQuiz.value) {
+            const nextQuiz = pendingQuiz.value
+            pendingQuiz.value = null
+            applyQuiz(nextQuiz)
+        }
+    }
+
+    const queueMiniGame = (payload: { gameType: string; timeLimit?: number; description?: string }) => {
+        miniGame.value = {
+            phase: 'pending',
+            gameType: payload.gameType,
+            timeLimitMs: payload.timeLimit ?? null,
+            description: payload.description ?? null,
+            result: null
+        }
+    }
+
+    const startMiniGame = () => {
+        if (miniGame.value.phase !== 'pending') return
+        miniGame.value = {
+            ...miniGame.value,
+            phase: 'playing'
+        }
+    }
+
+    const setMiniGameResult = (result: {
+        winnerUserId?: string | null
+        rewardBuff?: string | null
+        rankings?: Array<{ userId: string; nickname: string; value: number; rank: number }>
+    }) => {
+        miniGame.value = {
+            ...miniGame.value,
+            phase: 'result',
+            result: result
+        }
+    }
+
+    const clearMiniGame = () => {
+        miniGame.value = {
+            phase: 'idle',
+            gameType: null,
+            timeLimitMs: null,
+            description: null,
+            result: null
+        }
     }
 
     const gamePhase = computed(() => gameState.value.state || null)
@@ -185,13 +313,18 @@ export const useGameStore = defineStore('game', () => {
         quizzes,
         currentQuiz,
         currentQuizIndex,
+        gameStatus,
         isGameEnded,
+        timeRemaining,
         scores,
         lastAnswerResult,
         gameState,
         currentMove,
         currentRoundResult,
         gamePhase,
+        miniGame,
+        moveLocked,
+        movementInProgress,
 
         // Getters
         totalQuizCount,
@@ -210,9 +343,17 @@ export const useGameStore = defineStore('game', () => {
         startTimer,
         stopTimer,
         resetTimer,
+        reset,
+        unlockMove,
+        setMovementInProgress,
 
         // [ADDED] Roulette actions
+        rouletteTargetId,
         setRouletteResult,
-        handleRouletteComplete
+        handleRouletteComplete,
+        queueMiniGame,
+        startMiniGame,
+        setMiniGameResult,
+        clearMiniGame
     }
 })
