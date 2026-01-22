@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'eclipse-temurin:17-jdk-alpine'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     environment {
         BACKEND_DIR = 'docq_backend'
@@ -13,59 +8,54 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        /* =========================
-           Backend (Gradle / Java 17)
-           ========================= */
         stage('Backend: build') {
             steps {
                 dir("${BACKEND_DIR}") {
                     sh '''
-                        chmod +x gradlew
-                        ./gradlew clean build --no-daemon
+                        docker run --rm \
+                          -v $(pwd):/app \
+                          -w /app \
+                          eclipse-temurin:17-jdk-alpine \
+                          sh -c "chmod +x ./gradlew && ./gradlew clean build --no-daemon"
                     '''
                 }
             }
         }
 
-        /* =========================
-           Frontend (Node)
-           ========================= */
         stage('Frontend: build') {
             steps {
                 dir("${FRONTEND_DIR}") {
                     sh '''
-                        npm ci
-                        npm run build
+                        docker run --rm \
+                          -v $(pwd):/app \
+                          -w /app \
+                          node:20-alpine \
+                          sh -c "npm ci && npm run build"
                     '''
                 }
             }
         }
 
-        /* =========================
-           AI Service (Python)
-           ========================= */
-        stage('AI service: check') {
+        stage('AI service: deps check') {
             steps {
                 dir("${AI_DIR}") {
                     sh '''
-                        python -m pip install --upgrade pip
-                        pip install -r requirements.txt
-                        python -m pytest || echo "No tests configured"
+                        docker run --rm \
+                          -v $(pwd):/app \
+                          -w /app \
+                          python:3.10 \
+                          sh -c "pip install -r requirements.txt && python -m pytest || echo 'No tests'"
                     '''
                 }
             }
         }
 
-        /* =========================
-           Docker Build (local)
-           ========================= */
         stage('Docker Build') {
             parallel {
                 stage('Build Backend Image') {
@@ -94,38 +84,20 @@ pipeline {
             }
         }
 
-        /* =========================
-           Deploy (stop → rm → run)
-           ========================= */
         stage('Deploy') {
             steps {
                 sh '''
-                    # Backend
                     docker stop docq-backend || true
                     docker rm docq-backend || true
-                    docker run -d \
-                        --name docq-backend \
-                        --network app-network \
-                        -p 8080:8080 \
-                        docq-backend
+                    docker run -d --name docq-backend --network app-network -p 8080:8080 docq-backend
 
-                    # Frontend
                     docker stop docq-frontend || true
                     docker rm docq-frontend || true
-                    docker run -d \
-                        --name docq-frontend \
-                        --network app-network \
-                        -p 3000:80 \
-                        docq-frontend
+                    docker run -d --name docq-frontend --network app-network -p 3000:80 docq-frontend
 
-                    # AI Service
                     docker stop docq-ai || true
                     docker rm docq-ai || true
-                    docker run -d \
-                        --name docq-ai \
-                        --network app-network \
-                        -p 5000:5000 \
-                        docq-ai
+                    docker run -d --name docq-ai --network app-network -p 5000:5000 docq-ai
                 '''
             }
         }
@@ -133,10 +105,10 @@ pipeline {
 
     post {
         success {
-            echo '🎉 CI/CD 성공!'
+            echo '✅ 파이프라인 성공!'
         }
         failure {
-            echo '❌ CI/CD 실패'
+            echo '❌ 파이프라인 실패'
         }
         always {
             cleanWs()
