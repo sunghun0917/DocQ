@@ -26,13 +26,18 @@ const { get3DPos } = useIsometric()
 let sharedFbx: any | null = null
 let sharedClips: any[] = []
 let sharedLoadPromise: Promise<any> | null = null
+let sharedFbxLoader: ReturnType<typeof useFBX> | null = null
 
 const loadSharedFbx = async () => {
   if (sharedFbx) return sharedFbx
-  if (!sharedLoadPromise) {
-    sharedLoadPromise = useFBX('/assets/character/Walking.fbx')
+  if (!sharedFbxLoader) {
+    sharedFbxLoader = useFBX('/assets/character/Walking.fbx')
   }
-  sharedFbx = await sharedLoadPromise
+  if (!sharedLoadPromise) {
+    sharedLoadPromise = sharedFbxLoader.execute()
+  }
+  await sharedLoadPromise
+  sharedFbx = sharedFbxLoader.state?.value || sharedFbxLoader
   const state = (sharedFbx as any).state?.value || sharedFbx
   sharedClips = state.animations || []
   return sharedFbx
@@ -100,7 +105,8 @@ if (scene) {
 
 /* ===== 애니메이션 액션 설정 ===== */
 // scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
-const { actions } = useAnimations(allClips, scene || new THREE.Object3D())
+const animationTarget = scene ?? new THREE.Object3D()
+const { actions } = useAnimations(allClips, animationTarget as any)
 
 // 상수로 관리하는 설정값들
 const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
@@ -113,7 +119,8 @@ const Y_OFFSET = 0.0        // Primitive는 바닥 기준이므로 0
 const updateLookDirection = () => {
   if (!scene || !props.lookTarget) return
   const target3D = get3DPos(props.lookTarget.x, props.lookTarget.y)
-  scene.lookAt(target3D[0], target3D[1], target3D[2])
+  // y를 현재 캐릭터 높이에 맞춰 고개 숙임 방지
+  scene.lookAt(target3D[0], scene.position.y, target3D[2])
 }
 
 /*
@@ -122,10 +129,12 @@ const updateLookDirection = () => {
 onMounted(() => {
   if (idleClip && actions[idleClip.name]) {
     const action = actions[idleClip.name]
-    // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
-    action.setEffectiveTimeScale(2.0)
-    // 페이드인과 함께 재생
-    action.reset().fadeIn(FADE_TIME).play()
+    if (action) {
+      // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
+      action.setEffectiveTimeScale(2.0)
+      // 페이드인과 함께 재생
+      action.reset().fadeIn(FADE_TIME).play()
+    }
   }
   // 초기 시선 처리
   updateLookDirection()
@@ -153,7 +162,8 @@ watch(
       // 이동 시작 시: 목적지 바라보기
       onStart: () => {
         const dest3D: [number, number, number] = get3DPos(newX, newY)
-        scene.lookAt(dest3D[0], dest3D[1] + Y_OFFSET, dest3D[2])
+        // 이동 시작 시에도 y를 고정해 앞쏠림 방지
+        scene.lookAt(dest3D[0], scene.position.y, dest3D[2])
       },
 
       // 이동 완료 시: 다음 타겟(Target+1) 바라보기
