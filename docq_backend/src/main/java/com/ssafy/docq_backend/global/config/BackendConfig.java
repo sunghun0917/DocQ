@@ -14,7 +14,7 @@ public class BackendConfig {
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
                 .setConnectTimeout(Duration.ofSeconds(10))
-                .setReadTimeout(Duration.ofSeconds(60)) // AI 처리 시간 고려하여 넉넉하게 설정
+                .setReadTimeout(Duration.ofSeconds(180)) // AI 처리 시간 고려하여 넉넉하게 설정
                 .build();
     }
 }

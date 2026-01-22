@@ -39,7 +39,7 @@ public class GameController {
     }
 
     @ResponseBody
-    @PostMapping("/api/game/{roomId}/quiz/generate")
+    @PostMapping("/game/{roomId}/quiz/generate")
     public String generateQuiz(@PathVariable String roomId, @RequestParam("file") MultipartFile file) {
         // TODO: userId 검증 (방장인지 등)
         gameService.generateQuizFromPdf(roomId, file);
@@ -47,7 +47,7 @@ public class GameController {
     }
 
     @ResponseBody
-    @GetMapping("/api/game/{roomId}/quiz")
+    @GetMapping("/game/{roomId}/quiz")
     public java.util.List<QuizDto.Response> getQuizzes(@PathVariable String roomId) {
         return gameService.getQuizzes(roomId);
     }
