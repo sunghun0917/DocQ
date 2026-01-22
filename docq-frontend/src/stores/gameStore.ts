@@ -1,13 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRoomStore } from './roomStore'
-import { mockQuizzes } from '@/mocks/quizzes'
+// import { useWebSocketStore } from './websocketStore' // Cyclic Dependency Risk
+
 import type { Quiz } from '@/types/docq-api'
 
 // 게임 진행 상태 및 퀴즈 관리
 export const useGameStore = defineStore('game', () => {
-    // State
-    const quizzes = ref(mockQuizzes)
+    // state
+
+    // 퀴즈 관련
+    const quizzes = ref<Quiz[]>([])
     const currentQuizIndex = ref(0)
     const currentQuiz = ref<Quiz | null>(null) // Live Quiz Object
     const gameStatus = ref<'waiting' | 'playing' | 'finished'>('waiting')
