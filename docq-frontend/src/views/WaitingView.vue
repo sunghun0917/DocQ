@@ -5,7 +5,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
-import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, type QuizResponse } from '@/services/api'
+import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, type QuizResponse } from '@/services/api'
 import AlertModal from '@/components/common/AlertModal.vue';
 import ExitConfirmModal from '@/components/common/ExitConfirmModal.vue';
 
@@ -35,6 +35,13 @@ const isGenerating = ref(false)
 const selectedFile = ref<File | null>(null);
 const generatedQuizzes = ref<QuizResponse[]>([])
 const isQuizModalOpen = ref(false)
+const isBasicQuizModalOpen = ref(false)
+
+const basicQuizTypes = [
+  { type: 'nonsense', label: '넌센스 퀴즈', icon: 'sentiment_very_satisfied', color: 'bg-yellow-100 text-yellow-600 border-yellow-200' },
+  { type: 'common', label: '상식 퀴즈', icon: 'school', color: 'bg-blue-100 text-blue-600 border-blue-200' },
+  { type: 'mixed', label: '랜덤 퀴즈', icon: 'shuffle', color: 'bg-purple-100 text-purple-600 border-purple-200' },
+]
 
 // [Frontend] 파일 선택 핸들러
 const handleFileChange = (event: Event) => {
@@ -51,14 +58,14 @@ const handleUploadPdf = async () => {
   isGenerating.value = true
   try {
     await generateQuiz(roomId.value, selectedFile.value)
-    toastMessage.value = '퀴즈 생성이 시작되었습니다! 잠시 후 완료됩니다.';
+    toastMessage.value = '퀴즈 생성이 완료되었습니다!';
     toastType.value = 'success';
     isToastOpen.value = true;
     
     selectedFile.value = null // Reset
     await loadQuizzes()
   } catch (error) {
-    toastMessage.value = '퀴즈 생성 실패: ' + getErrorMessage(error);
+    toastMessage.value = '퀴즈 생성 실패 : AI 서비스 연결 안됨';
     toastType.value = 'error';
     isToastOpen.value = true;
   } finally {
@@ -116,6 +123,25 @@ const openQuizModal = async () => {
   await loadQuizzes()
   isQuizModalOpen.value = true
 }
+
+// [Frontend] 기본 퀴즈 선택 핸들러
+const selectBasicQuiz = async (type: string) => {
+  if (!roomId.value) return
+  
+  try {
+    await setDefaultQuizzes(roomId.value, type)
+    toastMessage.value = '기본 퀴즈가 선택되었습니다!';
+    toastType.value = 'success';
+    isToastOpen.value = true;
+    isBasicQuizModalOpen.value = false
+    // 퀴즈 목록 갱신 (선택사항, 백엔드에서 브로드캐스트 하므로 자동 갱신될 것임)
+  } catch (error) {
+    toastMessage.value = '퀴즈 선택 실패: ' + getErrorMessage(error);
+    toastType.value = 'error';
+    isToastOpen.value = true;
+  }
+}
+
 
 const displayUsers = computed(() => {
   const filled = users.value.map(u => ({
@@ -431,11 +457,11 @@ onMounted(async () => {
                      </button>
                      
                      <button 
-                       @click="openQuizModal"
+                       @click="isBasicQuizModalOpen = true"
                        class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
                      >
-                       <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">list_alt</span>
-                       목록
+                       <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">menu_book</span>
+                       기본 퀴즈
                      </button>
                   </div>
               </div>
@@ -606,8 +632,42 @@ onMounted(async () => {
              </button>
           </div>
        </div>
-    </div>
-  </div>
+   </div>
+
+   <!-- 기본 퀴즈 선택 모달 -->
+   <div v-if="isBasicQuizModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-[#881337]/20 backdrop-blur-sm p-4 animate-fade-in" @click.self="isBasicQuizModalOpen = false">
+      <div class="bg-white/95 backdrop-blur rounded-[12px] p-8 w-[500px] flex flex-col shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-white animate-slide-up">
+         <header class="flex justify-between items-center mb-6 border-b border-[#fecdd3] pb-4">
+            <h2 class="text-2xl font-extrabold text-[#881337] flex items-center gap-2">
+              <span class="material-symbols-outlined text-[#e11d48]">menu_book</span>
+              기본 퀴즈 선택
+            </h2>
+            <button @click="isBasicQuizModalOpen = false" class="text-[#fda4af] hover:text-[#e11d48] transition-colors rounded-full p-1 hover:bg-[#fff1f2]">
+              <span class="material-symbols-outlined text-2xl font-bold">close</span>
+            </button>
+         </header>
+         
+         <div class="grid gap-4">
+            <button 
+              v-for="item in basicQuizTypes" 
+              :key="item.type"
+              @click="selectBasicQuiz(item.type)"
+              class="flex items-center gap-4 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
+              :class="item.color"
+            >
+               <div class="w-12 h-12 rounded-full bg-white/50 flex items-center justify-center shadow-sm">
+                 <span class="material-symbols-outlined text-2xl">{{ item.icon }}</span>
+               </div>
+               <div>
+                 <p class="font-black text-lg">{{ item.label }}</p>
+                 <p class="text-sm opacity-80 font-medium">기본 제공되는 {{ item.label }} 게임하기</p>
+               </div>
+            </button>
+         </div>
+      </div>
+   </div>
+ </div>
+
 </template>
 
 <style scoped>

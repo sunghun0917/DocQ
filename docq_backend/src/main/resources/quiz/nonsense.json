@@ -1,0 +1,332 @@
+[
+    {
+        "question": "세상에서 가장 빠른 떡은?",
+        "options": [
+            "가래떡",
+            "시루떡",
+            "헐레벌떡",
+            "인절미"
+        ],
+        "answerIndex": 2,
+        "answerText": "헐레벌떡"
+    },
+    {
+        "question": "소가 웃으면?",
+        "options": [
+            "소소",
+            "우하하",
+            "우유",
+            "음메"
+        ],
+        "answerIndex": 1,
+        "answerText": "우하하"
+    },
+    {
+        "question": "바다가 화나면?",
+        "options": [
+            "파도침",
+            "성질남",
+            "해일",
+            "바다怒"
+        ],
+        "answerIndex": 2,
+        "answerText": "해일"
+    },
+    {
+        "question": "도둑이 가장 싫어하는 아이스크림은?",
+        "options": [
+            "바닐라",
+            "초코",
+            "누가바",
+            "죠스바"
+        ],
+        "answerIndex": 2,
+        "answerText": "누가바"
+    },
+    {
+        "question": "항상 손에 들고 다니는 나무는?",
+        "options": [
+            "소나무",
+            "대나무",
+            "손나무",
+            "나무젓가락"
+        ],
+        "answerIndex": 3,
+        "answerText": "나무젓가락"
+    },
+    {
+        "question": "가장 게으른 동물은?",
+        "options": [
+            "고양이",
+            "나무늘보",
+            "거북이",
+            "판다"
+        ],
+        "answerIndex": 1,
+        "answerText": "나무늘보"
+    },
+    {
+        "question": "병아리가 좋아하는 약은?",
+        "options": [
+            "감기약",
+            "삐약",
+            "소화제",
+            "비타민"
+        ],
+        "answerIndex": 1,
+        "answerText": "삐약"
+    },
+    {
+        "question": "차가 다니지 않는 도로는?",
+        "options": [
+            "고속도로",
+            "국도",
+            "인도",
+            "차도"
+        ],
+        "answerIndex": 2,
+        "answerText": "인도"
+    },
+    {
+        "question": "우유가 넘어지면?",
+        "options": [
+            "매일",
+            "아야",
+            "서울",
+            "빙그레"
+        ],
+        "answerIndex": 1,
+        "answerText": "아야"
+    },
+    {
+        "question": "세상에서 가장 뜨거운 바다는?",
+        "options": [
+            "태평양",
+            "대서양",
+            "열받아",
+            "홍해"
+        ],
+        "answerIndex": 2,
+        "answerText": "열받아"
+    },
+    {
+        "question": "신발이 화나면?",
+        "options": [
+            "구두",
+            "운동",
+            "성질남",
+            "신발질"
+        ],
+        "answerIndex": 3,
+        "answerText": "신발질"
+    },
+    {
+        "question": "달이 아플 때 먹는 약은?",
+        "options": [
+            "진통제",
+            "달약",
+            "반달",
+            "감기약"
+        ],
+        "answerIndex": 2,
+        "answerText": "반달"
+    },
+    {
+        "question": "바람이 귀엽게 불면?",
+        "options": [
+            "산들",
+            "휙",
+            "쌩",
+            "폭풍"
+        ],
+        "answerIndex": 0,
+        "answerText": "산들"
+    },
+    {
+        "question": "고기 먹고 남은 것은?",
+        "options": [
+            "뼈",
+            "접시",
+            "냄새",
+            "고기"
+        ],
+        "answerIndex": 0,
+        "answerText": "뼈"
+    },
+    {
+        "question": "물고기가 제일 싫어하는 것은?",
+        "options": [
+            "물",
+            "그물",
+            "바다",
+            "미끼"
+        ],
+        "answerIndex": 1,
+        "answerText": "그물"
+    },
+    {
+        "question": "눈이 아프면 가는 곳은?",
+        "options": [
+            "안과",
+            "병원",
+            "눈병원",
+            "안경점"
+        ],
+        "answerIndex": 0,
+        "answerText": "안과"
+    },
+    {
+        "question": "호랑이가 차를 타면?",
+        "options": [
+            "호차",
+            "타이거",
+            "호랑이차",
+            "무섭다"
+        ],
+        "answerIndex": 1,
+        "answerText": "타이거"
+    },
+    {
+        "question": "우체국에서 가장 바쁜 사람은?",
+        "options": [
+            "집배원",
+            "편지",
+            "우표",
+            "사장"
+        ],
+        "answerIndex": 0,
+        "answerText": "집배원"
+    },
+    {
+        "question": "세상에서 가장 추운 바다는?",
+        "options": [
+            "북극해",
+            "남극해",
+            "썰렁해",
+            "차가워"
+        ],
+        "answerIndex": 2,
+        "answerText": "썰렁해"
+    },
+    {
+        "question": "소금이 아프면?",
+        "options": [
+            "짜증",
+            "소금병",
+            "절임",
+            "소금약"
+        ],
+        "answerIndex": 0,
+        "answerText": "짜증"
+    },
+    {
+        "question": "침을 뱉는 나무는?",
+        "options": [
+            "소나무",
+            "단풍나무",
+            "침엽수",
+            "은행나무"
+        ],
+        "answerIndex": 2,
+        "answerText": "침엽수"
+    },
+    {
+        "question": "왕이 넘어지면?",
+        "options": [
+            "전하",
+            "킹콩",
+            "왕자",
+            "궁궐"
+        ],
+        "answerIndex": 1,
+        "answerText": "킹콩"
+    },
+    {
+        "question": "개가 좋아하는 숫자는?",
+        "options": [
+            "1",
+            "2",
+            "멍멍",
+            "10"
+        ],
+        "answerIndex": 2,
+        "answerText": "멍멍"
+    },
+    {
+        "question": "달걀이 길을 건너면?",
+        "options": [
+            "후라이",
+            "계란찜",
+            "에그",
+            "알"
+        ],
+        "answerIndex": 0,
+        "answerText": "후라이"
+    },
+    {
+        "question": "가장 무거운 펜은?",
+        "options": [
+            "만년필",
+            "볼펜",
+            "연필",
+            "무거운펜"
+        ],
+        "answerIndex": 3,
+        "answerText": "무거운펜"
+    },
+    {
+        "question": "물은 물인데 마시면 안 되는 물은?",
+        "options": [
+            "바닷물",
+            "약수",
+            "눈물",
+            "수영장"
+        ],
+        "answerIndex": 0,
+        "answerText": "바닷물"
+    },
+    {
+        "question": "세상에서 가장 큰 코는?",
+        "options": [
+            "사람코",
+            "코끼리코",
+            "피노키오",
+            "콧구멍"
+        ],
+        "answerIndex": 1,
+        "answerText": "코끼리코"
+    },
+    {
+        "question": "바늘이 싫어하는 옷은?",
+        "options": [
+            "면",
+            "실크",
+            "가죽",
+            "니트"
+        ],
+        "answerIndex": 3,
+        "answerText": "니트"
+    },
+    {
+        "question": "항상 배고픈 사람은?",
+        "options": [
+            "학생",
+            "아기",
+            "헝그리",
+            "요리사"
+        ],
+        "answerIndex": 2,
+        "answerText": "헝그리"
+    },
+    {
+        "question": "가장 조용한 총은?",
+        "options": [
+            "권총",
+            "대포",
+            "물총",
+            "소총"
+        ],
+        "answerIndex": 2,
+        "answerText": "물총"
+    }
+]

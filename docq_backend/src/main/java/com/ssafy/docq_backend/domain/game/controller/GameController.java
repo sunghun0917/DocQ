@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
+import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -55,16 +56,32 @@ public class GameController {
 
     @ResponseBody
     @PostMapping("/game/{roomId}/quiz/generate")
-    public String generateQuiz(@PathVariable String roomId, @RequestParam("file") MultipartFile file) {
-        // TODO: userId 검증 (방장인지 등)
-        gameService.generateQuizFromPdf(roomId, file);
-        return "Quiz generation started";
+    public ResponseEntity<?> generateQuiz(@PathVariable String roomId, @RequestParam("file") MultipartFile file) {
+        try {
+            // TODO: userId 검증 (방장인지 등)
+            gameService.generateQuizFromPdf(roomId, file);
+            return ResponseEntity.ok("Quiz generation started");
+        } catch (Exception e) {
+            log.error("Quiz generation failed", e);
+            return ResponseEntity
+                    .status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(java.util.Map.of("message", e.getMessage()));
+        }
+
     }
 
     @ResponseBody
     @GetMapping("/game/{roomId}/quiz")
     public java.util.List<QuizDto.Response> getQuizzes(@PathVariable String roomId) {
         return gameService.getQuizzes(roomId);
+    }
+
+    @ResponseBody
+    @PostMapping("/game/{roomId}/quiz/default")
+    public Map<String, Object> setDefaultQuizzes(@PathVariable String roomId,
+            @RequestParam("type") String type) {
+        int count = gameService.setDefaultQuizzes(roomId, type);
+        return Map.of("count", count);
     }
 
     @MessageMapping("/game/submit")
