@@ -752,6 +752,14 @@ public class GameService {
                     int before = nextPos;
                     nextPos += moveValue;
 
+                    // Boundary Check
+                    if (nextPos < 0)
+                        nextPos = 0;
+                    if (nextPos >= TARGET_POSITION) {
+                        nextPos = TARGET_POSITION;
+                        finishPlanned = true;
+                    }
+
                     actions.add(GameDto.MoveAction.builder()
                             .type("BUFF")
                             .buffType("DOUBLE_SCORE")
@@ -761,6 +769,12 @@ public class GameService {
                 } else if ("PLUS_THREE".equals(winnerState.getHasBuff())) {
                     int before = nextPos;
                     nextPos += 3;
+
+                    // Boundary Check
+                    if (nextPos >= TARGET_POSITION) {
+                        nextPos = TARGET_POSITION;
+                        finishPlanned = true;
+                    }
 
                     actions.add(GameDto.MoveAction.builder()
                             .type("BUFF")
@@ -776,8 +790,13 @@ public class GameService {
 
                     if ("TILE_X2".equals(eventType)) {
                         nextPos += moveValue;
+                        // Boundary Check
                         if (nextPos < 0)
                             nextPos = 0;
+                        if (nextPos >= TARGET_POSITION) {
+                            nextPos = TARGET_POSITION;
+                            finishPlanned = true;
+                        }
                     }
 
                     actions.add(GameDto.MoveAction.builder()
