@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 
+// 게임 스토어 가져오기
 const gameStore = useGameStore()
 
 // 결과 상태 (null이면 표시 안 함)

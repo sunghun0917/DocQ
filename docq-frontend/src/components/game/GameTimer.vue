@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 
+// 전역 상태 연동
 const gameStore = useGameStore()
 const timeRemaining = computed(() => gameStore.timeRemaining)
 
@@ -9,13 +10,14 @@ const timeRemaining = computed(() => gameStore.timeRemaining)
 const isUrgent = computed(() => timeRemaining.value <= 5)
 
 // 원형 진행도 계산 (30초 기준)
+// 113: timer 원의 전체 둘레 길이
 // stroke-dasharray: 2 * PI * r (r=18 => approx 113)
 const FULL_DASH_ARRAY = 113
 const progress = computed(() => {
   const total = 30 // 전체 시간
-  const current = timeRemaining.value
-  const fraction = current / total
-  return (fraction * FULL_DASH_ARRAY).toFixed(0)
+  const current = timeRemaining.value // 현재 시간
+  const fraction = current / total // 현재 시간 / 전체 시간
+  return (fraction * FULL_DASH_ARRAY).toFixed(0) // toFixed(0): 소수점 아래 버림
 })
 </script>
 

@@ -20,7 +20,7 @@ const timePercentage = computed(() => {
 })
 
 // 답안 제출 핸들러 (WebSocket 버전은 GameView에서 처리)
-// 이 컴포넌트는 UI만 담당
+// 이 컴포넌트는 UI만 담당  
 </script>
 
 <template>

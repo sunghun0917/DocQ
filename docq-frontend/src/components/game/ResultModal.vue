@@ -15,6 +15,7 @@ const roomStore = useRoomStore();
 // Store에서 랭킹 데이터 가져오기 (rankings getter 활용)
 const rankings = computed(() => gameStore.rankings)
 
+// find 함수는 한명씩 차례대로 검사
 const getAvatar = (userId: string) => {
     return roomStore.users.find(u => u.id === userId)?.avatar || '👤'
 }
@@ -23,17 +24,20 @@ const getIsMe = (userId: string) => {
     return roomStore.myUser?.id === userId
 }
 
+// 1등 순위 계산
 const winner = computed(() => {
     if (rankings.value.length === 0) return null
+    // 리스트의 0번자리에 있는 사람이 1등, !여기에 데이터가 무조건 있음을 알려주는 표시
     const w = rankings.value[0]!
     return {
-        ...w,
+        ...w, // 스프레드 연산자로 w의 모든 프로퍼티 복사
         avatar: getAvatar(w.userId),
         rank: 1,
         isMe: getIsMe(w.userId)
     }
 })
 
+// 나머지 순위 계산
 const others = computed(() => {
     return rankings.value.slice(1).map((p, index) => ({
         ...p,

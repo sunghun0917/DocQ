@@ -1,3 +1,5 @@
+// 데이터 설계도를 모아둔 파일
+// 실수로 오타를 내면 컴퓨터가 즉시 에러를 띄워줌.
 export interface Player {
     userId: string;
     nickname: string;

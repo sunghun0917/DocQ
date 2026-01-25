@@ -1,3 +1,4 @@
+// 게임 중 누군가가 퀴즈를 맞히거나 정답 상황이 되었을 때, 화면 중앙에 크게 나타나 실제 이동거리를 결정하는 룰렛
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import { useGameStore } from '@/stores/gameStore';

@@ -23,6 +23,7 @@ const startAngle = computed(() => -sectionAngle.value / 2)
 const wheelStyle = computed(() => {
   const light = '#4b5563'
   const dark = '#374151'
+  // step: 한 칸의 각도
   const step = sectionAngle.value
   const stops: string[] = []
   for (let i = 0; i < segmentCount.value; i++) {
@@ -31,6 +32,7 @@ const wheelStyle = computed(() => {
     const to = (i + 1) * step
     stops.push(`${color} ${from}deg ${to}deg`)
   }
+  // 실제 HTML 요소에 입혀질 CSS값들을 내보냄.
   return {
     transform: `rotate(${props.rotation}deg)`,
     transition: props.isSpinning ? 'transform 1.8s cubic-bezier(0.1, 0, 0.1, 1)' : 'none',
@@ -38,6 +40,7 @@ const wheelStyle = computed(() => {
   }
 })
 
+// 룰렛의 숫자를 정중앙에 딱 맞춰서 배치하는 수학 공식
 const labelStyle = (index: number) => {
   const angle = (index * sectionAngle.value) + (sectionAngle.value / 2)
   return {
