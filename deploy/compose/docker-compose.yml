@@ -30,7 +30,7 @@ services:
       - PYTHONUNBUFFERED=1
     networks:
       - docq-network
-  a
+
 networks:
   docq-network:
     driver: bridge
