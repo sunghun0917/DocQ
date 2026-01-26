@@ -69,6 +69,7 @@ import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
 import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
+import { useWebSocketStore } from '@/stores/websocketStore'
 import type { Player } from '@/types/docq-api'
 import { useIsometric } from '@/composables/useIsometric'
 
@@ -86,6 +87,7 @@ const emit = defineEmits<{
 
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
+const wsStore = useWebSocketStore()
 const { get3DPos } = useIsometric()
 
 const cameraPosition = ref<[number, number, number]>([10, 20, 10])
@@ -360,6 +362,7 @@ watch(() => gameStore.currentMove, async (move) => {
         isRouletteVisible.value = true
         await spinRouletteAnimation(rouletteStep.value, rouletteLabels.value)
         isRouletteVisible.value = false
+        wsStore.sendAck('ROULETTE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
     }
 
     // 2. 이동 애니메이션
@@ -387,6 +390,7 @@ watch(() => gameStore.currentMove, async (move) => {
     isMovingGlobal.value = false
     gameStore.setMovementInProgress(false)
     emit('movement-change', false)
+    wsStore.sendAck('MOVE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
 })
 
 async function spinRouletteAnimation(resultValue: number, labels: number[]) {

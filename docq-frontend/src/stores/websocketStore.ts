@@ -433,6 +433,32 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * ACK 전송
+     */
+    const sendAck = (ackType: 'RESULT_DISPLAYED' | 'ROULETTE_COMPLETE' | 'MOVE_COMPLETE' | 'MINIGAME_COMPLETE' | 'BUFF_ROULETTE_COMPLETE', quizId?: number, round?: number) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+        const roomStore = useRoomStore()
+        const userStore = useUserStore()
+        const roomId = roomStore.roomInfo.roomId
+        const userId = userStore.userId
+
+        if (!roomId || !userId) {
+            return
+        }
+
+        wsService.value.publish('/app/game/ack', {
+            roomId,
+            userId,
+            ackType,
+            quizId,
+            round
+        })
+    }
+
+    /**
      * 특정 경로 구독 해제
      */
     const unsubscribe = (destination: string) => {
@@ -479,6 +505,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         endGame,
         restartGame,
         submitMiniGameResult,
+        sendAck,
         unsubscribe,
         cleanup,
         clearQuizGeneratedNotice
