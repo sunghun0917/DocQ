@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watchEffect } from 'vue';
+import { ref, computed, onMounted, watchEffect, watch } from 'vue';
 import UserCard from '@/components/lobby/UserCard.vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useRoomStore } from '@/stores/roomStore'
@@ -58,12 +58,7 @@ const handleUploadPdf = async () => {
   isGenerating.value = true
   try {
     await generateQuiz(roomId.value, selectedFile.value)
-    toastMessage.value = '퀴즈 생성이 완료되었습니다!';
-    toastType.value = 'success';
-    isToastOpen.value = true;
-    
     selectedFile.value = null // Reset
-    await loadQuizzes()
   } catch (error) {
     toastMessage.value = '퀴즈 생성 실패 : AI 서비스 연결 안됨';
     toastType.value = 'error';
@@ -130,9 +125,6 @@ const selectBasicQuiz = async (type: string) => {
   
   try {
     await setDefaultQuizzes(roomId.value, type)
-    toastMessage.value = '기본 퀴즈가 선택되었습니다!';
-    toastType.value = 'success';
-    isToastOpen.value = true;
     isBasicQuizModalOpen.value = false
     // 퀴즈 목록 갱신 (선택사항, 백엔드에서 브로드캐스트 하므로 자동 갱신될 것임)
   } catch (error) {
@@ -174,6 +166,24 @@ watchEffect(() => {
     selectedChar.value = myUser.value.avatar
   }
 })
+
+watch(
+  () => wsStore.quizGeneratedNotice,
+  async (notice) => {
+    if (!notice) return
+
+    const countLabel = notice.count > 0 ? ` (${notice.count}개)` : ''
+    toastMessage.value = `퀴즈 생성이 완료되었습니다!${countLabel}`
+    toastType.value = 'success'
+    isToastOpen.value = true
+
+    if (roomId.value) {
+      await loadQuizzes()
+    }
+
+    wsStore.clearQuizGeneratedNotice()
+  }
+)
 
 const isCharacterTaken = (char: string) => {
   return users.value.some(user => user.avatar === char && !user.isMe);

@@ -104,6 +104,7 @@ watch(
             resultEffect.value = null
             resultEffectTimer = null
             gameStore.unlockMove()
+            wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
         }, 2000)
     }
 )
@@ -212,10 +213,12 @@ const handleMiniGameSubmit = (score: number) => {
 }
 
 const handleMiniGameClose = () => {
+    wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
     gameStore.clearMiniGame()
 }
 
 const handleBuffRouletteDone = () => {
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
     gameStore.clearMiniGame()
 }
 
@@ -224,7 +227,10 @@ watch(
     (rewardBuff) => {
         if (!rewardBuff || rewardBuff === 'NONE') {
             if (miniGame.value.phase === 'result') {
-                window.setTimeout(() => gameStore.clearMiniGame(), 1500)
+                window.setTimeout(() => {
+                    wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+                    gameStore.clearMiniGame()
+                }, 1500)
             }
         }
     }

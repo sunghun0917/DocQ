@@ -69,6 +69,27 @@ public class GameDto {
         private boolean isReady;
     }
 
+    public enum AckType {
+        RESULT_DISPLAYED,
+        ROULETTE_COMPLETE,
+        MOVE_COMPLETE,
+        MINIGAME_COMPLETE,
+        BUFF_ROULETTE_COMPLETE
+    }
+
+    @Getter
+    @Setter
+    @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AckRequest {
+        private String roomId;
+        private String userId;
+        private AckType ackType;
+        private Long quizId;
+        private Integer round;
+    }
+
     @Getter
     @Builder
     @AllArgsConstructor
