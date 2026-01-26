@@ -79,6 +79,18 @@ if (idleSceneRaw) {
 // 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
 if (scene) {
   scene.traverse((child: any) => {
+    // [해결 코드] 
+    // 이름에 'box', 'cube', 'cs_' 등이 포함된 객체를 렌더링하지 않도록 설정
+    if (child.isMesh && (
+      child.name.toLowerCase().includes('box') || 
+      child.name.toLowerCase().includes('cube') ||
+      child.name.startsWith('cs_')
+    )) {
+      child.visible = false; // 렌더링 제외
+      child.castShadow = false; // 그림자도 제거
+      child.receiveShadow = false;
+    }
+    
     // Mesh인 경우에만 재질 변경
     if (child.isMesh && child.material) {
       const mesh = child as THREE.Mesh
