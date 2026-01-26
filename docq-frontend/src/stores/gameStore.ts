@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRoomStore } from './roomStore'
 // import { useWebSocketStore } from './websocketStore' // Cyclic Dependency Risk
 
-import type { Quiz } from '@/types/docq-api'
+import type { Quiz, GameStateResponse, PlayerInfo, MoveInfo, RoundResult, QuizMessage, RoomStatus } from '@/types/docq-api'
 
 // 게임 진행 상태 및 퀴즈 관리
 export const useGameStore = defineStore('game', () => {
@@ -31,25 +31,20 @@ export const useGameStore = defineStore('game', () => {
     const moveLocked = ref(false)
 
     // === GameBoard.vue support ===
-    const gameState = ref<{
-        players: any[],
-        currentTurnUserId: string | null,
-        round: number | null,
-        state?: string | null,
-        mapEvents?: Record<string, string> | null,
-        // ... other fields from backend
-    }>({
+    const gameState = ref<GameStateResponse>({
+        state: 'WAITING',
         players: [],
         currentTurnUserId: null,
         round: 1,
-        state: null,
+        turnOrder: [],
+        cardDrawResult: {},
         mapEvents: null
     })
 
-    const currentMove = ref<any>(null)
-    const currentRoundResult = ref<any>(null)
+    const currentMove = ref<MoveInfo | null>(null)
+    const currentRoundResult = ref<RoundResult | null>(null)
     const movementInProgress = ref(false)
-    const pendingQuiz = ref<any | null>(null)
+    const pendingQuiz = ref<QuizMessage | null>(null)
     const miniGame = ref<{
         phase: 'idle' | 'pending' | 'playing' | 'result'
         gameType: string | null
@@ -94,7 +89,7 @@ export const useGameStore = defineStore('game', () => {
     })
 
     // Actions
-    const setGameState = (newState: any) => {
+    const setGameState = (newState: GameStateResponse) => {
         gameState.value = {
             ...gameState.value,
             ...newState,
@@ -102,8 +97,8 @@ export const useGameStore = defineStore('game', () => {
         }
 
         if (newState.players) {
-            newState.players.forEach((p: any) => {
-                scores.value[p.userId] = p.score || 0
+            newState.players.forEach((p: PlayerInfo) => {
+                scores.value[p.userId] = p.score ?? 0
             })
         }
 
@@ -127,12 +122,12 @@ export const useGameStore = defineStore('game', () => {
         }
     }
 
-    const handleMove = (moveInfo: any) => {
+    const handleMove = (moveInfo: MoveInfo) => {
         currentMove.value = moveInfo
         setMovementInProgress(true)
     }
 
-    const applyQuiz = (quizData: any) => {
+    const applyQuiz = (quizData: QuizMessage) => {
         const timeLimitMs = quizData.timeLimit ? Number(quizData.timeLimit) : 30000
         const startAt = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
         const effectiveStart = startAt ?? Date.now()
@@ -158,7 +153,7 @@ export const useGameStore = defineStore('game', () => {
         startTimer()
     }
 
-    const onQuizReceived = (quizData: any) => {
+    const onQuizReceived = (quizData: QuizMessage) => {
         if (movementInProgress.value) {
             pendingQuiz.value = quizData
             return
@@ -166,14 +161,15 @@ export const useGameStore = defineStore('game', () => {
         applyQuiz(quizData)
     }
 
-    const onRoundResultReceived = (resultData: any) => {
+    const onRoundResultReceived = (resultData: RoundResult) => {
         stopTimer()
         currentRoundResult.value = resultData
 
         // [ADDED] Set roulette target if there's a winner
-        if (resultData.winnerUserId) {
+        const winnerUserId = resultData.winnerUserId ?? null
+        if (winnerUserId) {
             setTimeout(() => {
-                rouletteTargetId.value = resultData.winnerUserId
+                rouletteTargetId.value = winnerUserId
             }, 2000) // Show feedback first
         }
     }
@@ -229,7 +225,15 @@ export const useGameStore = defineStore('game', () => {
         timeRemaining.value = 30
         quizEndAt.value = null
         lastAnswerResult.value = null
-        gameState.value = { players: [], currentTurnUserId: null, round: 1, state: 'WAITING' }
+        gameState.value = {
+            state: 'WAITING',
+            players: [],
+            currentTurnUserId: null,
+            round: 1,
+            turnOrder: [],
+            cardDrawResult: {},
+            mapEvents: null
+        }
         currentMove.value = null
         rouletteTargetId.value = null
         rouletteResult.value = null
@@ -307,7 +311,7 @@ export const useGameStore = defineStore('game', () => {
         }
     }
 
-    const gamePhase = computed(() => gameState.value.state || null)
+    const gamePhase = computed<RoomStatus | null>(() => gameState.value.state || null)
 
     return {
         quizzes,
