@@ -32,7 +32,10 @@ public class GameEventProcessor {
                 NextTurnPayload payload = objectMapper.convertValue(event.getPayload(), NextTurnPayload.class);
                 gameService.prepareNextTurn(event.getRoomId(), payload);
             }
-            case RESUME_AFTER_MINIGAME -> gameService.startQuiz(event.getRoomId());
+            case RESUME_AFTER_MINIGAME -> {
+                ResumeAfterMiniGamePayload payload = objectMapper.convertValue(event.getPayload(), ResumeAfterMiniGamePayload.class);
+                gameService.resumeAfterMiniGame(event.getRoomId(), payload);
+            }
             default -> log.warn("Unknown event type {}", event.getType());
         }
     }
