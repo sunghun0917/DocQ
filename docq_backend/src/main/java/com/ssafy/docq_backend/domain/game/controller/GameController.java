@@ -96,4 +96,9 @@ public class GameController {
     public void selectAvatar(GameDto.AvatarSelectRequest request) {
         gameService.selectAvatar(request);
     }
+
+    @MessageMapping("/game/ack")
+    public void handleAck(GameDto.AckRequest request) {
+        gameService.handleAck(request);
+    }
 }
