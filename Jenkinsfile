@@ -10,7 +10,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                // Jenkins 설정에서 지정한 브랜치를 자동으로 체크아웃
+                // Checkout repository configured in Jenkins
                 checkout scm
             }
         }
@@ -30,7 +30,8 @@ pipeline {
                 dir("${DEPLOY_DIR}") {
                     sh '''
                         set -e
-                        docker-compose down || true
+                        docker-compose pull --ignore-pull-failures || true
+                        docker-compose down --remove-orphans || true
                         docker-compose up -d --build
                     '''
                 }
@@ -40,13 +41,21 @@ pipeline {
 
     post {
         success {
-            echo '✅ 배포 성공'
+            echo 'Deploy succeeded'
         }
         failure {
-            echo '❌ 배포 실패 (nginx.conf 파일/디렉토리 상태 확인)'
+            echo 'Deploy failed (check nginx.conf and network status)'
+            sh '''
+                echo "[DEBUG] docker-compose ps"
+                cd deploy/compose && docker-compose ps
+                echo "[DEBUG] backend logs (last 200 lines)"
+                cd deploy/compose && docker-compose logs --tail=200 backend || true
+                echo "[DEBUG] nginx error log tail"
+                docker logs nginx --tail=100 || true
+            '''
         }
         always {
-            echo '빌드 종료'
+            echo 'Pipeline finished'
         }
     }
 }
