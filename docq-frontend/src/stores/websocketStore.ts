@@ -2,31 +2,19 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { WebSocketService } from '@/services/websocket'
+import type { GameStateResponse, PlayerInfo, RoundResult, MoveInfo, QuizMessage } from '@/types/docq-api'
 import { useUserStore } from './userStore'
 import { useRoomStore } from './roomStore'
 import { useGameStore } from './gameStore'
 import router from '@/router'
 
-// 백엔드 DTO 타입 정의
-export interface GameStateResponse {
-    state: 'WAITING' | 'PLAYING' | 'FINISHED'
-    players: PlayerInfo[]
-}
-
-export interface PlayerInfo {
-    userId: string
-    nickname: string
-    isHost: boolean
-    host?: boolean // 서버에서 오는 필드명 대응
-    connected: boolean
-    isReady: boolean
-    ready?: boolean // 서버에서 오는 필드명 대응
-    avatarId?: number // 아바타 ID 추가
-}
-
 export interface ErrorResponse {
     code: string
     message: string
+}
+
+export interface QuizGeneratedNotice {
+    count: number
 }
 
 const AVATAR_MAP: Record<number, string> = {
@@ -46,6 +34,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const isConnected = ref(false)
     const isConnecting = ref(false)
     const lastError = ref<string | null>(null)
+    const quizGeneratedNotice = ref<QuizGeneratedNotice | null>(null)
 
     // Getters
     const connectionStatus = computed(() => {
@@ -128,7 +117,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         const userStore = useUserStore()
         const gameStore = useGameStore() // Inject GameStore
 
-        wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: any) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/state`, (data: GameStateResponse) => {
             console.log('📨 Game State Update:', data)
 
             // 1. GameStore 업데이트 (게임 진행 상태)
@@ -136,7 +125,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
             // 2. RoomStore 업데이트 (로비/유저 목록 상태)
             const players = Array.isArray(data.players) ? data.players : []
-            const nextUsers = players.map((player: any) => {
+            const nextUsers = players.map((player: PlayerInfo) => {
                 const isMe = player.userId === userStore.userId
 
                 // 백엔드 naming 이슈(isReady vs ready, isHost vs host)를 방어적으로 처리
@@ -212,19 +201,29 @@ export const useWebSocketStore = defineStore('websocket', () => {
         })
 
         // 이동/룰렛 이벤트 구독
-        wsService.value.subscribe(`/topic/game/${roomId}/move`, (data: any) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/move`, (data: MoveInfo) => {
             console.log('📨 Move Event:', data)
             gameStore.handleMove(data)
         })
 
         // 퀴즈 문제 수신
-        wsService.value.subscribe(`/topic/game/${roomId}/quiz`, (data: any) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/quiz`, (data: QuizMessage & { type?: string; count?: number }) => {
             console.log('📨 Quiz Received:', data)
-            gameStore.onQuizReceived(data)
+
+            if (data?.type === 'QUIZ_GENERATED') {
+                quizGeneratedNotice.value = {
+                    count: Number(data.count ?? 0)
+                }
+                return
+            }
+
+            if (data?.question) {
+                gameStore.onQuizReceived(data)
+            }
         })
 
         // 라운드 결과 수신
-        wsService.value.subscribe(`/topic/game/${roomId}/result`, (data: any) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/result`, (data: RoundResult) => {
             console.log('📨 Round Result:', data)
             gameStore.onRoundResultReceived(data)
         })
@@ -448,6 +447,11 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const cleanup = () => {
         disconnect()
         lastError.value = null
+        quizGeneratedNotice.value = null
+    }
+
+    const clearQuizGeneratedNotice = () => {
+        quizGeneratedNotice.value = null
     }
 
     return {
@@ -455,6 +459,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         isConnected,
         isConnecting,
         lastError,
+        quizGeneratedNotice,
 
         // Getters
         connectionStatus,
@@ -475,6 +480,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         restartGame,
         submitMiniGameResult,
         unsubscribe,
-        cleanup
+        cleanup,
+        clearQuizGeneratedNotice
     }
 })
