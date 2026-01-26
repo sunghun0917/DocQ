@@ -2,10 +2,7 @@
 services:
   backend:
     build: ../../docq_backend
-    container_name: docq-backend
     restart: unless-stopped
-    ports:
-      - "8081:8081"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - ai.url=http://ai-service:8000
@@ -14,7 +11,6 @@ services:
 
   frontend:
     build: ../../docq-frontend
-    container_name: docq-frontend
     restart: unless-stopped
     ports:
       - "80:80"
@@ -27,17 +23,14 @@ services:
 
   ai-service:
     build: ../../docq-ai
-    container_name: docq-ai
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     env_file:
       - ../../docq-ai/.env
     environment:
       - PYTHONUNBUFFERED=1
     networks:
       - docq-network
-
+  a
 networks:
   docq-network:
     driver: bridge
