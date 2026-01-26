@@ -9,6 +9,10 @@
 - Redis ZSET(`game:events`)에 이벤트가 예약되고, 폴러가 due 이벤트를 처리한다.
 - 백엔드는 최종 상태를 결정하고, 프론트는 표시/애니메이션을 담당한다.
 - WebSocket은 상태/이벤트 브로드캐스트 경로이다.
+- ACK는 Redis Set(`ack:{roomId}:{phase}:{key}`)으로 수집한다.
+- `SADD`로 유저 ACK 저장, `SCARD`로 전체 인원 수 도달 시 다음 단계 진행
+- ACK 완료 키: `ack:complete:{roomId}:{phase}:{key}` (중복 처리 방지)
+- 실행 중복 방지 키: `exec:{roomId}:{eventType}:{key}` (이벤트 idempotency)
 - 이벤트 예약/락/재시도 로직: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/event/GameEventStore.java`
 - 폴링 실행기: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/event/GameEventPoller.java`
 - 이벤트 라우터: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/event/GameEventProcessor.java`
@@ -55,14 +59,16 @@
 3. Redis 타임라인
 - `PROCESS_ROUND_RESULT` 실행 → `processRoundResult()`
 - 승자/이동값 계산, 라운드 결과 생성
-- `APPLY_MOVE` 이벤트 예약
-- `NEXT_TURN` 이벤트 예약
+- `APPLY_MOVE` 이벤트 예약 (결과 표시 ACK 기준)
+- `NEXT_TURN` 이벤트 예약 (이동 완료 ACK 기준)
 - 실행 코드: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/event/GameEventProcessor.java`
 - 처리 코드: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/service/GameService.java` (`processRoundResult`)
 
 4. 서버 → 프론트
 - `WS: /topic/game/{roomId}/result` (라운드 결과)
 - `WS: /topic/game/{roomId}/state` (판정 상태)
+- 프론트는 결과 오버레이 종료 후 `ACK: RESULT_DISPLAYED` 전송
+- ACK 미수신 시 서버는 폴백 타임아웃 후 진행
 
 ---
 
@@ -82,6 +88,8 @@
 - 이동 애니메이션/룰렛 표시
 - UI 연출은 프론트에서 처리
 - 처리 코드: `docq-frontend/src/components/game/board3D/GameBoard.vue`
+- 이동 애니메이션 종료 후 `ACK: MOVE_COMPLETE` 전송
+- ACK 미수신 시 서버는 거리 기반 폴백 타임아웃 후 진행 (`MOVE_FALLBACK_STEP_MS`, `MOVE_FALLBACK_BUFFER_MS`)
 
 ---
 
@@ -117,9 +125,13 @@
 - 발행 코드: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/minigame/service/MiniGameService.java`
 
 4. 서버 처리
-- `resumeAfterMiniGame()`에서 다음 라운드 준비
-- `RESUME_AFTER_MINIGAME` 이벤트 예약 후 퀴즈 시작
-- 처리 코드: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/service/GameService.java` (`resumeAfterMiniGame`)
+- 미니게임 종료 시점에 `RESUME_AFTER_MINIGAME` 폴백 이벤트 예약
+- 결과/버프 연출 종료 후 ACK 수집
+- `MINIGAME_COMPLETE`와 `BUFF_ROULETTE_COMPLETE`는 동일 흐름으로 정규화
+- 방 상태가 `MINIGAME`일 때만 ACK 수용
+- `resumeAfterMiniGame()`에서 라운드 증가 및 다음 퀴즈 준비
+- 처리 코드: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/game/service/GameService.java` (`resumeAfterMiniGame`, `handleAck`)
+- ACK 미수신 시 서버는 폴백 타임아웃 후 진행
 
 ---
 
@@ -143,3 +155,32 @@
 - 이벤트 처리: 폴러의 `ZRANGEBYSCORE` + 락
 - 중복 실행 방지: `SETNX` 락 키
 - 실패 시 재시도: backoff 후 재예약
+
+---
+
+## ACK 키 설계 (디테일)
+- `ack:{roomId}:{ackType}:{keyId}`: 유저별 ACK 수집 Set
+- `ack:payload:{roomId}:{ackType}:{keyId}`: 다음 단계 실행에 필요한 payload 저장
+- `ack:complete:{roomId}:{ackType}:{keyId}`: ACK 완료 플래그(중복 처리 방지)
+- `exec:{roomId}:{eventType}:{keyId}`: 이벤트 1회 실행 보장
+- `keyId` 규칙:
+  - 퀴즈 단계: `quizId`
+  - 미니게임 단계: `round`
+
+---
+
+## 라운드 증가 규칙 (디테일)
+- 일반 턴 종료(`prepareNextTurn()`):
+  - 턴 순서가 끝나면 `round + 1`
+  - `round`가 홀수일 때 미니게임 진입
+- 미니게임 종료(`resumeAfterMiniGame()`):
+  - `round` 1 증가 후 다음 퀴즈 시작
+  - ACK가 중복 들어오더라도 `exec:*` 키로 1회만 실행
+
+---
+
+## 퀴즈 타이머 기준 (디테일)
+- 서버가 `quizStartTime`과 `timeLimit(ms)`를 제공
+- 클라이언트는 수신 시점 기준으로 남은 시간 계산
+- 네트워크 지연만큼 시작 숫자가 5→4로 보일 수 있음
+- 정확한 타이머 표시는 클라이언트-서버 시간 차이 보정 또는 서버 기준 남은 시간 전송으로 개선 가능

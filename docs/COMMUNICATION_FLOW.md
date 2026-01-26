@@ -67,6 +67,19 @@
 | `/app/game/restart` | 게임 재시작 | `{roomId, userId}` |
 | `/app/game/submit` | 정답 제출 | `{roomId, userId, quizId, answer}` |
 | `/app/game/avatar` | 아바타 선택 | `{roomId, userId, avatarId}` |
+| `/app/game/ack` | 애니메이션 ACK | `{roomId, userId, ackType, quizId?, round?}` |
+
+#### ACK 상세 규칙
+- 목적: 프론트 애니메이션 종료 시점을 서버가 감지해 다음 단계 이벤트를 즉시 진행.
+- ACK 타입 및 기준 키:
+  - `RESULT_DISPLAYED`: 결과 오버레이 종료 후, `quizId` 기반 키 사용.
+  - `MOVE_COMPLETE`: 이동 애니메이션 종료 후, `quizId` 기반 키 사용.
+  - `MINIGAME_COMPLETE`: 미니게임 결과 화면 종료 후, `round` 기반 키 사용.
+  - `BUFF_ROULETTE_COMPLETE`: 버프 룰렛 종료 후, 미니게임 흐름과 통합 처리.
+  - `ROULETTE_COMPLETE`: 현재는 미사용(향후 분리 연출용 예약).
+- 상태 보호:
+  - 미니게임 ACK는 방 상태가 `MINIGAME`일 때만 유효.
+  - 잘못된 상태의 ACK는 무시됨.
 
 ### MiniGameController
 - 파일: `docq_backend/src/main/java/com/ssafy/docq_backend/domain/minigame/controller/MiniGameController.java`
@@ -132,6 +145,7 @@
 | `/app/game/submit` | `submitAnswer()` | `{roomId, userId, quizId, answer}` |
 | `/app/game/avatar` | `setAvatar()` | `{roomId, userId, avatarId}` |
 | `/app/game/minigame/submit` | `submitMiniGameResult()` | `{roomId, userId, gameType, resultValue}` |
+| `/app/game/ack` | `sendAck()` | `{roomId, userId, ackType, quizId?, round?}` |
 
 ---
 
@@ -157,6 +171,12 @@
 3. `/topic/game/{roomId}/result` 수신  
 4. `/topic/game/{roomId}/move` 수신  
 5. `/topic/game/{roomId}/state` 수신
+
+### 퀴즈 타이머 동작
+1. 서버가 `QuizMessage`에 `quizStartTime`과 `timeLimit(ms)`를 포함해서 전송  
+2. 프론트는 수신 시점의 현재 시간과 `quizStartTime` 차이를 반영해 남은 시간을 계산  
+3. 네트워크 지연이 있는 경우 5초가 4초로 시작하는 등 표시값이 변할 수 있음  
+4. 타이머는 `QUIZ_TIME` 상태가 아닐 때 정지됨  
 
 ### 미니게임
 1. `/topic/game/{roomId}/minigame` START 수신  
