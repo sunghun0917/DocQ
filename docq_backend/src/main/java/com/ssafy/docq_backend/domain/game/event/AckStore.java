@@ -4,9 +4,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -78,6 +82,37 @@ public class AckStore {
             log.error("Failed to load ack payload map for {} {}", roomId, ackType, e);
             return null;
         }
+    }
+
+    public void clearRoomData(String roomId) {
+        try {
+            Set<String> keys = new HashSet<>();
+            keys.addAll(scanKeys("ack:" + roomId + ":*"));
+            keys.addAll(scanKeys("ack:payload:" + roomId + ":*"));
+            keys.addAll(scanKeys("ack:complete:" + roomId + ":*"));
+            keys.addAll(scanKeys("exec:" + roomId + ":*"));
+            if (!keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            log.error("Failed to clear ack data for room {}", roomId, e);
+        }
+    }
+
+    private Set<String> scanKeys(String pattern) {
+        Set<String> keys = new HashSet<>();
+        try (Cursor<byte[]> cursor = redisTemplate.executeWithStickyConnection(
+                connection -> connection.scan(ScanOptions.scanOptions().match(pattern).count(1000).build()))) {
+            if (cursor == null) {
+                return keys;
+            }
+            while (cursor.hasNext()) {
+                keys.add(new String(cursor.next()));
+            }
+        } catch (Exception e) {
+            log.error("Failed to scan keys with pattern {}", pattern, e);
+        }
+        return keys;
     }
 
     private String ackKey(String roomId, GameDto.AckType ackType, String keyId) {

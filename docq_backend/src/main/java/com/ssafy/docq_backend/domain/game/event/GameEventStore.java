@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -77,6 +80,40 @@ public class GameEventStore {
         event.setAttempt(event.getAttempt() + 1);
         event.setScheduledAt(System.currentTimeMillis() + Math.max(0, delayMs));
         storeEvent(event);
+    }
+
+    public void clearRoomEvents(String roomId) {
+        try {
+            Set<String> eventIds = new HashSet<>();
+            try (Cursor<byte[]> cursor = redisTemplate.executeWithStickyConnection(
+                    connection -> connection.scan(ScanOptions.scanOptions().match("game:event:*").count(1000).build()))) {
+                if (cursor != null) {
+                    while (cursor.hasNext()) {
+                        String key = new String(cursor.next());
+                        if (key.endsWith(":lock")) {
+                            continue;
+                        }
+                        String eventId = key.substring("game:event:".length());
+                        Map<Object, Object> fields = redisTemplate.opsForHash().entries(key);
+                        if (fields == null || fields.isEmpty()) {
+                            continue;
+                        }
+                        String eventRoomId = String.valueOf(fields.get("roomId"));
+                        if (roomId.equals(eventRoomId)) {
+                            eventIds.add(eventId);
+                            redisTemplate.delete(key);
+                            redisTemplate.delete(lockKey(eventId));
+                        }
+                    }
+                }
+            }
+
+            if (!eventIds.isEmpty()) {
+                redisTemplate.opsForZSet().remove(ZSET_KEY, eventIds.toArray());
+            }
+        } catch (Exception e) {
+            log.error("Failed to clear game events for room {}", roomId, e);
+        }
     }
 
     private void storeEvent(GameEvent event) {
