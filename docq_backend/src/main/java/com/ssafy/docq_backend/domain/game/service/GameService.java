@@ -57,6 +57,7 @@ public class GameService {
     private static final long TURN_PREP_DELAY_MS = 1500;
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
+    private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
@@ -1205,7 +1206,7 @@ public class GameService {
             ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                     .round(room.getRound())
                     .build();
-            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, ACK_FALLBACK_TIMEOUT_MS);
+            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, MINIGAME_RESUME_FALLBACK_MS);
             ackStore.clearAck(roomId, GameDto.AckType.MINIGAME_COMPLETE, roundKeyId);
             ackStore.clearAck(roomId, GameDto.AckType.BUFF_ROULETTE_COMPLETE, roundKeyId);
         } catch (Exception e) {
