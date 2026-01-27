@@ -170,6 +170,7 @@ public class GameDto {
         private List<String> options; // 4 options
         private long timeLimit; // ms
         private OffsetDateTime quizStartTime;
+        private Long quizStartTimeMs;
     }
 
     @Getter
