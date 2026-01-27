@@ -71,6 +71,7 @@ export interface RoundResult {
     isTurnUserCorrect: boolean
     winnerUserId?: string | null
     rouletteType?: 'BUFF' | 'MOVE' | 'NONE' | string
+    rouletteValue?: number
 }
 
 export interface MoveAction {

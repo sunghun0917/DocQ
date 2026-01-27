@@ -575,6 +575,13 @@ public class GameService {
                             ApplyMovePayload.class);
                     if (payload != null) {
                         gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
+                    } else {
+                        ApplyMovePayload roulettePayload = ackStore.loadPayload(
+                                room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId, ApplyMovePayload.class);
+                        if (roulettePayload != null) {
+                            gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, roulettePayload,
+                                    ACK_FALLBACK_TIMEOUT_MS);
+                        }
                     }
                 }
                 case MOVE_COMPLETE -> {
@@ -594,7 +601,11 @@ public class GameService {
                     // handled via MINIGAME_COMPLETE normalization
                 }
                 case ROULETTE_COMPLETE -> {
-                    // no-op: reserved for future split flow
+                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId,
+                            ApplyMovePayload.class);
+                    if (payload != null) {
+                        gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
+                    }
                 }
             }
 
@@ -803,6 +814,7 @@ public class GameService {
 
             MovePlanPayload movePlan = null;
             boolean finishPlanned = false;
+            List<GameDto.MoveAction> actions = null;
 
             if (winnerUserId != null && moveValue != 0) {
                 PlayerState winnerState = room.getPlayerStates().get(winnerUserId);
@@ -816,7 +828,7 @@ public class GameService {
                     finishPlanned = true;
                 }
 
-                List<GameDto.MoveAction> actions = new ArrayList<>();
+                actions = new ArrayList<>();
 
                 actions.add(GameDto.MoveAction.builder()
                         .type("ROULETTE")
@@ -911,12 +923,23 @@ public class GameService {
 
             }
 
+            Integer rouletteValue = null;
+            if (actions != null) {
+                for (GameDto.MoveAction action : actions) {
+                    if ("ROULETTE".equals(action.getType())) {
+                        rouletteValue = action.getValue();
+                        break;
+                    }
+                }
+            }
+
             GameDto.RoundResult result = GameDto.RoundResult.builder()
                     .quizId(room.getCurrentQuizId())
                     .correctAnswer(correctAnswer)
                     .isTurnUserCorrect(isTurnUserCorrect)
                     .winnerUserId(winnerUserId)
                     .rouletteType(rouletteType)
+                    .rouletteValue(rouletteValue)
                     .build();
 
             room.setStatus(RoomStatus.JUDGMENT);
@@ -927,13 +950,19 @@ public class GameService {
             String quizKeyId = String.valueOf(quizId);
 
             if (movePlan != null) {
+                boolean hasRouletteAction = rouletteValue != null;
                 ApplyMovePayload payload = ApplyMovePayload.builder()
                         .quizId(quizId)
                         .movePlan(movePlan)
                         .finishPlanned(finishPlanned)
                         .build();
-                ackStore.savePayload(roomId, GameDto.AckType.RESULT_DISPLAYED, quizKeyId, payload);
-                gameEventStore.schedule(roomId, GameEventType.APPLY_MOVE, payload, ACK_FALLBACK_TIMEOUT_MS);
+                GameDto.AckType applyMoveAckType = hasRouletteAction
+                        ? GameDto.AckType.ROULETTE_COMPLETE
+                        : GameDto.AckType.RESULT_DISPLAYED;
+                ackStore.savePayload(roomId, applyMoveAckType, quizKeyId, payload);
+                if (!hasRouletteAction) {
+                    gameEventStore.schedule(roomId, GameEventType.APPLY_MOVE, payload, ACK_FALLBACK_TIMEOUT_MS);
+                }
             }
 
             NextTurnPayload nextTurnPayload = NextTurnPayload.builder()

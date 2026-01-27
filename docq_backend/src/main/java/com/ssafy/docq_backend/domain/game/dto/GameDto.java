@@ -195,6 +195,7 @@ public class GameDto {
         private boolean isTurnUserCorrect;
         private String winnerUserId;
         private String rouletteType; // BUFF, MOVE, NONE
+        private Integer rouletteValue;
     }
 
     @Getter
