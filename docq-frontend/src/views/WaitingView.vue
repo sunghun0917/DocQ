@@ -37,6 +37,8 @@ const selectedFile = ref<File | null>(null);
 const generatedQuizzes = ref<QuizResponse[]>([])
 const isQuizModalOpen = ref(false)
 const isBasicQuizModalOpen = ref(false)
+// [Frontend] 대기 상태 메시지
+const processingText = ref('방장님이 문서를 고르고 있어요')
 
 const basicQuizTypes = [
   { type: 'nonsense', label: '넌센스 퀴즈', icon: 'sentiment_very_satisfied', color: 'bg-yellow-100 text-yellow-600 border-yellow-200' },
@@ -105,11 +107,14 @@ const onDrop = (e: DragEvent) => {
 const triggerFileInput = () => {
   fileInputRef.value?.click();
 };
-// [ADD] 초기화 후 바로 파일 선택창 열기
+// [ADD] 초기화 (다시 만들기)
 const resetAndUpload = async () => {
-    generatedQuizzes.value = [] // 1. 목록 초기화 (UI가 업로드 모드로 바뀜)
-    await nextTick()            // 2. DOM 업데이트 대기 (input 태그가 생성될 때까지)
-    triggerFileInput()          // 3. 파일 선택창 열기
+    generatedQuizzes.value = [] // 목록 초기화 (UI가 업로드 모드로 바뀜)
+    // [ADD] 서버에 리셋 알림 전송 (다른 참가자 화면 전환)
+    if (roomId.value) {
+        wsStore.resetQuiz(roomId.value)
+    }
+    // 자동 파일 선택창 열기는 제거 (사용자 요청)
 };
 
 // [Frontend] 퀴즈 목록 불러오기
@@ -180,16 +185,56 @@ watch(
   async (notice) => {
     if (!notice) return
 
-    const countLabel = notice.count > 0 ? ` (${notice.count}개)` : ''
-    toastMessage.value = `퀴즈 생성이 완료되었습니다!${countLabel}`
-    toastType.value = 'success'
-    isToastOpen.value = true
-
-    if (roomId.value) {
-      await loadQuizzes()
+    // 1. [QUIZ_RESET] 방장이 "다시 만들기" 누름 -> 방장: 업로드 UI, 참가자: 대기 UI
+    if (notice.type === 'QUIZ_RESET') {
+        generatedQuizzes.value = []
+        
+        if (myUser.value?.isHost) {
+            isGenerating.value = false
+        } else {
+            isGenerating.value = true
+        }
+        
+        processingText.value = '방장님이 문서를 고르고 있어요'
+        wsStore.clearQuizGeneratedNotice()
+        return
     }
 
-    wsStore.clearQuizGeneratedNotice()
+    // 2. [QUIZ_GENERATING] 실제 생성 시작 -> 모두 대기 UI
+    if (notice.type === 'QUIZ_GENERATING') {
+      isGenerating.value = true
+      generatedQuizzes.value = [] 
+      
+      // 메시지 구성
+      if (notice.fileName) {
+          processingText.value = `[${notice.fileName}]`
+      } else if (notice.quizType) {
+          const found = basicQuizTypes.find(t => t.type === notice.quizType)
+          const label = found ? found.label : notice.quizType
+          processingText.value = `방장님이 [${label}]를 고르고 있어요`
+      } else {
+          processingText.value = '방장님이 문서를 고르고 있어요'
+      }
+
+      wsStore.clearQuizGeneratedNotice()
+      return
+    }
+
+    // 3. [QUIZ_GENERATED] 생성 완료
+    if (!notice.type || notice.type === 'QUIZ_GENERATED') {
+      isGenerating.value = false // 로딩 해제
+      
+      const countLabel = notice.count && notice.count > 0 ? ` (${notice.count}개)` : ''
+      toastMessage.value = `퀴즈 생성이 완료되었습니다!${countLabel}`
+      toastType.value = 'success'
+      isToastOpen.value = true
+      
+      // 방장은 이미 API 응답으로 갱신했을 수 있지만 참가자를 위해 재요청
+      if (roomId.value) {
+        await loadQuizzes()
+      }
+      wsStore.clearQuizGeneratedNotice()
+    }
   }
 )
 
@@ -536,7 +581,7 @@ onMounted(async () => {
                            <span class="material-symbols-outlined text-[#fda4af] text-2xl">hourglass_top</span>
                         </div>
                         <p class="text-sm font-bold text-[#881337]">퀴즈 생성 대기 중...</p>
-                        <p class="text-xs text-[#fda4af] mt-1 font-medium">방장님이 문서를 고르고 있어요</p>
+                        <p class="text-xs text-[#fda4af] mt-1 font-medium">{{ processingText }}</p>
                      </div>
                   </div>
               </div>
