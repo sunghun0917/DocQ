@@ -136,8 +136,7 @@ onUnmounted(() => {
         </div>
         
         <div v-if="isResultShown" class="animate-pop" :class="index % 2 !== 0 ? 'mr-auto' : 'ml-auto'">
-          <span v-if="winnerId === player.id" class="bg-yellow-400 text-black px-3 py-1 rounded-lg font-black shadow-lg">WIN 👑</span>
-          <span v-else class="bg-gray-600 text-white px-3 py-1 rounded-lg font-bold">LOSE</span>
+          <span v-if="winnerId === player.id" class="bg-yellow-400 text-black px-3 py-1 rounded-lg font-black shadow-lg">👑</span>
         </div>
       </div>
 
