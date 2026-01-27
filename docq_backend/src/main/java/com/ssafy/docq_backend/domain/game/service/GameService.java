@@ -370,6 +370,9 @@ public class GameService {
                 return;
             }
 
+            gameEventStore.clearRoomEvents(room.getId());
+            ackStore.clearRoomData(room.getId());
+
             resetGameState(room);
             room.setStatus(RoomStatus.WAITING);
             roomRepository.save(room);

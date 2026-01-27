@@ -70,7 +70,7 @@ import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
-import type { Player } from '@/types/docq-api'
+import type { PlayerInfo } from '@/types/docq-api'
 import { useIsometric } from '@/composables/useIsometric'
 
 // === Imports & Types ===
@@ -171,6 +171,7 @@ const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string,
 // 애니메이션 상태 관리
 const animatingPlayers = ref<Record<string, number>>({})
 const lastStablePositions = ref<Record<string, number>>({})
+const isMovingGlobal = ref(false)
 const isMovePending = computed(() => gameStore.gamePhase === 'MOVE' && !gameStore.currentMove)
 
 // 초기화 시 서버 위치로 동기화
@@ -181,15 +182,16 @@ watch(() => players.value, (newPlayers) => {
 
     const movingUserId = gameStore.currentMove?.userId || null
     newPlayers.forEach(p => {
+        const safePosition = p.position ?? 0
         if (movingUserId && isMovingGlobal.value && p.userId === movingUserId) {
             return
         }
-        lastStablePositions.value[p.userId] = p.position
+        lastStablePositions.value[p.userId] = safePosition
         if (animatingPlayers.value[p.userId] === undefined) {
-            animatingPlayers.value[p.userId] = p.position 
+            animatingPlayers.value[p.userId] = safePosition 
         } else {
              if (!isMovingGlobal.value) {
-                 animatingPlayers.value[p.userId] = p.position
+                 animatingPlayers.value[p.userId] = safePosition
              }
         }
     })
@@ -224,15 +226,16 @@ function getPlayerColor(userId: string) {
     return PLAYER_COLORS[idx % 4] || '#ffffff'
 }
 
-function getPlayerDisplayCoords(p: Player) {
+function getPlayerDisplayCoords(p: PlayerInfo) {
     const idx = animatingPlayers.value[p.userId]
         ?? lastStablePositions.value[p.userId]
         ?? p.position
+        ?? 0
     return pathCoords.value[idx] || { x: 0, y: 0 }
 }
 
-function getPlayerFaceTarget(p: Player) {
-    const idx = animatingPlayers.value[p.userId] ?? p.position
+function getPlayerFaceTarget(p: PlayerInfo) {
+    const idx = animatingPlayers.value[p.userId] ?? p.position ?? 0
     if (idx < pathCoords.value.length - 1) {
         return pathCoords.value[idx+1] || pathCoords.value[idx] || { x: 0, y: 0 }
     }
@@ -332,7 +335,6 @@ async function runIntroCamera() {
 }
 
 // === Animation Logic ===
-const isMovingGlobal = ref(false)
 const isSpinning = ref(false)
 const rouletteRotation = ref(0)
 const isRouletteVisible = ref(false)
