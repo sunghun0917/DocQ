@@ -709,7 +709,7 @@ public class GameService {
 
             GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
                     .quizId(quizId)
-                    .question("Round " + room.getRound() + ": " + quizEntity.getQuestion())
+                    .question(quizEntity.getQuestion())
                     .options(quizEntity.getOptions())
                     .timeLimit(5000L)
                     .quizStartTime(quizStartTime)
