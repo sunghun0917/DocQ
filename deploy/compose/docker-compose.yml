@@ -14,7 +14,7 @@ services:
       - frontend
       - backend
     networks:
-      - docq-networkg
+      - docq-networke
 
   redis:
     image: redis:7-alpine
