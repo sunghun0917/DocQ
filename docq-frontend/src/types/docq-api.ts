@@ -143,6 +143,7 @@ export interface QuizMessage {
     options: string[]
     timeLimit: number
     quizStartTime?: string
+    quizStartTimeMs?: number
     type?: 'QUIZ_GENERATING' | 'QUIZ_GENERATED' | 'QUIZ_RESET' // 알림용
     count?: number          // 알림용
 }
