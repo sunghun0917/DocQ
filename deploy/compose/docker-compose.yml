@@ -13,7 +13,6 @@ services:
     depends_on:
       - frontend
       - backend
-      - ai-service
     networks:
       - docq-network
 
@@ -23,6 +22,20 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - ai.url=http://ai-service:8000
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - docq-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
     networks:
       - docq-network
 
@@ -45,3 +58,6 @@ services:
 networks:
   docq-network:
     driver: bridge
+
+volumes:
+  redis-data:
