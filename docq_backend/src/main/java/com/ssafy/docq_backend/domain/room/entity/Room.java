@@ -1,6 +1,5 @@
 package com.ssafy.docq_backend.domain.room.entity;
 
-import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -67,7 +66,7 @@ public class Room {
     private Long currentQuizId;
     @Builder.Default
     private Map<String, GameDto.SubmitAnswer> quizAnswers = new ConcurrentHashMap<>();
-    private LocalDateTime quizStartTime;
+    private Long quizStartTimeMs;
 
     // userId -> PlayerState
     @Builder.Default

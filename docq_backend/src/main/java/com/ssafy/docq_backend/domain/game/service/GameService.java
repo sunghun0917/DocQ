@@ -509,7 +509,7 @@ public class GameService {
         room.setRound(1);
         room.setCurrentTurnUserId(null);
         room.setCurrentQuizId(null);
-        room.setQuizStartTime(null);
+        room.setQuizStartTimeMs(null);
         room.getQuizAnswers().clear();
         room.getTurnOrder().clear();
         room.getCardDrawResult().clear();
@@ -689,7 +689,8 @@ public class GameService {
 
             Long quizId = quizEntity.getQuizId();
 
-            OffsetDateTime quizStartTime = OffsetDateTime.now(ZoneOffset.UTC);
+            long quizStartTimeMs = System.currentTimeMillis();
+            OffsetDateTime quizStartTime = OffsetDateTime.ofInstant(Instant.ofEpochMilli(quizStartTimeMs), ZoneOffset.UTC);
             log.info("Quiz start time (UTC): {}, server zone: {}, server now: {}",
                     quizStartTime, ZoneId.systemDefault(), Instant.now());
 
@@ -699,12 +700,13 @@ public class GameService {
                     .options(quizEntity.getOptions())
                     .timeLimit(5000L)
                     .quizStartTime(quizStartTime)
+                    .quizStartTimeMs(quizStartTimeMs)
                     .build();
 
             // Set Room State
             room.setCurrentQuizId(quizId);
             room.getQuizAnswers().clear();
-            room.setQuizStartTime(quizStartTime.toLocalDateTime());
+            room.setQuizStartTimeMs(quizStartTimeMs);
             room.setStatus(RoomStatus.QUIZ_TIME);
             roomRepository.save(room);
 

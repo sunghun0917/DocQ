@@ -63,6 +63,7 @@ export interface QuizMessage {
     options: string[]
     timeLimit: number
     quizStartTime?: string
+    quizStartTimeMs?: number
 }
 
 export interface RoundResult {

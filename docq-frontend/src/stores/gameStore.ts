@@ -129,8 +129,9 @@ export const useGameStore = defineStore('game', () => {
 
     const applyQuiz = (quizData: QuizMessage) => {
         const timeLimitMs = quizData.timeLimit ? Number(quizData.timeLimit) : 30000
-        const startAt = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
-        const effectiveStart = startAt ?? Date.now()
+        const startAtMs = quizData.quizStartTimeMs
+        const startAtIso = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
+        const effectiveStart = (startAtMs ?? startAtIso) ?? Date.now()
         const endAt = effectiveStart + timeLimitMs
         quizEndAt.value = endAt
         const remainingMs = Math.max(0, endAt - Date.now())
