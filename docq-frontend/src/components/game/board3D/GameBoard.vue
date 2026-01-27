@@ -171,6 +171,7 @@ const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string,
 // 애니메이션 상태 관리
 const animatingPlayers = ref<Record<string, number>>({})
 const lastStablePositions = ref<Record<string, number>>({})
+const isMovingGlobal = ref(false)
 const isMovePending = computed(() => gameStore.gamePhase === 'MOVE' && !gameStore.currentMove)
 
 // 초기화 시 서버 위치로 동기화
@@ -332,7 +333,6 @@ async function runIntroCamera() {
 }
 
 // === Animation Logic ===
-const isMovingGlobal = ref(false)
 const isSpinning = ref(false)
 const rouletteRotation = ref(0)
 const isRouletteVisible = ref(false)
