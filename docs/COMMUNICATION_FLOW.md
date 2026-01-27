@@ -73,10 +73,10 @@
 - 목적: 프론트 애니메이션 종료 시점을 서버가 감지해 다음 단계 이벤트를 즉시 진행.
 - ACK 타입 및 기준 키:
   - `RESULT_DISPLAYED`: 결과 오버레이 종료 후, `quizId` 기반 키 사용.
-  - `MOVE_COMPLETE`: 이동 애니메이션 종료 후, `quizId` 기반 키 사용.
+  - `ROULETTE_COMPLETE`: 룰렛 연출 종료 후, `quizId` 기반 키 사용 (룰렛이 있는 라운드에서 `APPLY_MOVE` 트리거).
+  - `MOVE_COMPLETE`: 이동 애니메이션 종료 후, `quizId` 기반 키 사용 (다음 턴 진행 트리거).
   - `MINIGAME_COMPLETE`: 미니게임 결과 화면 종료 후, `round` 기반 키 사용.
   - `BUFF_ROULETTE_COMPLETE`: 버프 룰렛 종료 후, 미니게임 흐름과 통합 처리.
-  - `ROULETTE_COMPLETE`: 현재는 미사용(향후 분리 연출용 예약).
 - 상태 보호:
   - 미니게임 ACK는 방 상태가 `MINIGAME`일 때만 유효.
   - 잘못된 상태의 ACK는 무시됨.

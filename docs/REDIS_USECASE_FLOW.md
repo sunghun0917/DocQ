@@ -67,7 +67,10 @@
 4. 서버 → 프론트
 - `WS: /topic/game/{roomId}/result` (라운드 결과)
 - `WS: /topic/game/{roomId}/state` (판정 상태)
-- 프론트는 결과 오버레이 종료 후 `ACK: RESULT_DISPLAYED` 전송
+- 프론트는 결과 오버레이 종료 후 룰렛 연출(필요 시) 진행
+- 룰렛 연출 완료 시 `ACK: ROULETTE_COMPLETE` 전송
+- 룰렛이 없는 경우 `ACK: RESULT_DISPLAYED`로 바로 진행
+- `ACK: RESULT_DISPLAYED`는 룰렛이 있는 경우에도 폴백 타이머 시작점으로 사용됨
 - ACK 미수신 시 서버는 폴백 타임아웃 후 진행
 
 ---
@@ -85,7 +88,7 @@
 - `WS: /topic/game/{roomId}/state` (MOVE 상태)
 
 3. 프론트 처리
-- 이동 애니메이션/룰렛 표시
+- 이동 애니메이션 표시
 - UI 연출은 프론트에서 처리
 - 처리 코드: `docq-frontend/src/components/game/board3D/GameBoard.vue`
 - 이동 애니메이션 종료 후 `ACK: MOVE_COMPLETE` 전송
@@ -155,6 +158,43 @@
 - 이벤트 처리: 폴러의 `ZRANGEBYSCORE` + 락
 - 중복 실행 방지: `SETNX` 락 키
 - 실패 시 재시도: backoff 후 재예약
+
+---
+
+## ACK 흐름도
+- 룰렛 연출이 있는 경우 `ROULETTE_COMPLETE`가 `APPLY_MOVE`를 트리거
+- 룰렛이 없는 경우 `RESULT_DISPLAYED`가 `APPLY_MOVE`를 트리거
+
+```mermaid
+flowchart TD
+    A[Quiz START_QUIZ] --> B[PROCESS_ROUND_RESULT]
+    B --> C[Result UI 표시]
+    C --> R{룰렛 있음?}
+    R -->|Yes| S[룰렛 UI 연출]
+    S --> D{ACK ROULETTE_COMPLETE}
+    R -->|No| D2{ACK RESULT_DISPLAYED}
+    D -->|ACK| E[APPLY_MOVE 실행]
+    D -->|Timeout| E
+    D2 -->|ACK| E
+    D2 -->|Timeout| E
+
+    E --> F[Move UI 연출]
+    F --> G{ACK MOVE_COMPLETE}
+    G -->|ACK| H[NEXT_TURN 실행]
+    G -->|Timeout| H
+
+    H --> I{턴 종료?}
+    I -->|No| J[다음 퀴즈 START_QUIZ]
+    I -->|Yes & 홀수 라운드| K[MINIGAME START]
+
+    K --> L[MiniGame RESULT UI]
+    L --> M{ACK MINIGAME_COMPLETE}
+    M -->|ACK| N[RESUME_AFTER_MINIGAME]
+    M -->|Timeout| N
+    N --> J
+
+    %% ROULETTE_COMPLETE는 별도 분기 없음
+```
 
 ---
 
