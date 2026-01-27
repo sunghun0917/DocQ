@@ -70,7 +70,7 @@ import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
-import type { Player } from '@/types/docq-api'
+import type { PlayerInfo } from '@/types/docq-api'
 import { useIsometric } from '@/composables/useIsometric'
 
 // === Imports & Types ===
@@ -171,6 +171,7 @@ const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string,
 // 애니메이션 상태 관리
 const animatingPlayers = ref<Record<string, number>>({})
 const lastStablePositions = ref<Record<string, number>>({})
+const isMovingGlobal = ref(false)
 const isMovePending = computed(() => gameStore.gamePhase === 'MOVE' && !gameStore.currentMove)
 
 // 초기화 시 서버 위치로 동기화
@@ -181,15 +182,16 @@ watch(() => players.value, (newPlayers) => {
 
     const movingUserId = gameStore.currentMove?.userId || null
     newPlayers.forEach(p => {
+        const safePosition = p.position ?? 0
         if (movingUserId && isMovingGlobal.value && p.userId === movingUserId) {
             return
         }
-        lastStablePositions.value[p.userId] = p.position
+        lastStablePositions.value[p.userId] = safePosition
         if (animatingPlayers.value[p.userId] === undefined) {
-            animatingPlayers.value[p.userId] = p.position 
+            animatingPlayers.value[p.userId] = safePosition 
         } else {
              if (!isMovingGlobal.value) {
-                 animatingPlayers.value[p.userId] = p.position
+                 animatingPlayers.value[p.userId] = safePosition
              }
         }
     })
@@ -224,15 +226,16 @@ function getPlayerColor(userId: string) {
     return PLAYER_COLORS[idx % 4] || '#ffffff'
 }
 
-function getPlayerDisplayCoords(p: Player) {
+function getPlayerDisplayCoords(p: PlayerInfo) {
     const idx = animatingPlayers.value[p.userId]
         ?? lastStablePositions.value[p.userId]
         ?? p.position
+        ?? 0
     return pathCoords.value[idx] || { x: 0, y: 0 }
 }
 
-function getPlayerFaceTarget(p: Player) {
-    const idx = animatingPlayers.value[p.userId] ?? p.position
+function getPlayerFaceTarget(p: PlayerInfo) {
+    const idx = animatingPlayers.value[p.userId] ?? p.position ?? 0
     if (idx < pathCoords.value.length - 1) {
         return pathCoords.value[idx+1] || pathCoords.value[idx] || { x: 0, y: 0 }
     }
@@ -332,10 +335,10 @@ async function runIntroCamera() {
 }
 
 // === Animation Logic ===
-const isMovingGlobal = ref(false)
 const isSpinning = ref(false)
 const rouletteRotation = ref(0)
 const isRouletteVisible = ref(false)
+const lastRouletteQuizId = ref<number | null>(null)
 const ROULETTE_SPIN_MS = 1800
 const MOVE_STEP_MS = 350
 
@@ -354,18 +357,8 @@ watch(() => gameStore.currentMove, async (move) => {
     isMovingGlobal.value = true
     gameStore.setMovementInProgress(true)
     emit('movement-change', true)
-    
-    // 1. 룰렛 돌리기
-    const rouletteStep = move.moveProcess.find((item: any) => item.type === 'ROULETTE')
-    if (rouletteStep && rouletteStep.value) {
-        rouletteLabels.value = getRouletteLabels(rouletteStep.value, move.userId)
-        isRouletteVisible.value = true
-        await spinRouletteAnimation(rouletteStep.value, rouletteLabels.value)
-        isRouletteVisible.value = false
-        wsStore.sendAck('ROULETTE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
-    }
 
-    // 2. 이동 애니메이션
+    // 1. 이동 애니메이션
     const start = move.startPosition
     const end = move.endPosition
     const userId = move.userId
@@ -379,7 +372,7 @@ watch(() => gameStore.currentMove, async (move) => {
         animatingPlayers.value[userId] = end
     }
 
-    // 3. 잡기 처리: 잡힌 플레이어는 즉시 출발지로 이동
+    // 2. 잡기 처리: 잡힌 플레이어는 즉시 출발지로 이동
     const catchActions = move.moveProcess?.filter((item: any) => item.type === 'CATCH') || []
     catchActions.forEach((action: any) => {
         if (action.targetUserId !== undefined && action.after !== undefined) {
@@ -391,6 +384,21 @@ watch(() => gameStore.currentMove, async (move) => {
     gameStore.setMovementInProgress(false)
     emit('movement-change', false)
     wsStore.sendAck('MOVE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
+})
+
+watch(() => gameStore.currentRoundResult, async (result) => {
+    if (!result || result.rouletteValue == null || !result.winnerUserId) return
+    if (lastRouletteQuizId.value === result.quizId) return
+    lastRouletteQuizId.value = result.quizId
+
+    await waitForMoveUnlock()
+
+    rouletteLabels.value = getRouletteLabels(result.rouletteValue, result.winnerUserId)
+    isRouletteVisible.value = true
+    await spinRouletteAnimation(result.rouletteValue, rouletteLabels.value)
+    isRouletteVisible.value = false
+
+    wsStore.sendAck('ROULETTE_COMPLETE', result.quizId, gameStore.gameState.round ?? undefined)
 })
 
 async function spinRouletteAnimation(resultValue: number, labels: number[]) {
