@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted, watchEffect } from 'vue';
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
+import QuizOverlay from '@/components/game/QuizOverlay.vue';
+import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
 import MiniGameModal from '@/components/minigame/MiniGameModal.vue';
 import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import { useRoomStore } from '@/stores/roomStore'
@@ -70,23 +72,10 @@ const miniGameUiType = computed(() => {
 
 // 현재 턴인지 확인
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
-const isMyTurn = computed(() => {
-    if (!currentTurnPlayer.value || !myUserId.value) return false
-    return currentTurnPlayer.value.userId === myUserId.value
-})
-
-const selectedOption = ref<number | null>(null)
-const isSubmitted = ref(false)
 const resultEffect = ref<{ text: 'WIN' | 'LOSE' | null } | null>(null)
 let resultEffectTimer: number | null = null
 const catchEffect = ref<string | null>(null)
 let catchEffectTimer: number | null = null
-
-// 퀴즈가 바뀌면 상태 초기화
-watch(currentQuiz, () => {
-    selectedOption.value = null
-    isSubmitted.value = false
-})
 
 watch(
     () => gameStore.currentRoundResult,
@@ -140,12 +129,8 @@ watch(
 )
 
 const submitAnswer = (index: number) => {
-    if (isSubmitted.value) return
     if (!currentQuiz.value) return
-    
-    selectedOption.value = index
-    isSubmitted.value = true
-    
+
     const answerText = currentQuiz.value.options[index]
     
     const roomId = roomStore.roomInfo.roomId
@@ -259,6 +244,13 @@ onMounted(() => {
       @close="handleMiniGameClose"
     />
 
+    <QuizOverlay
+      v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving && !isMiniGameActive && !showMiniGameStartNotice"
+      @submit="submitAnswer"
+    />
+
+    <RouletteOverlay />
+
     <div v-if="showMiniGameStartNotice" class="minigame-start-notice">
       <div class="minigame-start-card">
         미니게임이 시작됩니다
@@ -329,7 +321,7 @@ onMounted(() => {
               class="flex flex-col items-center">
             <div class="text-4xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]"
                  :class="{'text-red-400 animate-pulse': timeRemaining <= 5}">
-               {{ timeRemaining }}
+               {{ Math.ceil(timeRemaining) }}
             </div>
             <div class="text-white text-xs font-bold drop-shadow">SEC</div>
          </div>
@@ -357,58 +349,6 @@ onMounted(() => {
             </button>
          </div>
       </header>
-
-      <!-- 퀴즈 영역 (중앙 하단) -->
-      <div v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving" class="quiz-container">
-         
-         <!-- 퀴즈 풀기 (모든 플레이어 참여 가능 - 스틸 룰) -->
-         <div class="bg-white rounded-2xl shadow-2xl p-6 w-[600px] pointer-events-auto animate-bounce-up border-4"
-              :class="isMyTurn ? 'border-indigo-500 ring-4 ring-indigo-200' : 'border-slate-200'"
-         >
-            <div class="mb-4 flex justify-between items-start">
-               <div>
-                   <span v-if="isMyTurn" class="bg-indigo-600 text-white text-xs font-black px-2 py-1 rounded animate-pulse">
-                        👑 MY TURN
-                   </span>
-                   <span v-else class="bg-rose-500 text-white text-xs font-black px-2 py-1 rounded">
-                        ⚡ STEAL CHANCE
-                   </span>
-                   <h3 class="text-xl font-bold mt-2 text-slate-800 leading-snug">
-                      {{ currentQuiz.question }}
-                   </h3>
-               </div>
-               <div v-if="!isMyTurn" class="text-xs font-bold text-slate-400 text-right">
-                    {{ currentTurnPlayer?.nickname }}님의 턴<br>
-                    틀리면 가장 빠른 정답자가 승리!
-               </div>
-            </div>
-            
-            <div class="grid grid-cols-1 gap-2">
-               <button 
-                  v-for="(option, idx) in currentQuiz.options" 
-                  :key="idx"
-                  @click="submitAnswer(idx)"
-                  :disabled="isSubmitted"
-                  class="w-full text-left p-4 rounded-xl border-2 transition-all font-bold text-slate-600"
-                  :class="[
-                     selectedOption === idx 
-                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-2 ring-indigo-200' 
-                        : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-indigo-300'
-                  ]"
-               >
-                  <span class="inline-block w-6 h-6 rounded-full bg-white border-2 border-current text-center text-sm mr-2 leading-5">
-                    {{ idx + 1 }}
-                  </span>
-                  {{ option }}
-               </button>
-            </div>
-            
-            <div v-if="isSubmitted" class="text-center mt-4 text-indigo-600 font-bold animate-pulse">
-               답안 제출 완료! {{ isMyTurn ? '정답 체크 중...' : '턴 주인의 결과를 기다리는 중...' }}
-            </div>
-         </div>
-
-      </div>
 
       <!-- 결과 모달 -->
       <ResultModal v-if="isGameFinished" class="pointer-events-auto" />
