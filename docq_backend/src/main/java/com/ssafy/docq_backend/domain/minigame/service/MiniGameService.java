@@ -150,8 +150,8 @@ public class MiniGameService {
 
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/minigame", response);
 
-        // 4. 메인 게임 재개
-        gameService.resumeAfterMiniGame(roomId);
+        // 4. 메인 게임 재개 (ACK 기반 진행 + 폴백 예약)
+        gameService.scheduleResumeAfterMiniGame(roomId);
     }
 
     private List<MiniGameDto.RankInfo> calculateRankings(Room room) {

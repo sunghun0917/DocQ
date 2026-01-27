@@ -60,12 +60,15 @@ public class GameController {
         try {
             // TODO: userId 검증 (방장인지 등)
             gameService.generateQuizFromPdf(roomId, file);
-            return ResponseEntity.ok("Quiz generation started");
+            return ResponseEntity.ok(Map.of(
+                    "message", "Quiz generation started",
+                    "roomId", roomId
+            ));
         } catch (Exception e) {
             log.error("Quiz generation failed", e);
             return ResponseEntity
                     .status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(java.util.Map.of("message", e.getMessage()));
+                    .body(Map.of("message", e.getMessage()));
         }
 
     }
@@ -92,5 +95,10 @@ public class GameController {
     @MessageMapping("/game/avatar")
     public void selectAvatar(GameDto.AvatarSelectRequest request) {
         gameService.selectAvatar(request);
+    }
+
+    @MessageMapping("/game/ack")
+    public void handleAck(GameDto.AckRequest request) {
+        gameService.handleAck(request);
     }
 }

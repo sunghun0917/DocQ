@@ -21,11 +21,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.time.LocalDateTime;
+
+import com.ssafy.docq_backend.domain.game.event.AckStore;
+import com.ssafy.docq_backend.domain.game.event.ApplyMovePayload;
+import com.ssafy.docq_backend.domain.game.event.GameEventStore;
+import com.ssafy.docq_backend.domain.game.event.GameEventType;
+import com.ssafy.docq_backend.domain.game.event.MoveActionPayload;
+import com.ssafy.docq_backend.domain.game.event.MovePlanPayload;
+import com.ssafy.docq_backend.domain.game.event.NextTurnPayload;
+import com.ssafy.docq_backend.domain.game.event.RoundResultPayload;
+import com.ssafy.docq_backend.domain.game.event.ResumeAfterMiniGamePayload;
 
 @Slf4j
 @Service
@@ -38,31 +45,18 @@ public class GameService {
     private final AiClient aiClient;
     private final ObjectProvider<MiniGameService> miniGameServiceProvider;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final GameEventStore gameEventStore;
+    private final AckStore ackStore;
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
-    private static final long RESULT_DISPLAY_DELAY_MS = 2000;
     private static final long TURN_PREP_DELAY_MS = 1500;
-    private static final long ROULETTE_SPIN_MS = 1800;
-    private static final long MOVE_STEP_MS = 350;
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
+    private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
+    private static final long MOVE_FALLBACK_STEP_MS = 350;
+    private static final long MOVE_FALLBACK_BUFFER_MS = 500;
+    private static final long MOVE_FALLBACK_MAX_MS = 12000;
 
-    private static class MovePlan {
-        private final String winnerUserId;
-        private final int startPosition;
-        private final int endPosition;
-        private final boolean consumeDoubleMove;
-        private final List<GameDto.MoveAction> actions;
-
-        private MovePlan(String winnerUserId, int startPosition, int endPosition, boolean consumeDoubleMove,
-                List<GameDto.MoveAction> actions) {
-            this.winnerUserId = winnerUserId;
-            this.startPosition = startPosition;
-            this.endPosition = endPosition;
-            this.consumeDoubleMove = consumeDoubleMove;
-            this.actions = actions;
-        }
-    }
 
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
@@ -181,9 +175,6 @@ public class GameService {
                         .build())
                 .collect(Collectors.toList());
     }
-
-    // Simple Scheduler for Quiz Timer
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public void joinGame(GameDto.JoinRequest request) {
         log.info("Join Request: roomId={}, userId={}, nickname={}", request.getRoomId(), request.getUserId(),
@@ -337,9 +328,7 @@ public class GameService {
             broadcastGameState(room);
 
             // 카메라 인트로 이후 퀴즈 시작
-            scheduler.schedule(() -> {
-                startQuiz(room.getId());
-            }, INTRO_CAMERA_DURATION_MS, TimeUnit.MILLISECONDS);
+            gameEventStore.schedule(room.getId(), GameEventType.START_QUIZ, null, INTRO_CAMERA_DURATION_MS);
 
         } catch (DocqException e) {
             sendError(userId, e.getErrorCode());
@@ -541,6 +530,96 @@ public class GameService {
         log.info("Sent error to user {}: {}", userId, errorCode.getMessage());
     }
 
+    public void handleAck(GameDto.AckRequest request) {
+        try {
+            if (request == null || request.getAckType() == null) {
+                return;
+            }
+            Room room = roomRepository.findById(request.getRoomId()).orElse(null);
+            if (room == null || request.getUserId() == null) {
+                return;
+            }
+            if (!room.getPlayers().contains(request.getUserId())) {
+                return;
+            }
+
+            GameDto.AckType effectiveAckType = request.getAckType();
+            String keyId;
+
+            if (request.getAckType() == GameDto.AckType.MINIGAME_COMPLETE
+                    || request.getAckType() == GameDto.AckType.BUFF_ROULETTE_COMPLETE) {
+                if (room.getStatus() != RoomStatus.MINIGAME) {
+                    return;
+                }
+                effectiveAckType = GameDto.AckType.MINIGAME_COMPLETE;
+                keyId = String.valueOf(request.getRound() != null ? request.getRound() : room.getRound());
+            } else {
+                keyId = resolveAckKeyId(room, request);
+            }
+            if (keyId == null) {
+                return;
+            }
+
+            long count = ackStore.addAckAndCount(room.getId(), effectiveAckType, keyId, request.getUserId());
+            if (count < room.getPlayers().size()) {
+                return;
+            }
+
+            if (!ackStore.tryMarkAckComplete(room.getId(), effectiveAckType, keyId)) {
+                return;
+            }
+
+            switch (effectiveAckType) {
+                case RESULT_DISPLAYED -> {
+                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED, keyId,
+                            ApplyMovePayload.class);
+                    if (payload != null) {
+                        gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
+                    }
+                }
+                case MOVE_COMPLETE -> {
+                    NextTurnPayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.MOVE_COMPLETE, keyId,
+                            NextTurnPayload.class);
+                    if (payload != null) {
+                        gameEventStore.schedule(room.getId(), GameEventType.NEXT_TURN, payload, 0);
+                    }
+                }
+                case MINIGAME_COMPLETE -> {
+                    ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
+                            .round(request.getRound() != null ? request.getRound() : room.getRound())
+                            .build();
+                    gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, 0);
+                }
+                case BUFF_ROULETTE_COMPLETE -> {
+                    // handled via MINIGAME_COMPLETE normalization
+                }
+                case ROULETTE_COMPLETE -> {
+                    // no-op: reserved for future split flow
+                }
+            }
+
+            ackStore.clearAck(room.getId(), effectiveAckType, keyId);
+            if (request.getAckType() == GameDto.AckType.BUFF_ROULETTE_COMPLETE) {
+                ackStore.clearAck(room.getId(), GameDto.AckType.BUFF_ROULETTE_COMPLETE, keyId);
+            }
+        } catch (Exception e) {
+            log.error("Error handling ack", e);
+        }
+    }
+
+    private String resolveAckKeyId(Room room, GameDto.AckRequest request) {
+        if (request.getQuizId() != null) {
+            return String.valueOf(request.getQuizId());
+        }
+        if (request.getRound() != null) {
+            return String.valueOf(request.getRound());
+        }
+        if (room.getCurrentQuizId() != null) {
+            return String.valueOf(room.getCurrentQuizId());
+        }
+        return String.valueOf(room.getRound());
+    }
+
     public void selectAvatar(GameDto.AvatarSelectRequest request) {
         try {
             Room room = roomRepository.findById(request.getRoomId())
@@ -618,9 +697,9 @@ public class GameService {
             messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quiz);
 
             // Schedule Quiz End
-            scheduler.schedule(() -> {
-                processRoundResult(roomId, quizId);
-            }, quiz.getTimeLimit(), TimeUnit.MILLISECONDS);
+            gameEventStore.schedule(roomId, GameEventType.PROCESS_ROUND_RESULT,
+                    RoundResultPayload.builder().quizId(quizId).build(),
+                    quiz.getTimeLimit());
 
         } catch (Exception e) {
             log.error("Error starting quiz", e);
@@ -663,7 +742,7 @@ public class GameService {
         }
     }
 
-    void processRoundResult(String roomId, Long quizId) {
+    public void processRoundResult(String roomId, Long quizId) {
         try {
             Room room = roomRepository.findById(roomId).orElse(null);
             if (room == null)
@@ -722,8 +801,7 @@ public class GameService {
                 }
             }
 
-            MovePlan movePlan = null;
-            long moveAnimationMs = 0;
+            MovePlanPayload movePlan = null;
             boolean finishPlanned = false;
 
             if (winnerUserId != null && moveValue != 0) {
@@ -752,6 +830,14 @@ public class GameService {
                     int before = nextPos;
                     nextPos += moveValue;
 
+                    // Boundary Check
+                    if (nextPos < 0)
+                        nextPos = 0;
+                    if (nextPos >= TARGET_POSITION) {
+                        nextPos = TARGET_POSITION;
+                        finishPlanned = true;
+                    }
+
                     actions.add(GameDto.MoveAction.builder()
                             .type("BUFF")
                             .buffType("DOUBLE_SCORE")
@@ -761,6 +847,12 @@ public class GameService {
                 } else if ("PLUS_THREE".equals(winnerState.getHasBuff())) {
                     int before = nextPos;
                     nextPos += 3;
+
+                    // Boundary Check
+                    if (nextPos >= TARGET_POSITION) {
+                        nextPos = TARGET_POSITION;
+                        finishPlanned = true;
+                    }
 
                     actions.add(GameDto.MoveAction.builder()
                             .type("BUFF")
@@ -776,8 +868,13 @@ public class GameService {
 
                     if ("TILE_X2".equals(eventType)) {
                         nextPos += moveValue;
+                        // Boundary Check
                         if (nextPos < 0)
                             nextPos = 0;
+                        if (nextPos >= TARGET_POSITION) {
+                            nextPos = TARGET_POSITION;
+                            finishPlanned = true;
+                        }
                     }
 
                     actions.add(GameDto.MoveAction.builder()
@@ -803,10 +900,15 @@ public class GameService {
                     }
                 }
 
-                movePlan = new MovePlan(winnerUserId, currentPos, nextPos, consumeBuff, actions);
+                List<MoveActionPayload> actionPayloads = toActionPayloads(actions);
+                movePlan = MovePlanPayload.builder()
+                        .winnerUserId(winnerUserId)
+                        .startPosition(currentPos)
+                        .endPosition(nextPos)
+                        .consumeDoubleMove(consumeBuff)
+                        .actions(actionPayloads)
+                        .build();
 
-                int distance = Math.abs(nextPos - currentPos);
-                moveAnimationMs = (long) distance * MOVE_STEP_MS;
             }
 
             GameDto.RoundResult result = GameDto.RoundResult.builder()
@@ -822,119 +924,206 @@ public class GameService {
             broadcastGameState(room);
             messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/result", result);
 
-            final MovePlan plannedMove = movePlan;
-            final boolean finishPlannedFinal = finishPlanned;
-            final long plannedMoveAnimationMs = moveAnimationMs;
+            String quizKeyId = String.valueOf(quizId);
 
-            long rouletteDelayMs = plannedMove != null ? ROULETTE_SPIN_MS : 0;
-
-            if (plannedMove != null) {
-                scheduler.schedule(() -> {
-                    try {
-                        Room latest = roomRepository.findById(roomId).orElse(null);
-                        if (latest == null || !quizId.equals(latest.getCurrentQuizId()))
-                            return;
-
-                        PlayerState winnerState = latest.getPlayerStates().get(plannedMove.winnerUserId);
-                        if (winnerState == null)
-                            return;
-
-                        if (plannedMove.consumeDoubleMove) {
-                            winnerState.setHasBuff(null);
-                        }
-
-                        winnerState.setPosition(plannedMove.endPosition);
-
-                        for (GameDto.MoveAction action : plannedMove.actions) {
-                            if ("CATCH".equals(action.getType())) {
-                                PlayerState other = latest.getPlayerStates().get(action.getTargetUserId());
-                                if (other != null) {
-                                    other.setPosition(action.getAfter());
-                                }
-                            }
-                        }
-
-                        if (finishPlannedFinal) {
-                            latest.setStatus(RoomStatus.FINISHED);
-                            roomRepository.save(latest);
-                            messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move",
-                                    GameDto.MoveInfo.builder()
-                                            .userId(plannedMove.winnerUserId)
-                                            .startPosition(plannedMove.startPosition)
-                                            .endPosition(plannedMove.endPosition)
-                                            .moveProcess(plannedMove.actions)
-                                            .build());
-                            messagingTemplate.convertAndSend(
-                                    "/topic/game/" + latest.getId() + "/finish",
-                                    buildFinishResponse(latest));
-                            broadcastGameState(latest);
-                            return;
-                        }
-
-                        latest.setStatus(RoomStatus.MOVE);
-                        roomRepository.save(latest);
-
-                        GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
-                                .userId(plannedMove.winnerUserId)
-                                .startPosition(plannedMove.startPosition)
-                                .endPosition(plannedMove.endPosition)
-                                .moveProcess(plannedMove.actions)
-                                .build();
-
-                        messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move", moveInfo);
-                        broadcastGameState(latest);
-                    } catch (Exception e) {
-                        log.error("Error sending move info", e);
-                    }
-                }, RESULT_DISPLAY_DELAY_MS + rouletteDelayMs, TimeUnit.MILLISECONDS);
+            if (movePlan != null) {
+                ApplyMovePayload payload = ApplyMovePayload.builder()
+                        .quizId(quizId)
+                        .movePlan(movePlan)
+                        .finishPlanned(finishPlanned)
+                        .build();
+                ackStore.savePayload(roomId, GameDto.AckType.RESULT_DISPLAYED, quizKeyId, payload);
+                gameEventStore.schedule(roomId, GameEventType.APPLY_MOVE, payload, ACK_FALLBACK_TIMEOUT_MS);
             }
 
-            long clientRouletteMs = plannedMove != null ? ROULETTE_SPIN_MS : 0;
-            long turnDelayMs = RESULT_DISPLAY_DELAY_MS + rouletteDelayMs + clientRouletteMs + plannedMoveAnimationMs;
-
-            scheduler.schedule(() -> {
-                try {
-                    if (finishPlannedFinal)
-                        return;
-                    Room latest = roomRepository.findById(roomId).orElse(null);
-                    if (latest == null || !quizId.equals(latest.getCurrentQuizId()))
-                        return;
-
-                    List<String> order = latest.getTurnOrder();
-                    int idx = order.indexOf(turnUser) + 1;
-
-                    if (idx >= order.size()) {
-                        if (latest.getRound() % 2 != 0) {
-                            miniGameServiceProvider.getObject().startMiniGame(roomId);
-                            return;
-                        }
-                        idx = 0;
-                        latest.setRound(latest.getRound() + 1);
-                    }
-
-                    latest.setCurrentTurnUserId(order.get(idx));
-                    latest.setStatus(RoomStatus.STARTING);
-                    roomRepository.save(latest);
-                    broadcastGameState(latest);
-
-                    scheduler.schedule(() -> startQuiz(roomId),
-                            TURN_PREP_DELAY_MS, TimeUnit.MILLISECONDS);
-                } catch (Exception e) {
-                    log.error("Error preparing next turn", e);
-                }
-            }, turnDelayMs, TimeUnit.MILLISECONDS);
+            NextTurnPayload nextTurnPayload = NextTurnPayload.builder()
+                    .quizId(quizId)
+                    .turnUserId(turnUser)
+                    .finishPlanned(finishPlanned)
+                    .build();
+            if (!finishPlanned) {
+                ackStore.savePayload(roomId, GameDto.AckType.MOVE_COMPLETE, quizKeyId, nextTurnPayload);
+            }
+            if (movePlan == null && !finishPlanned) {
+                gameEventStore.schedule(roomId, GameEventType.NEXT_TURN, nextTurnPayload, ACK_FALLBACK_TIMEOUT_MS);
+            }
 
         } catch (Exception e) {
             log.error("Error in processRoundResult", e);
         }
     }
 
-    public void resumeAfterMiniGame(String roomId) {
+    public void applyMove(String roomId, ApplyMovePayload payload) {
+        try {
+            if (payload == null || payload.getQuizId() == null || payload.getMovePlan() == null) {
+                return;
+            }
+            String quizKeyId = String.valueOf(payload.getQuizId());
+            if (!ackStore.tryMarkExecution(roomId, GameEventType.APPLY_MOVE.name(), quizKeyId)) {
+                return;
+            }
+            Room latest = roomRepository.findById(roomId).orElse(null);
+            if (latest == null || !payload.getQuizId().equals(latest.getCurrentQuizId())) {
+                return;
+            }
+
+            MovePlanPayload plannedMove = payload.getMovePlan();
+            PlayerState winnerState = latest.getPlayerStates().get(plannedMove.getWinnerUserId());
+            if (winnerState == null) {
+                return;
+            }
+
+            if (plannedMove.isConsumeDoubleMove()) {
+                winnerState.setHasBuff(null);
+            }
+
+            winnerState.setPosition(plannedMove.getEndPosition());
+
+            if (plannedMove.getActions() != null) {
+                for (MoveActionPayload action : plannedMove.getActions()) {
+                    if ("CATCH".equals(action.getType())) {
+                        PlayerState other = latest.getPlayerStates().get(action.getTargetUserId());
+                        if (other != null) {
+                            other.setPosition(action.getAfter());
+                        }
+                    }
+                }
+            }
+
+            List<GameDto.MoveAction> moveActions = toMoveActions(plannedMove.getActions());
+            GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                    .userId(plannedMove.getWinnerUserId())
+                    .startPosition(plannedMove.getStartPosition())
+                    .endPosition(plannedMove.getEndPosition())
+                    .moveProcess(moveActions)
+                    .build();
+
+            if (payload.isFinishPlanned()) {
+                latest.setStatus(RoomStatus.FINISHED);
+                roomRepository.save(latest);
+                messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move", moveInfo);
+                messagingTemplate.convertAndSend(
+                        "/topic/game/" + latest.getId() + "/finish",
+                        buildFinishResponse(latest));
+                broadcastGameState(latest);
+                return;
+            }
+
+            latest.setStatus(RoomStatus.MOVE);
+            roomRepository.save(latest);
+            messagingTemplate.convertAndSend("/topic/game/" + latest.getId() + "/move", moveInfo);
+            broadcastGameState(latest);
+
+            if (!payload.isFinishPlanned()) {
+                NextTurnPayload nextTurnPayload = ackStore.loadPayload(
+                        roomId, GameDto.AckType.MOVE_COMPLETE, quizKeyId, NextTurnPayload.class);
+                if (nextTurnPayload != null) {
+                    long moveFallbackMs = estimateMoveFallbackMs(plannedMove);
+                    long nextTurnFallbackMs = ACK_FALLBACK_TIMEOUT_MS + moveFallbackMs;
+                    gameEventStore.schedule(roomId, GameEventType.NEXT_TURN, nextTurnPayload, nextTurnFallbackMs);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error applying move", e);
+        }
+    }
+
+    public void prepareNextTurn(String roomId, NextTurnPayload payload) {
+        try {
+            if (payload == null || payload.isFinishPlanned()) {
+                return;
+            }
+            String quizKeyId = payload.getQuizId() == null ? "unknown" : String.valueOf(payload.getQuizId());
+            if (!ackStore.tryMarkExecution(roomId, GameEventType.NEXT_TURN.name(), quizKeyId)) {
+                return;
+            }
+            Room latest = roomRepository.findById(roomId).orElse(null);
+            if (latest == null || payload.getQuizId() == null || !payload.getQuizId().equals(latest.getCurrentQuizId())) {
+                return;
+            }
+
+            List<String> order = latest.getTurnOrder();
+            int idx = order.indexOf(payload.getTurnUserId()) + 1;
+
+            if (idx >= order.size()) {
+                if (latest.getRound() % 2 != 0) {
+                    miniGameServiceProvider.getObject().startMiniGame(roomId);
+                    return;
+                }
+                idx = 0;
+                latest.setRound(latest.getRound() + 1);
+            }
+
+            latest.setCurrentTurnUserId(order.get(idx));
+            latest.setStatus(RoomStatus.STARTING);
+            roomRepository.save(latest);
+            broadcastGameState(latest);
+
+            gameEventStore.schedule(roomId, GameEventType.START_QUIZ, null, TURN_PREP_DELAY_MS);
+        } catch (Exception e) {
+            log.error("Error preparing next turn", e);
+        }
+    }
+
+    private List<MoveActionPayload> toActionPayloads(List<GameDto.MoveAction> actions) {
+        if (actions == null || actions.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return actions.stream()
+                .map(action -> MoveActionPayload.builder()
+                        .type(action.getType())
+                        .value(action.getValue())
+                        .buffType(action.getBuffType())
+                        .effectType(action.getEffectType())
+                        .before(action.getBefore())
+                        .after(action.getAfter())
+                        .targetUserId(action.getTargetUserId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private List<GameDto.MoveAction> toMoveActions(List<MoveActionPayload> actions) {
+        if (actions == null || actions.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return actions.stream()
+                .map(action -> GameDto.MoveAction.builder()
+                        .type(action.getType())
+                        .value(action.getValue() == null ? 0 : action.getValue())
+                        .buffType(action.getBuffType())
+                        .effectType(action.getEffectType())
+                        .before(action.getBefore())
+                        .after(action.getAfter())
+                        .targetUserId(action.getTargetUserId())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private long estimateMoveFallbackMs(MovePlanPayload movePlan) {
+        if (movePlan == null) {
+            return ACK_FALLBACK_TIMEOUT_MS;
+        }
+        int distance = Math.abs(movePlan.getEndPosition() - movePlan.getStartPosition());
+        long estimate = (long) distance * MOVE_FALLBACK_STEP_MS + MOVE_FALLBACK_BUFFER_MS;
+        long bounded = Math.min(Math.max(estimate, ACK_FALLBACK_TIMEOUT_MS), MOVE_FALLBACK_MAX_MS);
+        return bounded;
+    }
+
+    public void resumeAfterMiniGame(String roomId, ResumeAfterMiniGamePayload payload) {
         try {
             Room room = roomRepository.findById(roomId)
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
             log.info("Resuming Game after MiniGame for Room {}", roomId);
+
+            Integer expectedRound = payload != null ? payload.getRound() : room.getRound();
+            String roundKeyId = expectedRound == null ? String.valueOf(room.getRound()) : String.valueOf(expectedRound);
+            if (!ackStore.tryMarkExecution(roomId, GameEventType.RESUME_AFTER_MINIGAME.name(), roundKeyId)) {
+                return;
+            }
+            if (expectedRound != null && !expectedRound.equals(room.getRound())) {
+                return;
+            }
 
             if (!room.getTurnOrder().isEmpty()) {
                 room.setRound(room.getRound() + 1);
@@ -947,12 +1136,26 @@ public class GameService {
 
             broadcastGameState(room);
 
-            scheduler.schedule(() -> {
-                startQuiz(roomId);
-            }, 5000, TimeUnit.MILLISECONDS);
+            gameEventStore.schedule(roomId, GameEventType.START_QUIZ, null, TURN_PREP_DELAY_MS);
 
         } catch (Exception e) {
             log.error("Error resuming game after mini-game", e);
+        }
+    }
+
+    public void scheduleResumeAfterMiniGame(String roomId) {
+        try {
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+            String roundKeyId = String.valueOf(room.getRound());
+            ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
+                    .round(room.getRound())
+                    .build();
+            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, ACK_FALLBACK_TIMEOUT_MS);
+            ackStore.clearAck(roomId, GameDto.AckType.MINIGAME_COMPLETE, roundKeyId);
+            ackStore.clearAck(roomId, GameDto.AckType.BUFF_ROULETTE_COMPLETE, roundKeyId);
+        } catch (Exception e) {
+            log.error("Error scheduling resume after mini-game", e);
         }
     }
 

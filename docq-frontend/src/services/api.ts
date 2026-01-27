@@ -157,11 +157,16 @@ export interface QuizResponse {
     answerText: string
 }
 
+export interface QuizGenerateResponse {
+    message: string
+    roomId: string
+}
+
 /**
  * PDF 업로드 및 퀴즈 생성
  * POST /api/game/{roomId}/quiz/generate
  */
-export const generateQuiz = async (roomId: string, file: File): Promise<string> => {
+export const generateQuiz = async (roomId: string, file: File): Promise<QuizGenerateResponse> => {
     const formData = new FormData()
     formData.append('file', file)
 

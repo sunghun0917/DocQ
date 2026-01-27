@@ -1,7 +1,7 @@
 <!-- src/components/game/board3d/Character.vue -->
 <script setup lang="ts">
 import { shallowRef, watch, onMounted } from 'vue'
-import { useFBX, useAnimations } from '@tresjs/cientos'
+import { useAnimations, useGLTF } from '@tresjs/cientos'
 import { useIsometric } from '@/composables/useIsometric'
 // @ts-ignore
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -23,32 +23,48 @@ const props = withDefaults(defineProps<{
 // 3D 좌표 변환 훅 가져오기
 const { get3DPos } = useIsometric()
 
-let sharedFbx: any | null = null
+let sharedGltf: any | null = null
 let sharedClips: any[] = []
 let sharedLoadPromise: Promise<any> | null = null
-let sharedFbxLoader: ReturnType<typeof useFBX> | null = null
 
-const loadSharedFbx = async () => {
-  if (sharedFbx) return sharedFbx
-  if (!sharedFbxLoader) {
-    sharedFbxLoader = useFBX('/assets/character/Walking.fbx')
-  }
+const loadSharedGltf = async () => {
+  if (sharedGltf) return sharedGltf
   if (!sharedLoadPromise) {
-    sharedLoadPromise = sharedFbxLoader.execute()
+    // [GLB 변경] 확장자를 glb로 변경하고 useGLTF를 사용
+    // @ts-ignore
+    sharedLoadPromise = useGLTF('/assets/character/Walking.glb') as Promise<any>
   }
-  await sharedLoadPromise
-  sharedFbx = sharedFbxLoader.state?.value || sharedFbxLoader
-  const state = (sharedFbx as any).state?.value || sharedFbx
-  sharedClips = state.animations || []
-  return sharedFbx
+  const loaded = await sharedLoadPromise
+  
+  // 디버깅: 로드된 객체 구조 확인
+  console.log('GLTF Loaded Raw:', loaded)
+  
+  // [수정] useGLTF가 Promise가 아닌 Composable 형태({ state, isReady ... })로 리턴되는 경우 처리
+  let finalData = loaded
+  if (loaded && typeof loaded === 'object') {
+    // 1. state 라는 Ref 안에 데이터가 있는 경우 (로그상 이 케이스 유력)
+    if ('state' in loaded && loaded.state?.value) {
+      finalData = loaded.state.value
+    }
+    // 2. 혹은 loaded 자체가 Ref인 경우 (.value)
+    else if ('value' in loaded && loaded.value) {
+      finalData = loaded.value
+    }
+  }
+  
+  console.log('Final GLTF Data:', finalData)
+
+  sharedGltf = finalData
+  // GLTF 객체 구조: { scene, animations, ... }
+  // Tresjs/cientos useGLTF는 scene을 바로 반환하는 경우도 있으므로 체크 필요
+  sharedClips = sharedGltf.animations || []
+  return sharedGltf
 }
 
-/* ===== FBX 모델 로드 (단일 애니메이션: Walking.fbx 사용) ===== */
-const idleFbx = await loadSharedFbx()
-
-// 로드된 FBX 객체에서 상태, 씬, 애니메이션 클립 추출
-const idleState = (idleFbx as any).state?.value || idleFbx
-const idleSceneRaw = idleState.scene || idleState
+/* ===== GLB 모델 로드 ===== */
+const gltfData = await loadSharedGltf()
+// 구조 분해 할당 시 fallback 처리
+const idleSceneRaw = gltfData.scene || gltfData
 const idleClips = sharedClips
 
 /* ===== 씬 복제 (Independent Instances) ===== */
@@ -63,6 +79,18 @@ if (idleSceneRaw) {
 // 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
 if (scene) {
   scene.traverse((child: any) => {
+    // [해결 코드] 
+    // 이름에 'box', 'cube', 'cs_' 등이 포함된 객체를 렌더링하지 않도록 설정
+    if (child.isMesh && (
+      child.name.toLowerCase().includes('box') || 
+      child.name.toLowerCase().includes('cube') ||
+      child.name.startsWith('cs_')
+    )) {
+      child.visible = false; // 렌더링 제외
+      child.castShadow = false; // 그림자도 제거
+      child.receiveShadow = false;
+    }
+    
     // Mesh인 경우에만 재질 변경
     if (child.isMesh && child.material) {
       const mesh = child as THREE.Mesh
@@ -85,7 +113,7 @@ const allClips = shallowRef(idleClip ? [idleClip] : [])
 
 // 로드 실패 시 에러 로그
 if (!scene) {
-  console.error('Character scene is null; check FBX load.')
+  console.error('Character scene is null; check GLTF load.')
 }
 
 // 상수로 관리하는 설정값들
@@ -101,8 +129,9 @@ if (scene) {
   // Y축(높이) 보정값 적용
   scene.position.set(startPos[0], startPos[1] + Y_OFFSET, startPos[2])
 
-  // 모델 크기 축소 (FBX 원본 크기에 맞춰 조절)
-  scene.scale.set(0.01, 0.01, 0.01)
+  // GLB는 보통 1 unit = 1 meter. 
+  // 만약 너무 작거나 크면 여기서 조절하세요. (예: 100, 0.5 등)
+  scene.scale.set(1.5, 1.5, 1.5)
 
   // 기본 회전값 (모델이 뒷면을 보고 있다면 180도 회전)
   scene.rotation.y = Math.PI
