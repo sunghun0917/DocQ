@@ -15,6 +15,9 @@ export interface ErrorResponse {
 
 export interface QuizGeneratedNotice {
     count: number
+    type?: string // [ADD]
+    fileName?: string
+    quizType?: string
 }
 
 const AVATAR_MAP: Record<number, string> = {
@@ -207,12 +210,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
         })
 
         // 퀴즈 문제 수신
-        wsService.value.subscribe(`/topic/game/${roomId}/quiz`, (data: QuizMessage & { type?: string; count?: number }) => {
+        wsService.value.subscribe(`/topic/game/${roomId}/quiz`, (data: QuizMessage & { type?: string; count?: number; fileName?: string; quizType?: string }) => {
             console.log('📨 Quiz Received:', data)
 
-            if (data?.type === 'QUIZ_GENERATED') {
+            if (data?.type === 'QUIZ_GENERATING' || data?.type === 'QUIZ_GENERATED' || data?.type === 'QUIZ_RESET') {
                 quizGeneratedNotice.value = {
-                    count: Number(data.count ?? 0)
+                    count: Number(data.count ?? 0),
+                    type: data.type,
+                    fileName: data.fileName,
+                    quizType: data.quizType
                 }
                 return
             }
@@ -433,6 +439,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 퀴즈 리셋 (다시 만들기 시작 알림)
+     */
+    const resetQuiz = (roomId: string) => {
+        if (!wsService.value) return
+        wsService.value.publish('/app/game/quiz/reset', { roomId })
+    }
+
+    /**
      * ACK 전송
      */
     const sendAck = (ackType: 'RESULT_DISPLAYED' | 'ROULETTE_COMPLETE' | 'MOVE_COMPLETE' | 'MINIGAME_COMPLETE' | 'BUFF_ROULETTE_COMPLETE', quizId?: number, round?: number) => {
@@ -505,6 +519,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         endGame,
         restartGame,
         submitMiniGameResult,
+        resetQuiz, // [ADD]
         sendAck,
         unsubscribe,
         cleanup,

@@ -53,8 +53,8 @@ export const useUserStore = defineStore('user', () => {
 
             isAuthenticated.value = true
 
-            // 로컬 스토리지에 저장
-            localStorage.setItem('user', JSON.stringify(currentUser.value))
+            // 세션 스토리지에 저장
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
 
             return { success: true }
         } catch (error) {
@@ -80,7 +80,7 @@ export const useUserStore = defineStore('user', () => {
             }
 
             isAuthenticated.value = true
-            localStorage.setItem('user', JSON.stringify(currentUser.value))
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
 
             return { success: true }
         } catch (error) {
@@ -117,7 +117,7 @@ export const useUserStore = defineStore('user', () => {
         isAuthenticated.value = false
 
         // 스토리지 정리
-        localStorage.removeItem('user')
+        sessionStorage.removeItem('user')
         sessionStorage.removeItem('guestUser')
     }
 
@@ -130,8 +130,8 @@ export const useUserStore = defineStore('user', () => {
             currentUser.value.username = newUsername
 
             // 스토리지 업데이트
-            if (localStorage.getItem('user')) {
-                localStorage.setItem('user', JSON.stringify(currentUser.value))
+            if (sessionStorage.getItem('user')) {
+                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
             }
             if (sessionStorage.getItem('guestUser')) {
                 sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
@@ -148,8 +148,8 @@ export const useUserStore = defineStore('user', () => {
             currentUser.value.avatar = newAvatar
 
             // 스토리지 업데이트
-            if (localStorage.getItem('user')) {
-                localStorage.setItem('user', JSON.stringify(currentUser.value))
+            if (sessionStorage.getItem('user')) {
+                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
             }
             if (sessionStorage.getItem('guestUser')) {
                 sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
@@ -169,8 +169,8 @@ export const useUserStore = defineStore('user', () => {
             }
 
             // 스토리지 업데이트
-            if (localStorage.getItem('user')) {
-                localStorage.setItem('user', JSON.stringify(currentUser.value))
+            if (sessionStorage.getItem('user')) {
+                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
             }
             if (sessionStorage.getItem('guestUser')) {
                 sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
@@ -182,15 +182,15 @@ export const useUserStore = defineStore('user', () => {
      * 저장된 사용자 정보 복원
      */
     const restoreUser = () => {
-        // 로컬 스토리지에서 복원 시도
-        const savedUser = localStorage.getItem('user')
+        // 세션 스토리지에서 복원 시도
+        const savedUser = sessionStorage.getItem('user')
         if (savedUser) {
             try {
                 currentUser.value = JSON.parse(savedUser)
                 isAuthenticated.value = true
                 return true
             } catch (error) {
-                console.error('Failed to restore user from localStorage:', error)
+                console.error('Failed to restore user from sessionStorage:', error)
             }
         }
 
@@ -224,7 +224,7 @@ export const useUserStore = defineStore('user', () => {
         currentUser.value = null
         isAuthenticated.value = false
         isLoading.value = false
-        localStorage.removeItem('user')
+        sessionStorage.removeItem('user')
         sessionStorage.removeItem('guestUser')
     }
 

@@ -62,8 +62,7 @@ public class GameController {
             gameService.generateQuizFromPdf(roomId, file);
             return ResponseEntity.ok(Map.of(
                     "message", "Quiz generation started",
-                    "roomId", roomId
-            ));
+                    "roomId", roomId));
         } catch (Exception e) {
             log.error("Quiz generation failed", e);
             return ResponseEntity
@@ -100,5 +99,13 @@ public class GameController {
     @MessageMapping("/game/ack")
     public void handleAck(GameDto.AckRequest request) {
         gameService.handleAck(request);
+    }
+
+    @MessageMapping("/game/quiz/reset")
+    public void resetQuiz(Map<String, String> payload) {
+        String roomId = payload.get("roomId");
+        if (roomId != null) {
+            gameService.resetQuiz(roomId);
+        }
     }
 }

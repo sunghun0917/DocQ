@@ -61,9 +61,14 @@ public class GameService {
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
 
-
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
+
+        // [ADD] 퀴즈 생성 시작 알림 (프론트엔드 대기 화면 전환용)
+        Map<String, Object> startMsg = new HashMap<>();
+        startMsg.put("type", "QUIZ_GENERATING");
+        startMsg.put("fileName", pdfFile.getOriginalFilename());
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
 
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
@@ -97,6 +102,12 @@ public class GameService {
     }
 
     public int setDefaultQuizzes(String roomId, String type) {
+        // [ADD] 퀴즈 생성 시작 알림
+        Map<String, Object> startMsg = new HashMap<>();
+        startMsg.put("type", "QUIZ_GENERATING");
+        startMsg.put("quizType", type);
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
@@ -143,6 +154,13 @@ public class GameService {
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
 
         return quizzes.size();
+    }
+
+    public void resetQuiz(String roomId) {
+        // [MOD] 퀴즈 리셋 알림 -> "대기 중" 상태로 전환
+        Map<String, Object> resetMsg = new HashMap<>();
+        resetMsg.put("type", "QUIZ_RESET");
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", resetMsg);
     }
 
     private List<QuizDto.Response> loadQuizzesFromJson(String filename) {
@@ -578,7 +596,8 @@ public class GameService {
 
             switch (effectiveAckType) {
                 case RESULT_DISPLAYED -> {
-                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED, keyId,
+                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED,
+                            keyId,
                             ApplyMovePayload.class);
                     if (payload != null) {
                         gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
@@ -601,7 +620,8 @@ public class GameService {
                     // handled via MINIGAME_COMPLETE normalization
                 }
                 case ROULETTE_COMPLETE -> {
-                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId,
+                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE,
+                            keyId,
                             ApplyMovePayload.class);
                     if (payload != null) {
                         gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
@@ -1071,7 +1091,8 @@ public class GameService {
                 return;
             }
             Room latest = roomRepository.findById(roomId).orElse(null);
-            if (latest == null || payload.getQuizId() == null || !payload.getQuizId().equals(latest.getCurrentQuizId())) {
+            if (latest == null || payload.getQuizId() == null
+                    || !payload.getQuizId().equals(latest.getCurrentQuizId())) {
                 return;
             }
 

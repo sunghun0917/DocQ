@@ -4,7 +4,8 @@ import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
-import { getRoomByInviteCode, verifyJoinRoom, getErrorMessage, type RoomResponse } from '@/services/api'
+import { getRoomByInviteCode, verifyJoinRoom, getErrorMessage } from '@/services/api'
+import type { RoomResponse } from '@/types/docq-api'
 import AlertModal from '@/components/common/AlertModal.vue';
 
 const router = useRouter();
