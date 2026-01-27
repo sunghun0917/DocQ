@@ -582,13 +582,6 @@ public class GameService {
                             ApplyMovePayload.class);
                     if (payload != null) {
                         gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
-                    } else {
-                        ApplyMovePayload roulettePayload = ackStore.loadPayload(
-                                room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId, ApplyMovePayload.class);
-                        if (roulettePayload != null) {
-                            gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, roulettePayload,
-                                    ACK_FALLBACK_TIMEOUT_MS);
-                        }
                     }
                 }
                 case MOVE_COMPLETE -> {
