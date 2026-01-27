@@ -23,6 +23,10 @@ const currentQuiz = computed(() => gameStore.currentQuiz)
 const timeRemaining = computed(() => gameStore.timeRemaining)
 const isGameFinished = computed(() => gameStore.isGameFinished)
 const gamePhase = computed(() => gameStore.gamePhase)
+const isResultVisible = computed(() => isGameFinished.value || gamePhase.value === 'FINISHED')
+const canShowResultModal = computed(() =>
+    isResultVisible.value && !isBoardMoving.value && !gameStore.movementInProgress
+)
 const roomId = computed(() => roomStore.roomInfo.roomId)
 const isHost = computed(() => roomStore.isHost)
 const players = computed(() => gameStore.gameState.players || [])
@@ -41,6 +45,34 @@ const buffRouletteCode = computed(() => {
 const isBoardMoving = ref(false)
 const showMiniGameStartNotice = ref(false)
 const isMiniGameStarting = ref(false)
+const systemNotice = ref<string | null>(null)
+const isMiniGameWinnerNoticeActive = ref(false)
+const isGameEndNoticeActive = ref(false)
+const hasShownGameStartNotice = ref(false)
+const hasShownGameEndNotice = ref(false)
+let systemNoticeTimer: number | null = null
+let systemNoticeResolver: (() => void) | null = null
+
+const showSystemNotice = (text: string, duration = 2000) => {
+    if (systemNoticeTimer !== null) {
+        clearTimeout(systemNoticeTimer)
+        systemNoticeTimer = null
+    }
+    if (systemNoticeResolver) {
+        systemNoticeResolver()
+        systemNoticeResolver = null
+    }
+    systemNotice.value = text
+    return new Promise<void>((resolve) => {
+        systemNoticeResolver = resolve
+        systemNoticeTimer = window.setTimeout(() => {
+            systemNotice.value = null
+            systemNoticeTimer = null
+            systemNoticeResolver = null
+            resolve()
+        }, duration)
+    })
+}
 
 const winnerName = computed(() => {
     const winnerId = miniGame.value.result?.winnerUserId
@@ -72,29 +104,33 @@ const miniGameUiType = computed(() => {
 
 // 현재 턴인지 확인
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
-const resultEffect = ref<{ text: 'WIN' | 'LOSE' | null } | null>(null)
-let resultEffectTimer: number | null = null
 const catchEffect = ref<string | null>(null)
+const pendingCatchEffect = ref<string | null>(null)
+let pendingCatchKey: string | null = null
 let catchEffectTimer: number | null = null
+let resultNoticeToken = 0
+let miniGameNoticeToken = 0
+let gameEndNoticeToken = 0
 
 watch(
     () => gameStore.currentRoundResult,
-    (result) => {
-        if (!result || !userStore.userId) return
-        if (resultEffectTimer !== null) {
-            clearTimeout(resultEffectTimer)
-            resultEffectTimer = null
+    async (result) => {
+        if (!result) return
+        const token = ++resultNoticeToken
+        const winnerId = result.winnerUserId ?? null
+        const currentTurnId = gameStore.gameState.currentTurnUserId ?? null
+        let noticeText = '맞춘 사람이 없습니다.'
+
+        if (winnerId) {
+            const winnerName = roomStore.users.find(u => u.id === winnerId)?.nickname || '알 수 없음'
+            const roleLabel = winnerId === currentTurnId ? '플레이어' : '고스트'
+            noticeText = `${roleLabel}${winnerName}가 문제를 맞추었습니다.`
         }
 
-        const isWinner = result.winnerUserId === userStore.userId
-        resultEffect.value = { text: isWinner ? 'WIN' : 'LOSE' }
-
-        resultEffectTimer = window.setTimeout(() => {
-            resultEffect.value = null
-            resultEffectTimer = null
-            gameStore.unlockMove()
-            wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
-        }, 2000)
+        await showSystemNotice(noticeText, 2000)
+        if (token !== resultNoticeToken) return
+        gameStore.unlockMove()
+        wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
     }
 )
 
@@ -104,27 +140,58 @@ watch(
         if (!move || !myUserId.value) return
 
         const catchAction = move.moveProcess?.find((item: any) => item.type === 'CATCH')
-        if (!catchAction) return
+        if (!catchAction) {
+            pendingCatchEffect.value = null
+            pendingCatchKey = null
+            return
+        }
+
+        const moveKey = JSON.stringify({
+            userId: move.userId,
+            start: move.startPosition,
+            end: move.endPosition,
+            process: move.moveProcess
+        })
+        pendingCatchKey = moveKey
+
+        if (catchAction.targetUserId === myUserId.value) {
+            pendingCatchEffect.value = '잡혔습니다. 출발지로 이동합니다.'
+        } else if (move.userId === myUserId.value) {
+            pendingCatchEffect.value = '잡았습니다. 출발지로 이동시킵니다.'
+        } else {
+            pendingCatchEffect.value = null
+        }
+    }
+)
+
+watch(
+    () => gameStore.movementInProgress,
+    (moving, prev) => {
+        if (moving || !prev) return
+        if (!pendingCatchEffect.value || !gameStore.currentMove) return
+
+        const move = gameStore.currentMove
+        const moveKey = JSON.stringify({
+            userId: move.userId,
+            start: move.startPosition,
+            end: move.endPosition,
+            process: move.moveProcess
+        })
+        if (pendingCatchKey !== moveKey) return
 
         if (catchEffectTimer !== null) {
             clearTimeout(catchEffectTimer)
             catchEffectTimer = null
         }
 
-        if (catchAction.targetUserId === myUserId.value) {
-            catchEffect.value = '잡혔습니다. 출발지로 이동합니다.'
-        } else if (move.userId === myUserId.value) {
-            catchEffect.value = '잡았습니다. 출발지로 이동시킵니다.'
-        } else {
-            catchEffect.value = null
-        }
+        catchEffect.value = pendingCatchEffect.value
+        pendingCatchEffect.value = null
+        pendingCatchKey = null
 
-        if (catchEffect.value) {
-            catchEffectTimer = window.setTimeout(() => {
-                catchEffect.value = null
-                catchEffectTimer = null
-            }, 2000)
-        }
+        catchEffectTimer = window.setTimeout(() => {
+            catchEffect.value = null
+            catchEffectTimer = null
+        }, 2000)
     }
 )
 
@@ -179,14 +246,14 @@ watchEffect(() => {
         return
     }
 
-    if (isBoardMoving.value || isMiniGameStarting.value) return
+    if (isBoardMoving.value || isMiniGameStarting.value || catchEffect.value || pendingCatchEffect.value) return
     isMiniGameStarting.value = true
     showMiniGameStartNotice.value = true
     window.setTimeout(() => {
         showMiniGameStartNotice.value = false
         gameStore.startMiniGame()
         isMiniGameStarting.value = false
-    }, 1200)
+    }, 2000)
 })
 
 const handleMiniGameSubmit = (score: number) => {
@@ -208,16 +275,52 @@ const handleBuffRouletteDone = () => {
 }
 
 watch(
-    () => miniGame.value.result?.rewardBuff,
-    (rewardBuff) => {
+    () => miniGame.value.phase,
+    async (phase) => {
+        if (phase !== 'result') return
+        const token = ++miniGameNoticeToken
+        isMiniGameWinnerNoticeActive.value = true
+        const name = winnerName.value
+        const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
+        await showSystemNotice(noticeText, 2000)
+        if (token !== miniGameNoticeToken) return
+        isMiniGameWinnerNoticeActive.value = false
+
+        const rewardBuff = miniGame.value.result?.rewardBuff
         if (!rewardBuff || rewardBuff === 'NONE') {
-            if (miniGame.value.phase === 'result') {
-                window.setTimeout(() => {
-                    wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
-                    gameStore.clearMiniGame()
-                }, 1500)
-            }
+            wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+            gameStore.clearMiniGame()
         }
+    }
+)
+
+watch(
+    () => gamePhase.value,
+    async (phase) => {
+        if (phase === 'WAITING') {
+            hasShownGameStartNotice.value = false
+            return
+        }
+        if (phase === 'STARTING' && !hasShownGameStartNotice.value) {
+            hasShownGameStartNotice.value = true
+            await showSystemNotice('게임이 시작됩니다', 2000)
+        }
+    },
+    { immediate: true }
+)
+
+watch(
+    () => [isGameFinished.value, gamePhase.value] as const,
+    async ([finished, phase]) => {
+        if (!finished && phase !== 'FINISHED') return
+        if (hasShownGameEndNotice.value) return
+        if (isBoardMoving.value || gameStore.movementInProgress) return
+        hasShownGameEndNotice.value = true
+        const token = ++gameEndNoticeToken
+        isGameEndNoticeActive.value = true
+        await showSystemNotice('게임이 종료되었습니다', 2000)
+        if (token !== gameEndNoticeToken) return
+        isGameEndNoticeActive.value = false
     }
 )
 
@@ -245,7 +348,7 @@ onMounted(() => {
     />
 
     <QuizOverlay
-      v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving && !isMiniGameActive && !showMiniGameStartNotice"
+      v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving && !isMiniGameActive && !showMiniGameStartNotice && !systemNotice"
       @submit="submitAnswer"
     />
 
@@ -258,11 +361,19 @@ onMounted(() => {
     </div>
 
     <BuffRouletteOverlay
-      v-if="buffRouletteCode"
+      v-if="buffRouletteCode && !isMiniGameWinnerNoticeActive"
       :buff-code="buffRouletteCode"
       :winner-name="winnerName"
       @done="handleBuffRouletteDone"
     />
+
+    <transition name="result-pop">
+      <div v-if="systemNotice" class="system-notice">
+        <div class="system-notice-card">
+          {{ systemNotice }}
+        </div>
+      </div>
+    </transition>
 
     <!-- UI 오버레이 -->
     <div v-if="!isMiniGameActive && !showMiniGameStartNotice" class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
@@ -280,7 +391,7 @@ onMounted(() => {
           >
             <div class="player-name">{{ p.nickname }}</div>
             <div class="player-meta">
-              <span class="player-score">SCORE {{ p.score ?? 0 }}</span>
+              <span class="player-score">맞춘 문제: {{ p.score ?? 0 }}</span>
               <span class="player-pos">POS {{ p.position ?? 0 }}</span>
               <span v-if="p.hasBuff" class="player-buff" :title="p.hasBuff">
                 ⚡
@@ -289,17 +400,6 @@ onMounted(() => {
           </div>
         </div>
       </div>
-
-      <transition name="result-pop">
-        <div v-if="resultEffect?.text" class="result-effect">
-          <div
-            class="result-effect-text"
-            :class="resultEffect.text === 'WIN' ? 'result-win' : 'result-lose'"
-          >
-            {{ resultEffect.text }}
-          </div>
-        </div>
-      </transition>
 
       <transition name="result-pop">
         <div v-if="catchEffect" class="catch-effect">
@@ -351,7 +451,7 @@ onMounted(() => {
       </header>
 
       <!-- 결과 모달 -->
-      <ResultModal v-if="isGameFinished" class="pointer-events-auto" />
+      <ResultModal v-if="canShowResultModal && !isGameEndNoticeActive" class="pointer-events-auto" />
     </div>
   </div>
 </template>
@@ -502,39 +602,6 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.result-effect {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.result-effect-text {
-  font-size: 6rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  padding: 16px 32px;
-  border-radius: 24px;
-  border: 4px solid transparent;
-}
-
-.result-win {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.5);
-  box-shadow: 0 0 30px rgba(34, 197, 94, 0.5);
-}
-
-.result-lose {
-  color: #f43f5e;
-  background: rgba(244, 63, 94, 0.12);
-  border-color: rgba(244, 63, 94, 0.5);
-  box-shadow: 0 0 30px rgba(244, 63, 94, 0.5);
-}
-
 .result-pop-enter-active,
 .result-pop-leave-active {
   transition: opacity 200ms ease, transform 200ms ease;
@@ -544,6 +611,28 @@ onMounted(() => {
 .result-pop-leave-to {
   opacity: 0;
   transform: scale(0.9);
+}
+
+.system-notice {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2300;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+}
+
+.system-notice-card {
+  background: white;
+  padding: 18px 30px;
+  border-radius: 18px;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #111827;
+  text-align: center;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
 .catch-effect {
