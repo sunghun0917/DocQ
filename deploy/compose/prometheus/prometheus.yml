@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'spring-boot-monitor'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['backend:8081'] # backend 컨테이너의 8081 포트 수집
