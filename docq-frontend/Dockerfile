@@ -26,7 +26,7 @@ COPY --from=build /app/dist .
 
 # Copy nginx configuration (optional, if custom config needed)
 # 기본 nginx 설정 사용 (docker-compose에서 볼륨 마운트로 오버라이드 가능)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
