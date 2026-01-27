@@ -72,7 +72,7 @@ watch(quiz, () => {
     <!-- 문제 카드 -->
     <div class="question-card">
       <div class="header-badge">
-         <span class="round-badge">Round {{ gameStore.currentQuizIndex + 1 }}</span>
+         <span class="round-badge">Round {{ gameStore.gameState.round || 1 }}</span>
       </div>
       <h2 class="question-text">{{ quiz.question }}</h2>
       <div class="timer-text-display">남은 시간: {{ gameStore.timeRemaining.toFixed(1) }}s</div>
