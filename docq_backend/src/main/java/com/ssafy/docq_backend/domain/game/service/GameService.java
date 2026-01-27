@@ -22,7 +22,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 import com.ssafy.docq_backend.domain.game.event.AckStore;
 import com.ssafy.docq_backend.domain.game.event.ApplyMovePayload;
@@ -685,7 +689,9 @@ public class GameService {
 
             Long quizId = quizEntity.getQuizId();
 
-            LocalDateTime quizStartTime = LocalDateTime.now();
+            OffsetDateTime quizStartTime = OffsetDateTime.now(ZoneOffset.UTC);
+            log.info("Quiz start time (UTC): {}, server zone: {}, server now: {}",
+                    quizStartTime, ZoneId.systemDefault(), Instant.now());
 
             GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
                     .quizId(quizId)
@@ -698,7 +704,7 @@ public class GameService {
             // Set Room State
             room.setCurrentQuizId(quizId);
             room.getQuizAnswers().clear();
-            room.setQuizStartTime(quizStartTime);
+            room.setQuizStartTime(quizStartTime.toLocalDateTime());
             room.setStatus(RoomStatus.QUIZ_TIME);
             roomRepository.save(room);
 

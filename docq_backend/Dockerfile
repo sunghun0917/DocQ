@@ -19,6 +19,12 @@ RUN gradle clean build --no-daemon -x test
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
+# Set timezone to match server (KST)
+ENV TZ=Asia/Seoul
+RUN apk add --no-cache tzdata \
+    && cp /usr/share/zoneinfo/Asia/Seoul /etc/localtime \
+    && echo "Asia/Seoul" > /etc/timezone
+
 # Create non-root user
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
