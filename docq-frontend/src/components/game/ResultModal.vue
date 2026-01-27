@@ -143,7 +143,7 @@ const restartGame = () => {
               </div>
             </div>
             <h2 class="text-2xl font-black text-[#2d3436]">{{ winner?.nickname }}</h2>
-            <p class="text-[#fdcb6e] font-extrabold text-xl">{{ winner?.score }} pts</p>
+            <p class="text-[#fdcb6e] font-extrabold text-xl">맞춘 문제 {{ winner?.score }}</p>
           </div>
 
           <div class="flex-1 flex flex-col gap-3 justify-center">
