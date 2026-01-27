@@ -49,24 +49,15 @@
       </Suspense>
     </TresCanvas>
 
-    <!-- Roulette (Visual Only) -->
-    <GameRoulette
-      v-if="isRouletteVisible"
-      :rotation="rouletteRotation"
-      :isMoving="isMovingGlobal"
-      :isSpinning="isSpinning"
-      :labelByIndex="rouletteLabels"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls } from '@tresjs/cientos'
 import Tile3D from '@/components/game/board3D/Tile3D.vue'
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
-import GameRoulette from '@/components/game/board3D/GameRoulette.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -102,7 +93,6 @@ const PATH_LENGTH = 31
 
 const grid = ref<GridItem[]>([])
 const pathCoords = ref<PathCoord[]>([])
-const rouletteLabels = ref<number[]>([1, 2, 3, 4])
 
 // 고정된 경로 생성 (동기화 이슈 방지)
 function generateDeterministicPath(): PathCoord[] {
@@ -335,22 +325,26 @@ async function runIntroCamera() {
 }
 
 // === Animation Logic ===
-const isSpinning = ref(false)
-const rouletteRotation = ref(0)
-const isRouletteVisible = ref(false)
-const lastRouletteQuizId = ref<number | null>(null)
-const ROULETTE_SPIN_MS = 1800
 const MOVE_STEP_MS = 350
+const lastMoveKey = ref<string | null>(null)
 
 // gameStore.currentMove 감지하여 애니메이션 실행
 const waitForMoveUnlock = async () => {
-    while (gameStore.moveLocked) {
+    while (gameStore.moveLocked || gameStore.roulettePending || gameStore.rouletteTargetId) {
         await sleep(100)
     }
 }
 
 watch(() => gameStore.currentMove, async (move) => {
     if (!move) return
+    const moveKey = JSON.stringify({
+        userId: move.userId,
+        start: move.startPosition,
+        end: move.endPosition,
+        process: move.moveProcess
+    })
+    if (lastMoveKey.value === moveKey) return
+    lastMoveKey.value = moveKey
 
     await waitForMoveUnlock()
 
@@ -386,53 +380,6 @@ watch(() => gameStore.currentMove, async (move) => {
     wsStore.sendAck('MOVE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
 })
 
-watch(() => gameStore.currentRoundResult, async (result) => {
-    if (!result || result.rouletteValue == null || !result.winnerUserId) return
-    if (lastRouletteQuizId.value === result.quizId) return
-    lastRouletteQuizId.value = result.quizId
-
-    await waitForMoveUnlock()
-
-    rouletteLabels.value = getRouletteLabels(result.rouletteValue, result.winnerUserId)
-    isRouletteVisible.value = true
-    await spinRouletteAnimation(result.rouletteValue, rouletteLabels.value)
-    isRouletteVisible.value = false
-
-    wsStore.sendAck('ROULETTE_COMPLETE', result.quizId, gameStore.gameState.round ?? undefined)
-})
-
-async function spinRouletteAnimation(resultValue: number, labels: number[]) {
-    isSpinning.value = true
-    await nextTick()
-    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
-
-    const totalSpins = 360 * 3
-    const targetIndex = labels.indexOf(resultValue)
-    const safeIndex = targetIndex >= 0 ? targetIndex : 0
-    const sectionAngle = 360 / Math.max(labels.length, 1)
-    const targetRotation = -((safeIndex * sectionAngle) + (sectionAngle / 2))
-    const current = ((rouletteRotation.value % 360) + 360) % 360
-    let delta = targetRotation - current
-    if (delta < -180) delta += 360
-    if (delta > 180) delta -= 360
-
-    rouletteRotation.value += totalSpins + delta
-
-    return new Promise<void>(resolve => {
-        setTimeout(() => {
-            isSpinning.value = false
-            resolve()
-        }, ROULETTE_SPIN_MS)
-    })
-}
-
-function getRouletteLabels(resultValue: number, winnerUserId: string) {
-    if (resultValue < 0) {
-        return [-2, -1, 1, 2]
-    }
-    const isTurnWinner = winnerUserId === gameStore.gameState.currentTurnUserId
-    return isTurnWinner ? [1, 2, 3, 4] : [-2, -1, 1, 2]
-}
 
 function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms))

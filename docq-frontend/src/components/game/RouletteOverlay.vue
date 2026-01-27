@@ -2,19 +2,32 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 import { useRoomStore } from '@/stores/roomStore';
+import { useWebSocketStore } from '@/stores/websocketStore';
 
 const gameStore = useGameStore();
 const roomStore = useRoomStore();
+const wsStore = useWebSocketStore();
 
 const isSpinning = ref(false);
 const rotation = ref(0);
 const isVisible = ref(false); // [NEW] 내부 표시 관리
-const labelByIndex = [1, 2, 3, 4, 5, 6];
+const labelByIndex = ref<number[]>([1, 2, 3, 4]);
+const displayResult = ref<number | null>(null);
 
 // 컴포넌트 마운트 여부 (Store 상태 의존)
 const shouldMount = computed(() => !!gameStore.rouletteTargetId);
 const targetUserId = computed(() => gameStore.rouletteTargetId);
+const rouletteValue = computed(() => gameStore.currentRoundResult?.rouletteValue ?? null);
 const targetUser = computed(() => roomStore.users.find(u => u.id === targetUserId.value));
+
+// Init labels when target is set (Snapshot to prevent changing during spin)
+watch(() => gameStore.rouletteTargetId, (targetId) => {
+    if (targetId) {
+        const currentTurnUserId = gameStore.gameState.currentTurnUserId;
+        const isTurnOwner = targetId === currentTurnUserId;
+        labelByIndex.value = isTurnOwner ? [1, 2, 3, 4] : [-2, -1, 1, 2];
+    }
+}, { immediate: true });
 
 /*
  * 룰렛 원판 스타일 (회전 애니메이션)
@@ -27,12 +40,12 @@ const wheelStyle = computed(() => ({
 /*
  * 각 조각(Section)의 스타일
  */
-const sectionStyle = (n: number) => {
-  const sectionAngle = 360 / 6;
-  const startAngle = -30;
-  const angle = startAngle + (n - 1) * sectionAngle;
+const sectionStyle = (n: number, total: number) => {
+  const sectionAngle = 360 / total;
+  const startAngle = -(sectionAngle / 2); // Center alignment
+  const angle = startAngle + (n) * sectionAngle;
   return {
-    transform: `rotate(${angle}deg)`
+    transform: `rotate(${angle}deg) skewY(-${90 - sectionAngle}deg)`
   };
 };
 
@@ -40,22 +53,38 @@ const sectionStyle = (n: number) => {
  * 룰렛 자동 실행 로직
  * 컴포넌트가 마운트되거나 visible해지면 자동 실행
  */
-const spinRoulette = () => {
+const RESULT_HOLD_MS = 1500
+const FADE_OUT_MS = 300
+const ACK_DELAY_MS = 500
+
+const spinRoulette = (targetVal: number) => {
   if (isSpinning.value) return;
   isSpinning.value = true;
+  displayResult.value = null;
 
-  // 1~6 랜덤값 생성
-  const result = Math.floor(Math.random() * 6) + 1;
-  const targetIndex = labelByIndex.indexOf(result);
-
+  const labels = labelByIndex.value;
+  // Use the provided target value
+  const result = targetVal;
+  
+  // Find index. If not found, default to 0 (should not happen if logic matches)
+  let targetIndex = labels.indexOf(result);
+  if (targetIndex === -1) {
+      console.warn(`Roulette target ${result} not found in labels`, labels);
+      targetIndex = 0;
+  }
+  
   // 회전 애니메이션 계산
-  const sectionAngle = 360 / 6;
+  const sectionAngle = 360 / labels.length;
   const totalSpins = 360 * 5; // 최소 5바퀴
   const currentDegrees = ((rotation.value % 360) + 360) % 360;
-  const extraToZero = (360 - currentDegrees) % 360;
+  
+  // Target rotation: We want the target index to land at the TOP (0 degrees).
   const targetRotation = -(targetIndex * sectionAngle);
-
-  rotation.value += totalSpins + extraToZero + targetRotation;
+  
+  // Calculate delta to reach multiple of 360 + target
+  const extra = (360 - currentDegrees) % 360;
+  
+  rotation.value += totalSpins + extra + targetRotation;
 
   // 회전 종료 후 로직
   // 1. 회전 시간(3.2s) 대기
@@ -64,27 +93,41 @@ const spinRoulette = () => {
   // 4. GameBoard에 이동 신호 전송
   setTimeout(() => {
     isSpinning.value = false;
+    displayResult.value = rouletteValue.value ?? result;
     
     // 결과 보여주기 위한 짧은 대기
     setTimeout(() => {
         isVisible.value = false; // 팝업 닫기 (이러면 보드판이 보임)
         
-        // 팝업이 완전히 사라진 후 이동 신호 전송 (Fade out 고려 0.3s)
+        // 팝업이 완전히 사라진 후 이동 신호 전송
         setTimeout(() => {
-             gameStore.setRouletteResult(result);
-        }, 300);
-    }, 1500); // 1.5초 동안 결과 보여줌
+            setTimeout(() => {
+                gameStore.setRouletteResult(result);
+                wsStore.sendAck(
+                    'ROULETTE_COMPLETE',
+                    gameStore.currentRoundResult?.quizId,
+                    gameStore.gameState.round ?? undefined
+                );
+                // [FIX] Clear roulette target so QuizOverlay can show next time
+                gameStore.handleRouletteComplete();
+            }, ACK_DELAY_MS);
+        }, FADE_OUT_MS);
+    }, RESULT_HOLD_MS); // 결과 보여줌
 
   }, 3200);
 };
 
-// TargetId가 생기면 팝업을 열고 스핀 시작
-watch(() => gameStore.rouletteTargetId, (newVal) => {
-  if (newVal) {
-    isVisible.value = true;
-    setTimeout(() => {
-        spinRoulette();
-    }, 500);
+// TargetId가 생기고, 결과 값이 설정되면 스핀 시작
+watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId, newVal]) => {
+  if (newId) {
+    isVisible.value = true; // Show overlay immediately when ID is set
+  }
+  
+  if (newId && newVal != null && !isSpinning.value) {
+      // Delay slightly for effect implies waiting for Value
+      setTimeout(() => {
+        spinRoulette(newVal as number);
+      }, 100);
   }
 }, { immediate: true });
 
@@ -104,18 +147,21 @@ watch(() => gameStore.rouletteTargetId, (newVal) => {
                 <!-- 룰렛 원판 -->
                 <div class="roulette-wheel" :style="wheelStyle">
                 <div
-                    v-for="i in 6"
+                    v-for="(label, i) in labelByIndex"
                     :key="i"
                     class="wheel-section"
-                    :style="sectionStyle(i)"
+                    :style="sectionStyle(i, labelByIndex.length)"
                 >
-                    <span class="section-label">{{ labelByIndex[i - 1] }}</span>
+                    <span class="section-label" :style="{ transform: `skewY(${90 - (360 / labelByIndex.length)}deg) rotate(${360 / labelByIndex.length / 2}deg)` }">{{ label }}</span>
                 </div>
                 </div>
             </div>
             
             <div class="info-text">
-                <p>앞으로 {{ rotation > 0 && !isSpinning ? '...' : '' }} 칸 이동합니다</p>
+                <p v-if="displayResult !== null">
+                    앞으로 {{ displayResult }} 칸 이동합니다
+                </p>
+                <p v-else>결과 확인 중...</p>
                 <small>(잠시 후 맵 이동 애니메이션)</small>
             </div>
         </div>
