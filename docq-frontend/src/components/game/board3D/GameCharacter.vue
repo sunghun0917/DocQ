@@ -1,229 +1,215 @@
-<!-- src/components/game/board3d/Character.vue -->
 <script setup lang="ts">
-import { shallowRef, watch, onMounted } from 'vue'
-import { useAnimations, useGLTF } from '@tresjs/cientos'
-import { useIsometric } from '@/composables/useIsometric'
-// @ts-ignore
-import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import * as THREE from 'three' // THREE 타입 사용을 위해 임포트
+import { computed, onMounted, shallowRef, watch } from 'vue'
+import * as THREE from 'three'
 import gsap from 'gsap'
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
-// [TS] Props 인터페이스 정의 (상세 주석 포함)
-// withDefaults를 사용하여 color의 기본값을 설정
+type Vec3 = { x: number; y: number; z: number }
+
+type PointerEventsObject3D = THREE.Object3D & {
+  setPointerCapture(pointerId: number): void
+  releasePointerCapture(pointerId: number): void
+  hasPointerCapture(pointerId: number): boolean
+}
+
 const props = withDefaults(defineProps<{
-  x: number         // 현재 그리드 X 좌표
-  y: number         // 현재 그리드 Y 좌표
-  isMoving: boolean // 이동 중 여부 (true면 애니메이션 시점 보정)
-  lookTarget: { x: number, y: number } // 다음 시선 목표 지점
-  color?: string    // 캐릭터 색상 (선택 사항, 기본값 흰색)
+  modelUrl: string
+  position: Vec3
+  lookTarget: Vec3
+  isMoving: boolean
+  color?: string
 }>(), {
   color: '#ffffff'
 })
 
-// 3D 좌표 변환 훅 가져오기
-const { get3DPos } = useIsometric()
+const MODEL_YAW_OFFSET = Math.PI
+const STEP_DURATION_MS = 350
+const STEP_DURATION_S = STEP_DURATION_MS / 1000
+const JUMP_HEIGHT = 0.35
+const CHARACTER_Y_OFFSET = 0
 
-let sharedGltf: any | null = null
-let sharedClips: any[] = []
-let sharedLoadPromise: Promise<any> | null = null
+const gltfCache = new Map<string, GLTF>()
+const gltfPromiseCache = new Map<string, Promise<GLTF>>()
 
-const loadSharedGltf = async () => {
-  if (sharedGltf) return sharedGltf
-  if (!sharedLoadPromise) {
-    // [GLB 변경] 확장자를 glb로 변경하고 useGLTF를 사용
-    // @ts-ignore
-    sharedLoadPromise = useGLTF('/assets/character/Walking.glb') as Promise<any>
-  }
-  const loaded = await sharedLoadPromise
-  
-  // 디버깅: 로드된 객체 구조 확인
-  console.log('GLTF Loaded Raw:', loaded)
-  
-  // [수정] useGLTF가 Promise가 아닌 Composable 형태({ state, isReady ... })로 리턴되는 경우 처리
-  let finalData = loaded
-  if (loaded && typeof loaded === 'object') {
-    // 1. state 라는 Ref 안에 데이터가 있는 경우 (로그상 이 케이스 유력)
-    if ('state' in loaded && loaded.state?.value) {
-      finalData = loaded.state.value
-    }
-    // 2. 혹은 loaded 자체가 Ref인 경우 (.value)
-    else if ('value' in loaded && loaded.value) {
-      finalData = loaded.value
-    }
-  }
-  
-  console.log('Final GLTF Data:', finalData)
+const loadGltf = async (url: string): Promise<GLTF> => {
+  const cached = gltfCache.get(url)
+  if (cached) return cached
 
-  sharedGltf = finalData
-  // GLTF 객체 구조: { scene, animations, ... }
-  // Tresjs/cientos useGLTF는 scene을 바로 반환하는 경우도 있으므로 체크 필요
-  sharedClips = sharedGltf.animations || []
-  return sharedGltf
+  const cachedPromise = gltfPromiseCache.get(url)
+  if (cachedPromise) return cachedPromise
+
+  const loader = new GLTFLoader()
+
+  const loadPromise = loader.loadAsync(url)
+    .then((gltf) => {
+      gltfCache.set(url, gltf)
+      gltfPromiseCache.delete(url)
+      return gltf
+    })
+    .catch((error) => {
+      gltfPromiseCache.delete(url)
+      throw error
+    })
+
+  gltfPromiseCache.set(url, loadPromise)
+
+  return loadPromise
 }
 
-/* ===== GLB 모델 로드 ===== */
-const gltfData = await loadSharedGltf()
-// 구조 분해 할당 시 fallback 처리
-const idleSceneRaw = gltfData.scene || gltfData
-const idleClips = sharedClips
+const scene = shallowRef<PointerEventsObject3D | null>(null)
 
-/* ===== 씬 복제 (Independent Instances) ===== */
-// 원본 씬을 그대로 쓰면 모든 플레이어가 똑같이 움직이므로, clone()으로 복제해서 사용
-// [TS] 타입 단언(as THREE.Group)을 사용하여 타입 에러 방지
-let scene: THREE.Group | null = null
-if (idleSceneRaw) {
-  scene = (typeof idleSceneRaw.clone === 'function' ? clone(idleSceneRaw) : idleSceneRaw) as THREE.Group
-}
+const applyPlayerColor = (root: THREE.Object3D) => {
+  if (!props.color || props.color === '#ffffff') return
 
-/* ===== 색상 적용 (Material Clone) ===== */
-// 각 플레이어마다 다른 색상을 입히기 위해 재질(Material)도 복제해야 함
-if (scene) {
-  scene.traverse((child: any) => {
-    // [해결 코드] 
-    // 이름에 'box', 'cube', 'cs_' 등이 포함된 객체를 렌더링하지 않도록 설정
-    if (child.isMesh && (
-      child.name.toLowerCase().includes('box') || 
-      child.name.toLowerCase().includes('cube') ||
-      child.name.startsWith('cs_')
-    )) {
-      child.visible = false; // 렌더링 제외
-      child.castShadow = false; // 그림자도 제거
-      child.receiveShadow = false;
-    }
-    
-    // Mesh인 경우에만 재질 변경
-    if (child.isMesh && child.material) {
-      const mesh = child as THREE.Mesh
-      // 재질을 복제하여 독립적인 색상 적용 가능하게 함
-      if (Array.isArray(mesh.material)) {
-        mesh.material = mesh.material.map(m => m.clone())
-      } else {
-        mesh.material = mesh.material.clone()
-        if ('color' in mesh.material) {
-            (mesh.material as THREE.MeshStandardMaterial).color.setStyle(props.color)
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+
+    const mesh = child
+    if (!mesh.material) return
+
+    if (Array.isArray(mesh.material)) {
+      mesh.material = mesh.material.map((material: THREE.Material) => material.clone())
+      mesh.material.forEach((material: THREE.Material) => {
+        if (material instanceof THREE.MeshStandardMaterial) {
+          material.color.setStyle(props.color)
         }
+      })
+      return
+    }
+
+    const nextMaterial = mesh.material.clone()
+    if (nextMaterial instanceof THREE.MeshStandardMaterial) {
+      nextMaterial.color.setStyle(props.color)
+    }
+
+    mesh.material = nextMaterial
+  })
+}
+
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t)
+
+const getYawTowards = (from: THREE.Vector3, to: THREE.Vector3) => {
+  const dx = to.x - from.x
+  const dz = to.z - from.z
+  return Math.atan2(dx, dz) + MODEL_YAW_OFFSET
+}
+
+const updateLookDirection = () => {
+  const currentScene = scene.value
+  if (!currentScene) return
+
+  const from = currentScene.position.clone()
+  const to = new THREE.Vector3(props.lookTarget.x, props.lookTarget.y, props.lookTarget.z)
+  currentScene.rotation.set(0, getYawTowards(from, to), 0)
+}
+
+let activeTween: gsap.core.Tween | null = null
+
+const animateTo = (target: THREE.Vector3) => {
+  const currentScene = scene.value
+  if (!currentScene) return
+
+  if (activeTween) {
+    activeTween.kill()
+    activeTween = null
+  }
+
+  const from = currentScene.position.clone()
+  const to = target.clone()
+
+  currentScene.rotation.set(0, getYawTowards(from, to), 0)
+
+  const progress = { t: 0 }
+  activeTween = gsap.to(progress, {
+    t: 1,
+    duration: STEP_DURATION_S,
+    ease: 'none',
+    onUpdate: () => {
+      const eased = easeInOut(progress.t)
+
+      currentScene.position.x = THREE.MathUtils.lerp(from.x, to.x, eased)
+      currentScene.position.z = THREE.MathUtils.lerp(from.z, to.z, eased)
+
+      const baseY = THREE.MathUtils.lerp(from.y, to.y, eased)
+      const jumpY = JUMP_HEIGHT * Math.sin(Math.PI * eased)
+      currentScene.position.y = baseY + jumpY
+    },
+    onComplete: () => {
+      currentScene.position.copy(to)
+      activeTween = null
+
+      if (!props.isMoving) {
+        updateLookDirection()
       }
     }
   })
 }
 
-// 애니메이션 클립 준비 (첫 번째 클립이 걷기 동작이라고 가정)
-const idleClip = idleClips[0] || null
-const allClips = shallowRef(idleClip ? [idleClip] : [])
+const targetWorldPos = computed(() => new THREE.Vector3(
+  props.position.x,
+  props.position.y + CHARACTER_Y_OFFSET,
+  props.position.z
+))
 
-// 로드 실패 시 에러 로그
-if (!scene) {
-  console.error('Character scene is null; check GLTF load.')
-}
-
-// 상수로 관리하는 설정값들
-const FADE_TIME = 0.2       // 애니메이션 전환 페이드 시간
-const MOVE_DURATION = 0.5   // 한 칸 이동 시간
-const Y_OFFSET = 0.45       // 바닥 아래로 보이는 현상 방지
-
-/* ===== 초기 위치 설정 ===== */
-if (scene) {
-  // 시작점 3D 좌표 계산
-  const startPos = get3DPos(props.x, props.y)
-
-  // Y축(높이) 보정값 적용
-  scene.position.set(startPos[0], startPos[1] + Y_OFFSET, startPos[2])
-
-  // GLB는 보통 1 unit = 1 meter. 
-  // 만약 너무 작거나 크면 여기서 조절하세요. (예: 100, 0.5 등)
-  scene.scale.set(1.5, 1.5, 1.5)
-
-  // 기본 회전값 (모델이 뒷면을 보고 있다면 180도 회전)
-  scene.rotation.y = Math.PI
-}
-
-/* ===== 애니메이션 액션 설정 ===== */
-// scene이 null일 수 있으므로 타입 단언 또는 대체값 사용
-const animationTarget = scene ?? new THREE.Object3D()
-const { actions } = useAnimations(allClips, animationTarget as any)
-
-/*
- * 함수: 다음 이동할 칸을 바라보게 회전시키는 함수
- */
-const updateLookDirection = () => {
-  if (!scene || !props.lookTarget) return
-  const target3D = get3DPos(props.lookTarget.x, props.lookTarget.y)
-  const dx = target3D[0] - scene.position.x
-  const dz = target3D[2] - scene.position.z
-  scene.rotation.set(0, Math.atan2(dx, dz), 0)
-}
-
-/*
- * 라이프사이클
- */
-onMounted(() => {
-  if (idleClip && actions[idleClip.name]) {
-    const action = actions[idleClip.name]
-    if (action) {
-      // 속도를 2배로 설정 (씩씩하게 걷는 느낌)
-      action.setEffectiveTimeScale(2.0)
-      // 페이드인과 함께 재생
-      action.reset().fadeIn(FADE_TIME).play()
-    }
+const loadCharacterScene = async () => {
+  if (activeTween) {
+    activeTween.kill()
+    activeTween = null
   }
-  // 초기 시선 처리
+
+  const gltf = await loadGltf(props.modelUrl)
+  const cloned = cloneSkeleton(gltf.scene as unknown as PointerEventsObject3D) as PointerEventsObject3D
+  applyPlayerColor(cloned)
+
+  cloned.position.copy(targetWorldPos.value)
+  scene.value = cloned
+
   updateLookDirection()
+}
+
+onMounted(() => {
+  void loadCharacterScene()
 })
 
-/*
- * 감시자(Watch): 캐릭터 좌표(x, y)가 변경될 때마다 이동 애니메이션 실행
- */
 watch(
-  () => [props.x, props.y] as [number, number],
-  ([newX, newY]: [number, number]) => {
-    if (!scene) return
-
-    // 목표 지점 3D 좌표
-    const target: [number, number, number] = get3DPos(newX, newY)
-
-    // GSAP를 이용한 부드러운 트윈(Tween) 이동
-    gsap.to(scene.position, {
-      x: target[0],
-      z: target[2],
-      y: target[1] + Y_OFFSET,
-      duration: MOVE_DURATION,
-      ease: 'power1.inOut', // 부드러운 가감속
-
-      // 이동 시작 시: 목적지 바라보기
-      onStart: () => {
-        const dest3D: [number, number, number] = get3DPos(newX, newY)
-        const dx = dest3D[0] - scene.position.x
-        const dz = dest3D[2] - scene.position.z
-        scene.rotation.set(0, Math.atan2(dx, dz), 0)
-      },
-
-      // 이동 완료 시: 다음 타겟(Target+1) 바라보기
-      onComplete: () => {
-        updateLookDirection()
-      }
-    })
+  () => props.modelUrl,
+  () => {
+    void loadCharacterScene()
   }
 )
 
-/*
- * 감시자(Watch): 이동이 멈췄을 때 시선 재정렬
- */
-watch(() => props.isMoving, (moving) => {
-  if (!moving) updateLookDirection()
-})
+watch(
+  () => [props.position.x, props.position.y, props.position.z] as const,
+  () => {
+    if (!scene.value) return
+    animateTo(targetWorldPos.value)
+  }
+)
 
-/*
- * 감시자(Watch): 다음 목표(lookTarget)가 바뀌면 시선 갱신
- */
-watch(() => props.lookTarget, () => updateLookDirection(), { deep: true })
+watch(
+  () => [props.lookTarget.x, props.lookTarget.y, props.lookTarget.z] as const,
+  () => {
+    if (!props.isMoving) {
+      updateLookDirection()
+    }
+  }
+)
+
+watch(
+  () => props.isMoving,
+  (moving) => {
+    if (!moving) {
+      updateLookDirection()
+    }
+  }
+)
 </script>
 
 <template>
-  <!-- 씬 객체가 준비되면 렌더링 -->
   <primitive v-if="scene" :object="scene" cast-shadow />
-  
-  <!-- 로드 실패 시 디버그용 큐브 (빨강) -->
-  <TresMesh v-else :position="get3DPos(x, y)" :scale="[0.5, 0.5, 0.5]">
+
+  <TresMesh v-else :position="[position.x, position.y, position.z]" :scale="[0.3, 0.3, 0.3]">
     <TresBoxGeometry />
     <TresMeshStandardMaterial color="red" />
   </TresMesh>

@@ -51,6 +51,7 @@ public class GameService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final GameEventStore gameEventStore;
     private final AckStore ackStore;
+    private static final int START_POSITION = 1;
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
@@ -416,7 +417,7 @@ public class GameService {
             PlayerState ps = PlayerState.builder()
                     .userId(pid)
                     .score(0)
-                    .position(0)
+                    .position(START_POSITION)
                     .hasBuff(null)
                     .build();
             room.getPlayerStates().put(pid, ps);
@@ -426,8 +427,11 @@ public class GameService {
         room.getMapEvents().clear();
         Random random = new Random();
         Set<Integer> eventTiles = new HashSet<>();
+        int eventMinPosition = START_POSITION + 1;
+        int eventMaxPosition = TARGET_POSITION - 1;
+
         while (eventTiles.size() < 5) {
-            int pos = random.nextInt(29) + 1; // 1 ~ 29 (0번은 시작점이라 제외)
+            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) + eventMinPosition;
             if (eventTiles.add(pos)) {
                 room.getMapEvents().put(pos, "TILE_X2");
             }
@@ -539,7 +543,7 @@ public class GameService {
             PlayerState ps = PlayerState.builder()
                     .userId(pid)
                     .score(0)
-                    .position(0)
+                    .position(START_POSITION)
                     .hasBuff(null)
                     .build();
             room.getPlayerStates().put(pid, ps);
@@ -845,8 +849,8 @@ public class GameService {
                 int currentPos = winnerState.getPosition();
                 int nextPos = currentPos + moveValue;
 
-                if (nextPos < 0)
-                    nextPos = 0;
+                if (nextPos < START_POSITION)
+                    nextPos = START_POSITION;
                 if (nextPos >= TARGET_POSITION) {
                     nextPos = TARGET_POSITION;
                     finishPlanned = true;
@@ -867,8 +871,8 @@ public class GameService {
                     nextPos += moveValue;
 
                     // Boundary Check
-                    if (nextPos < 0)
-                        nextPos = 0;
+                    if (nextPos < START_POSITION)
+                        nextPos = START_POSITION;
                     if (nextPos >= TARGET_POSITION) {
                         nextPos = TARGET_POSITION;
                         finishPlanned = true;
@@ -905,8 +909,8 @@ public class GameService {
                     if ("TILE_X2".equals(eventType)) {
                         nextPos += moveValue;
                         // Boundary Check
-                        if (nextPos < 0)
-                            nextPos = 0;
+                        if (nextPos < START_POSITION)
+                            nextPos = START_POSITION;
                         if (nextPos >= TARGET_POSITION) {
                             nextPos = TARGET_POSITION;
                             finishPlanned = true;
@@ -926,12 +930,12 @@ public class GameService {
                         continue;
 
                     PlayerState other = room.getPlayerStates().get(pid);
-                    if (other != null && other.getPosition() == nextPos && nextPos != 0) {
+                    if (other != null && other.getPosition() == nextPos && nextPos != START_POSITION) {
                         actions.add(GameDto.MoveAction.builder()
                                 .type("CATCH")
                                 .targetUserId(pid)
                                 .before(other.getPosition())
-                                .after(0)
+                                .after(START_POSITION)
                                 .build());
                     }
                 }
