@@ -16,6 +16,19 @@ services:
     networks:
       - docq-network
 
+  backend:
+    build: ../../docq_backend
+    restart: unless-stopped
+    environment:
+#      - SPRING_PROFILES_ACTIVE=prod
+      - ai.url=http://ai-service:8000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - docq-network
+
   redis:
     image: redis:7-alpine
     container_name: redis
