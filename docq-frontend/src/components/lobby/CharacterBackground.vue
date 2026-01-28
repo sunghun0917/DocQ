@@ -92,15 +92,18 @@ const initThree = () => {
         const mixer = new THREE.AnimationMixer(model);
         mixers.push(mixer); // 배열에 추가
         
-        const action = mixer.clipAction(gltf.animations[0]);
-        
-        // [디테일] 걷는 동작이 로봇처럼 똑같지 않게 시작 시간을 랜덤하게 섞음
-        action.time = Math.random() * 2; 
-        
-        // 속도도 미세하게 다르게 (선택사항)
-        action.timeScale = charData.speed; 
-        
-        action.play();
+        const clip = gltf.animations[0];
+        if (clip) {
+          const action = mixer.clipAction(clip);
+          
+          // [디테일] 걷는 동작이 로봇처럼 똑같지 않게 시작 시간을 랜덤하게 섞음
+          action.time = Math.random() * 2; 
+          
+          // 속도도 미세하게 다르게 (선택사항)
+          action.timeScale = charData.speed; 
+          
+          action.play();
+        }
       }
     });
   });
