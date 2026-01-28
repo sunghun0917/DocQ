@@ -28,6 +28,7 @@ export interface RoomInfo {
     inviteCode: string
     hostId: string
     currentCount: number
+    quizCount: number
 }
 
 export const useRoomStore = defineStore('room', () => {
@@ -40,7 +41,8 @@ export const useRoomStore = defineStore('room', () => {
         status: 'WAITING',
         inviteCode: '',
         hostId: '',
-        currentCount: 0
+        currentCount: 0,
+        quizCount: 0
     })
 
     const users = ref<User[]>([])
@@ -82,7 +84,8 @@ export const useRoomStore = defineStore('room', () => {
             status: 'WAITING',
             inviteCode: '',
             hostId: '',
-            currentCount: 0
+            currentCount: 0,
+            quizCount: 0
         }
         users.value = []
         isHost.value = false
