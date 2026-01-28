@@ -21,40 +21,32 @@ const isPrivateRoom = ref(false);
 const resolvedRoom = ref<RoomResponse | null>(null)
 const lastCheckedCode = ref('')
 const isNicknameSet = computed(() => !!userStore.userId);
-// [추가] 알림(토스트) 상태 관리
+
+// 알림 상태
 const isAlertOpen = ref(false);
 const alertMessage = ref('');
 const alertType = ref<'success' | 'error'>('error');
 const isShaking = ref(false);
-// [추가] 알림 띄우기 도우미 함수
+
+const triggerShake = () => {
+  isShaking.value = true;
+  setTimeout(() => { isShaking.value = false; }, 500);
+}
+
 const triggerAlert = (message: string, type: 'success' | 'error' = 'error') => {
   alertMessage.value = message;
   alertType.value = type;
   isAlertOpen.value = true;
-  if (type === 'error') {
-    triggerShake();
-  }
+  if (type === 'error') triggerShake();
 }
-const triggerShake = () => {
-  isShaking.value = true;
-  setTimeout(() => {
-    isShaking.value = false;
-  }, 500);
-}
-// 방참가 or 방취소 로직
+
+// 방참가 로직
 const joinRoom = async () => {
   const inviteCode = roomCode.value.trim().toUpperCase()
-  if (!inviteCode) {
-    triggerAlert("입장 코드를 입력해주세요!"); // [수정] alert -> triggerAlert
-    return;
-  }
-
-  if (!userStore.userId) {
-    triggerAlert('닉네임을 먼저 설정해주세요.'); // [수정]
-    return
-  }
-
+  if (!inviteCode) { triggerAlert("입장 코드를 입력해주세요!"); return; }
+  if (!userStore.userId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
   if (isSubmitting.value) return
+  
   isSubmitting.value = true
 
   try {
@@ -64,7 +56,7 @@ const joinRoom = async () => {
     isPrivateRoom.value = room.isPrivate
 
     if (room.isPrivate && !password.value.trim()) {
-      triggerAlert("비밀번호를 입력해주세요!"); // [수정]
+      triggerAlert("비밀번호를 입력해주세요!");
       return;
     }
 
@@ -87,12 +79,13 @@ const joinRoom = async () => {
     await wsStore.connect()
     wsStore.subscribeErrors(userStore.userId)
     wsStore.subscribeGameState(room.roomId)
+    wsStore.subscribeMiniGame(room.roomId)
     wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
 
     router.push(`/waiting/${room.roomId}`);
     emit('close');
   } catch (error) {
-    triggerAlert(getErrorMessage(error)); // [수정]
+    triggerAlert(getErrorMessage(error));
   } finally {
     isSubmitting.value = false
   }
@@ -115,66 +108,83 @@ const checkRoomType = async () => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-[#881337]/20 backdrop-blur-sm p-4 animate-fade-in font-display">
+  <div class="fixed inset-0 z-50 flex items-center justify-center px-4 font-display">
     
-    <div class="w-full max-w-sm bg-white/95 backdrop-blur-xl rounded-[18px] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] p-14 border-4 border-white ring-4 ring-[#ffe4e6] animate-slide-up relative">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" @click="$emit('close')"></div>
 
+    <div class="animate-pop-in w-full max-w-[360px] h-[300px] flex justify-center">
+        
+      <div class="relative bg-[#fff8e1] w-full rounded-[32px] box-border !px-8 py-12
+                  flex flex-col border-[6px] border-[#8d6e63] shadow-[0_12px_35px_rgba(0,0,0,0.25)]"
+           :class="{ 'animate-shake': isShaking }">
+        
+        <div class="absolute top-5 left-5 w-3.5 h-3.5 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]"></div>
+        <div class="absolute top-5 right-5 w-3.5 h-3.5 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]"></div>
+        <div class="absolute bottom-5 left-5 w-3.5 h-3.5 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]"></div>
+        <div class="absolute bottom-5 right-5 w-3.5 h-3.5 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]"></div>
+        <div class="w-full h-6"></div>
+        <h2 class="text-4xl font-display text-[#5d4037] mb-10 text-center drop-shadow-sm tracking-wide mt-2">
+          참여하기
+        </h2>
+        <div class="w-full h-3"></div>
+        <div class="flex flex-col gap-8 mb-10 w-full">
+          
+          <div class="w-full">
+            <label class="block text-[#8d6e63] text-xl font-bold mb-3 ml-1 flex items-center gap-2">
+              <span class="material-symbols-outlined text-2xl">link</span>
+              입장 코드
+            </label>
+            <input 
+              v-model="roomCode"
+              type="text" 
+              placeholder="예: A1B2" 
+              class="w-full h-14 px-6 rounded-2xl border-4 border-[#d7ccc8] bg-white 
+                     focus:border-[#7cb342] focus:bg-[#f1f8e9] outline-none 
+                     font-black text-2xl text-center text-[#5d4037] tracking-[0.2em] uppercase 
+                     placeholder:text-[#d7ccc8] placeholder:font-normal placeholder:tracking-normal placeholder:text-xl transition-all"
+              @keyup.enter="joinRoom"
+              @blur="checkRoomType"
+            />
+          </div>
 
-      <h2 class="text-3xl font-extrabold text-[#881337] mb-2 text-center flex items-center justify-center gap-3">
-        참여하기
-      </h2>
+          <div v-if="isPrivateRoom" class="animate-slide-down w-full">
+            <label class="block text-[#8d6e63] text-xl font-bold mb-3 ml-1 flex items-center gap-2">
+              <span class="material-symbols-outlined text-2xl">lock</span>
+              비밀번호
+            </label>
+            <input 
+              v-model="password"
+              type="password" 
+              placeholder="비밀번호 4자리" 
+              maxlength="4"
+              class="w-full h-14 px-6 rounded-2xl border-4 border-[#ef5350] bg-[#fff1f2] 
+                     focus:border-[#e53935] focus:bg-[#ffebee] outline-none 
+                     font-black text-2xl text-center text-[#c62828] tracking-widest 
+                     placeholder:text-[#ef9a9a] placeholder:font-normal placeholder:tracking-normal placeholder:text-xl transition-all"
+              @keyup.enter="joinRoom"
+            />
+          </div>
 
-      <div class="space-y-8 mb-10">
-        <div>
-          <label class="block text-[#9f1239] font-bold mb-3 ml-1 flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[18px]">link</span>
-            입장 코드
-          </label>
-          <input 
-            v-model="roomCode"
-            type="text" 
-            placeholder="예: A1B2" 
-            class="w-full h-10 px-6 rounded-xl border-2 border-[#fecdd3] bg-white focus:border-[#e11d48] focus:ring-4 focus:ring-[#e11d48]/10 outline-none font-black text-xl text-center text-[#881337] tracking-[0.2em] uppercase transition-all placeholder:font-normal placeholder:tracking-normal placeholder:text-xl placeholder:text-[#fda4af]"
-            :class="{ 'animate-shake ring-4 ring-red-500/50 border-red-500': isShaking }"
-            @keyup.enter="joinRoom"
-            @blur="checkRoomType"
-          />
         </div>
 
-        <div v-if="isPrivateRoom" class="animate-slide-down bg-[#fff1f2] p-6 rounded-3xl border border-[#fecdd3]">
-          <label class="block text-[#9f1239] font-bold mb-3 ml-1 flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[18px]">lock</span>
-            비밀번호
-          </label>
-          <input 
-            v-model="password"
-            type="password" 
-            placeholder="비밀번호 4자리" 
-            maxlength="4"
-            class="w-full h-10 px-6 rounded-2xl border-2 border-[#fecdd3] bg-white focus:border-[#e11d48] focus:ring-2 focus:ring-[#e11d48]/10 outline-none font-black text-xl text-[#881337] text-center tracking-widest transition-all placeholder:text-[#fda4af] placeholder:font-normal placeholder:tracking-normal"
-            :class="{ 'animate-shake ring-4 ring-red-500/50 border-red-500': isShaking }"
-            @keyup.enter="joinRoom"
-          />
+        <div class="h-6 w-full invisible"></div>
+
+        <div class="flex gap-4 mt-auto w-full">
+          <button 
+            @click="$emit('close')"
+            class="cartoon-btn secondary"
+          >
+            취소
+          </button>
+          <button 
+            @click="joinRoom"
+            class="cartoon-btn primary"
+          >
+            입장하기
+          </button>
         </div>
-      </div>
-      <div v-if="!isNicknameSet" class="h-4 w-full"></div>
 
-      <div class="flex gap-4">
-        <button 
-          @click="$emit('close')"
-          class="flex-1 h-12 rounded-2xl font-bold text-lg text-[#e11d48] bg-white border-2 border-[#fecdd3] hover:bg-[#fff1f2] transition-colors"
-        >
-          취소
-        </button>
-        <button 
-          @click="joinRoom"
-          class="flex-[2] h-12 rounded-2xl font-black text-xl text-white bg-gradient-to-r from-[#e11d48] to-[#be123c] shadow-lg shadow-rose-500/30 hover:shadow-[0_0_25px_rgba(225,29,72,0.4)] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-        >
-          입장하기
-          <span class="material-symbols-outlined">arrow_forward</span>
-        </button>
       </div>
-
     </div>
 
     <AlertModal 
@@ -187,62 +197,64 @@ const checkRoomType = async () => {
 </template>
 
 <style scoped>
-.font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
 
-.animate-fade-in { animation: fadeIn 0.2s ease-out; }
-.animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.animate-slide-down { animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-/* [추가] 흔들림 애니메이션 */
-.animate-shake {
-  animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-}
+.font-display { font-family: 'Jua', sans-serif; }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-@keyframes slideDown {
-  from { 
-    opacity: 0; 
-    transform: translateY(-10px);
-    max-height: 0;
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0);
-    max-height: 200px;
-  }
+/* 카툰 버튼 공통 스타일 */
+.cartoon-btn {
+  flex: 1;
+  height: 60px;
+  border-radius: 18px;
+  font-size: 1.5rem;
+  color: white;
+  font-family: 'Jua', sans-serif;
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  top: 0;
+  border: none;
+  cursor: pointer;
 }
 
+/* 취소 버튼 (회색) */
+.cartoon-btn.secondary {
+  background-color: #9ca3af;
+  box-shadow: 0 5px 0 #6b7280;
+}
+.cartoon-btn.secondary:hover { background-color: #d1d5db; }
+.cartoon-btn.secondary:active { top: 5px; box-shadow: 0 0 0 #6b7280; }
+
+/* 입장 버튼 (초록색) */
+.cartoon-btn.primary {
+  background-color: #7cb342;
+  box-shadow: 0 5px 0 #558b2f;
+}
+.cartoon-btn.primary:hover { background-color: #8bc34a; }
+.cartoon-btn.primary:active { top: 5px; box-shadow: 0 0 0 #558b2f; }
+
+/* 애니메이션 */
+.animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+.animate-pop-in { animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+/* shake에 translate3d 사용으로 GPU 가속 유도 */
+.animate-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; transform: translate3d(0, 0, 0); backface-visibility: hidden; } 
+.animate-slide-down { animation: slideDown 0.3s ease-out forwards; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popIn { 
+  from { opacity: 0; transform: scale(0.8) translateY(20px) rotate(-2deg); }
+  to { opacity: 1; transform: scale(1) translateY(0) rotate(0deg); }
+}
 @keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
 }
 @keyframes slideDown {
-  from { 
-    opacity: 0; 
-    transform: translateY(-10px);
-    max-height: 0;
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0);
-    max-height: 200px;
-  }
+  from { opacity: 0; transform: translateY(-10px); max-height: 0; }
+  to { opacity: 1; transform: translateY(0); max-height: 200px; }
 }
 </style>
