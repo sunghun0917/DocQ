@@ -4,7 +4,7 @@ import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage } from '@/services/api';
 
-// 컴포넌트 임포트
+// 컴포넌트 임포트 (경로 확인 필요)
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
 import AlertModal from '@/components/common/AlertModal.vue';
 import CreateRoomModal from '@/components/lobby/CreateRoomModal.vue';
@@ -12,7 +12,7 @@ import JoinRoomModal from '@/components/lobby/JoinRoomModal.vue';
 
 gsap.registerPlugin(Observer);
 
-// --- 1. 데이터 및 상태 관리 ---
+// --- 1. 데이터 ---
 const menuItems = [
   { id: 'profile', label: '내 정보', description: '닉네임을 수정할 수 있어요.', icon: 'face' },
   { id: 'create', label: '방 만들기', description: '새로운 게임 방을 만들어요.', icon: 'add_circle' },
@@ -21,6 +21,9 @@ const menuItems = [
   { id: 'stack', label: '기술 스택', description: '개발 도구 정보입니다.', icon: 'code_blocks' },
   { id: 'team', label: '만든 사람들', description: '우리를 소개합니다!', icon: 'groups' },
 ];
+
+const totalItems = menuItems.length; // [중요] 변수 선언 위치 확인
+const anglePerItem = 360 / totalItems;
 
 const userStore = useUserStore();
 const nickname = ref('');
@@ -32,8 +35,6 @@ const errorMessage = ref('');
 const isShaking = ref(false);
 
 // --- 2. 룰렛 변수 ---
-const totalItems = menuItems.length;
-const anglePerItem = 360 / totalItems;
 const wheelRef = ref<HTMLElement | null>(null);
 const arrowRef = ref<HTMLElement | null>(null);
 const activeIndex = ref(0);
@@ -43,33 +44,175 @@ let targetRotation = 0;
 let isInteracting = false;
 let idleTimer: ReturnType<typeof setTimeout>;
 
-// 3D 캐릭터 속도용
+// 3D 캐릭터 속도 & 틱 애니메이션
 const rouletteSpeed = ref(0);
-
-// 틱 애니메이션용
 let lastSectionIndex = 0;
 let lastDelta = 0; 
 
 // --- 3. Computed Props ---
-const activeItem = computed(() => {
-  const item = menuItems[activeIndex.value];
-  return (item ?? menuItems[0])!;
-});
+const activeItem = computed(() => itemAt(activeIndex.value));
+const prevItemData = computed(() => itemAt(activeIndex.value - 1));
+const nextItemData = computed(() => itemAt(activeIndex.value + 1));
 
-const prevItemData = computed(() => {
-    let index = activeIndex.value - 1;
-    if (index < 0) index = totalItems - 1;
-    return menuItems[index];
-});
+// 안전하게 아이템 가져오는 헬퍼 함수
+const itemAt = (index: number) => {
+    // 음수 인덱스 처리 및 범위 보정
+    const adjustedIndex = ((index % totalItems) + totalItems) % totalItems;
+    return menuItems[adjustedIndex] || menuItems[0];
+};
 
-const nextItemData = computed(() => {
-    let index = activeIndex.value + 1;
-    if (index >= totalItems) index = 0;
-    return menuItems[index];
-});
+// --- 4. 핵심 로직 ---
 
-// --- 4. 로직 함수들 ---
+// [수정] 아이템 위치 계산 함수 (안전장치 추가)
+const getItemPosition = (index: number) => {
+    if (!menuItems || menuItems.length === 0) return 'pos-hidden';
+    
+    const active = activeIndex.value;
+    const total = totalItems;
+    
+    // 현재 activeIndex를 기준으로 상대적 거리 계산
+    let diff = (index - active + total) % total;
+    
+    if (diff === 0) return 'pos-center';       
+    if (diff === 1) return 'pos-right';        
+    if (diff === total - 1) return 'pos-left'; 
+    return 'pos-hidden';
+};
 
+// [회전 로직] 최단 경로 이동 (인덱스 기반)
+const goToIndex = (targetIndex: number) => {
+    isInteracting = true;
+
+    // 현재 각도에서 가장 가까운 '현재 인덱스' 역산
+    const currentRawIndex = -targetRotation / anglePerItem;
+    const currentRoundIndex = Math.round(currentRawIndex);
+    const currentVisibleIndex = ((currentRoundIndex % totalItems) + totalItems) % totalItems;
+
+    let diff = targetIndex - currentVisibleIndex;
+
+    // 지름길 보정
+    if (diff > totalItems / 2) diff -= totalItems;
+    if (diff < -totalItems / 2) diff += totalItems;
+
+    // 목표 각도 설정 (누적 인덱스 + 차이)
+    targetRotation = -(currentRoundIndex + diff) * anglePerItem;
+
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => isInteracting = false, 1000);
+};
+
+// 버튼 액션: 이전/다음 (물리적 한 칸 이동)
+const prevItem = () => {
+    isInteracting = true;
+    targetRotation += anglePerItem; 
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => isInteracting = false, 1000);
+};
+
+const nextItem = () => {
+    isInteracting = true;
+    targetRotation -= anglePerItem;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => isInteracting = false, 1000);
+};
+
+// 사이드 카드 클릭 핸들러
+const clickItem = (index: number) => {
+    // 중앙 클릭 시 무시 (이미 활성화됨)
+    if (index === activeIndex.value) return; 
+    
+    // 바로 옆이면 물리 이동, 아니면 최단거리 이동
+    goToIndex(index);
+};
+
+// 틱 애니메이션
+const playTickAnimation = (direction: number) => {
+    if (!arrowRef.value) return;
+    const tickAngle = direction > 0 ? -25 : 25;
+    gsap.killTweensOf(arrowRef.value);
+    gsap.to(arrowRef.value, {
+        rotation: tickAngle, duration: 0.05, ease: "power1.out",
+        onComplete: () => { gsap.to(arrowRef.value, { rotation: 0, duration: 0.3, ease: "elastic.out(1.2, 0.5)" }); }
+    });
+};
+
+// 메인 루프 (항상 실행)
+const updateLoop = () => {
+  // 로그인 여부와 상관없이 배경 룰렛은 돕니다.
+  if (!isInteracting) {
+      targetRotation -= 0.05; // 자동 회전
+  }
+  
+  const diff = targetRotation - currentRotation;
+  currentRotation += diff * 0.08;
+
+  const dynamicSpeed = Math.abs(diff) * 0.8;
+  rouletteSpeed.value = dynamicSpeed < 0.05 ? 0 : 0.5 + dynamicSpeed; // 멈춤 처리
+
+  if (Math.abs(diff) > 0.01) lastDelta = diff; 
+
+  if (wheelRef.value) {
+    gsap.set(wheelRef.value, { rotation: currentRotation });
+  }
+
+  // 핀 충돌 감지
+  const pinSpacing = anglePerItem / 2;
+  const collisionBias = 2;
+  const absRotation = Math.abs(currentRotation);
+  const currentPinIndex = Math.floor((absRotation + collisionBias) / pinSpacing);
+
+  if (currentPinIndex !== lastSectionIndex) {
+      playTickAnimation(lastDelta);
+      lastSectionIndex = currentPinIndex;
+  }
+
+  // 인덱스 업데이트
+  let rawIndex = Math.round(-currentRotation / anglePerItem);
+  let index = ((rawIndex % totalItems) + totalItems) % totalItems;
+
+  if (activeIndex.value !== index) {
+    activeIndex.value = index;
+  }
+};
+
+// 룰렛 초기화
+let observer: any = null;
+const startRoulette = () => {
+    if (observer) return;
+    gsap.ticker.add(updateLoop);
+    observer = Observer.create({
+        target: window,
+        type: "wheel,touch,pointer",
+        wheelSpeed: -1.3,
+        // 로그인 전에는 클릭으로 멈추지 않게 함
+        onPress: () => { 
+            if (!isNicknameSet.value) return; 
+            isInteracting = true; clearTimeout(idleTimer); 
+        },
+        onRelease: () => { 
+            if (!isNicknameSet.value) return; 
+            clearTimeout(idleTimer); idleTimer = setTimeout(() => isInteracting = false, 1000); 
+        },
+        onChange: (self: any) => {
+            if (!isNicknameSet.value) return; // 로그인 전 휠 막기
+            isInteracting = true;
+            let delta = self.deltaY * 0.3;
+            delta = Math.max(-60, Math.min(60, delta));
+            targetRotation += delta; // 휠 방향
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => isInteracting = false, 1000);
+        }
+    });
+};
+
+const stopRoulette = () => {
+    gsap.ticker.remove(updateLoop);
+    if (observer) { observer.kill(); observer = null; }
+    clearTimeout(idleTimer);
+    currentRotation = 0; targetRotation = 0; activeIndex.value = 0;
+};
+
+// 기타 핸들러
 const confirmNickname = async () => {
   if (nickname.value.trim().length < 2) {
     triggerShake();
@@ -80,7 +223,6 @@ const confirmNickname = async () => {
   const result = await userStore.loginWithApi(nickname.value.trim());
   if (!result.success) {
     triggerShake();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     errorMessage.value = getErrorMessage((result as any).error);
     isErrorModalOpen.value = true;
     return;
@@ -110,166 +252,7 @@ const handleAction = (action: string) => {
   }
 };
 
-// [회전 로직]
-const prevItem = () => {
-    isInteracting = true;
-    targetRotation += anglePerItem;
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => isInteracting = false, 1000);
-};
-
-const nextItem = () => {
-    isInteracting = true;
-    targetRotation -= anglePerItem;
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => isInteracting = false, 1000);
-};
-
-const goToIndex = (index: number) => {
-    isInteracting = true;
-    const targetBaseAngle = -(index * anglePerItem);
-    const currentAngle = targetRotation;
-    let diff = (targetBaseAngle - currentAngle) % 360;
-
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-
-    targetRotation += diff;
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => isInteracting = false, 1000);
-};
-
-const playTickAnimation = (direction: number) => {
-    if (!arrowRef.value) return;
-    const tickAngle = direction > 0 ? -25 : 25;
-
-    gsap.killTweensOf(arrowRef.value);
-    gsap.to(arrowRef.value, {
-        rotation: tickAngle, duration: 0.05, ease: "power1.out",
-        onComplete: () => {
-            gsap.to(arrowRef.value, { rotation: 0, duration: 0.3, ease: "elastic.out(1.2, 0.5)" });
-        }
-    });
-};
-
-const updateLoop = () => {
-  // 로그인 여부 상관없이 배경은 항상 돔
-  
-  if (!isInteracting) {
-      targetRotation -= 0.05; 
-  }
-  
-  const diff = targetRotation - currentRotation;
-  currentRotation += diff * 0.08;
-
-  const dynamicSpeed = Math.abs(diff) * 0.8;
-  rouletteSpeed.value = dynamicSpeed < 0.05 ? 0 : 0.5 + dynamicSpeed;
-
-  if (Math.abs(diff) > 0.01) {
-      lastDelta = diff; 
-  }
-
-  if (wheelRef.value) {
-    gsap.set(wheelRef.value, { rotation: currentRotation });
-  }
-
-  const pinSpacing = anglePerItem / 2;
-  const collisionBias = 2;
-  const absRotation = Math.abs(currentRotation);
-  const currentPinIndex = Math.floor((absRotation + collisionBias) / pinSpacing);
-
-  if (currentPinIndex !== lastSectionIndex) {
-      playTickAnimation(lastDelta);
-      lastSectionIndex = currentPinIndex;
-  }
-
-  let normalized = currentRotation % 360;
-  if (normalized < 0) normalized += 360;
-  let index = Math.round(((360 - normalized + 90) + anglePerItem/2 ) / anglePerItem) % totalItems;
-
-  if (activeIndex.value !== index) {
-    activeIndex.value = index;
-  }
-};
-
-let observer: any = null;
-
-const getItemPosition = (index: number) => {
-    const total = totalItems;
-    const active = activeIndex.value;
-    let diff = (index - active + total) % total;
-    
-    if (diff === 0) return 'pos-center';       
-    if (diff === 1) return 'pos-right';        
-    if (diff === total - 1) return 'pos-left'; 
-    return 'pos-hidden';
-};
-
-// [수정] 사이드 카드 클릭 시: 계산하지 않고 물리적으로 한 칸만 이동
-const clickItem = (index: number) => {
-    // 1. 현재 보고 있는 메뉴와 클릭한 메뉴의 거리 차이 계산
-    const total = totalItems;
-    const current = activeIndex.value;
-    
-    // (클릭한 인덱스 - 현재 인덱스)를 0 ~ 5 사이 값으로 변환
-    const diff = (index - current + total) % total;
-
-    // 2. 상황에 따라 단순히 한 칸씩만 회전시킴 (점프 원천 봉쇄)
-    if (diff === 1) {
-        // 바로 오른쪽(다음) 클릭 -> 시계 방향 회전
-        nextItem();
-    } else if (diff === total - 1) {
-        // 바로 왼쪽(이전) 클릭 -> 반시계 방향 회전
-        prevItem();
-    } else {
-        // (예외 처리) 혹시나 두 칸 이상 떨어진 곳을 클릭했다면 기존 방식 사용
-        goToIndex(index);
-    }
-};
-
-// [수정] 룰렛 시작 함수 & 멈칫 현상 해결
-const startRoulette = () => {
-    if (observer) return;
-    gsap.ticker.add(updateLoop);
-    
-    observer = Observer.create({
-        target: window,
-        type: "wheel,touch,pointer",
-        wheelSpeed: -1.3,
-        
-        // [핵심] 로그인 전에는 클릭(Press/Release) 이벤트를 무시하여 배경 멈춤 방지
-        onPress: () => { 
-            if (!isNicknameSet.value) return; 
-            isInteracting = true; 
-            clearTimeout(idleTimer); 
-        },
-        onRelease: () => { 
-            if (!isNicknameSet.value) return; 
-            clearTimeout(idleTimer); 
-            idleTimer = setTimeout(() => isInteracting = false, 1000); 
-        },
-        
-        onChange: (self: any) => {
-            if (!isNicknameSet.value) return; // 로그인 전 휠 조작 방지
-
-            isInteracting = true;
-            let delta = self.deltaY * 0.3;
-            delta = Math.max(-60, Math.min(60, delta));
-            targetRotation += delta; // 휠 방향 반전 적용됨 (+delta)
-            clearTimeout(idleTimer);
-            idleTimer = setTimeout(() => isInteracting = false, 1000);
-        }
-    });
-};
-
-const stopRoulette = () => {
-    gsap.ticker.remove(updateLoop);
-    if (observer) { observer.kill(); observer = null; }
-    clearTimeout(idleTimer);
-    currentRotation = 0; targetRotation = 0; activeIndex.value = 0;
-};
-
-// --- 5. 구름 ---
+// 구름 생성
 const clouds = ref<{ id: number; typeId: number; style: any }[]>([]);
 const generateClouds = () => {
   const cloudCount = 12;
@@ -307,12 +290,7 @@ onUnmounted(() => { stopRoulette(); });
     
     <div class="cartoon-bg">
       <div class="sky"></div>
-      <div 
-        v-for="cloud in clouds" 
-        :key="cloud.id" 
-        :class="['cloud', `cloud-type-${cloud.typeId}`]"
-        :style="cloud.style"
-      ></div>
+      <div v-for="cloud in clouds" :key="cloud.id" :class="['cloud', `cloud-type-${cloud.typeId}`]" :style="cloud.style"></div>
       <div class="ground-back"></div>
       <div class="ground-front"></div>
       <div class="decoration tree-1"></div>
@@ -320,24 +298,20 @@ onUnmounted(() => { stopRoulette(); });
     </div>
 
     <div class="roulette-wrapper">
-            <div class="wheel-shadow-static"></div>
-            <div class="roulette-wheel" ref="wheelRef">
-            <div class="wood-wheel-enhanced">
-                <div class="wood-texture-overlay"></div>
-            </div>
+        <div class="wheel-shadow-static"></div>
+        <div class="roulette-wheel" ref="wheelRef">
+            <div class="wood-wheel-enhanced"><div class="wood-texture-overlay"></div></div>
             <div class="pins-container">
                 <div v-for="n in (totalItems * 2)" :key="'pin-'+n" class="pin"
                     :style="{ transform: `rotate(${(n - 1) * (anglePerItem / 2)}deg) translateY(-985px)` }"></div>
             </div>
-            </div>
-            <div class="character-sticker">
-            <CharacterBackground :speed="rouletteSpeed" />
-            </div>
-            <div class="central-arrow" ref="arrowRef">
+        </div>
+        <div class="character-sticker"><CharacterBackground :speed="rouletteSpeed" /></div>
+        <div class="central-arrow" ref="arrowRef">
             <svg viewBox="0 0 100 300" xmlns="http://www.w3.org/2000/svg">
                 <g><path d="M 50 200 L 15 30 L 85 30 Z" fill="#ff5252" /></g>
             </svg>
-            </div>
+        </div>
     </div>
 
     <transition name="intro-fade">
@@ -349,15 +323,9 @@ onUnmounted(() => { stopRoulette(); });
                 </div>
                 <div class="input-area">
                     <div class="input-wrapper">
-                        <input 
-                            type="text" 
-                            v-model="nickname" 
-                            placeholder="닉네임을 입력하세요" 
-                            @keyup.enter="confirmNickname" 
-                            autofocus 
-                        />
+                        <input type="text" v-model="nickname" placeholder="닉네임을 입력하세요" @keyup.enter="confirmNickname" autofocus />
                     </div>
-                    <button @click="confirmNickname" class="start-btn">
+                    <button @click="confirmNickname" class="cartoon-btn primary large-btn">
                         <span>START</span>
                         <span class="material-symbols-outlined">play_arrow</span>
                     </button>
@@ -380,7 +348,7 @@ onUnmounted(() => { stopRoulette(); });
                     >
                         <div class="panel-content" :class="{ 'main-mode': index === activeIndex, 'side-mode': index !== activeIndex }">
                             
-                            <div v-if="index === activeIndex" class="full-content">
+                            <div v-if="index === activeIndex" class="full-content" @click.stop>
                                 <div class="content-header">
                                     <div class="icon-circle"><span class="leaf-icon material-symbols-outlined">{{ item.icon }}</span></div>
                                     <span class="index-number">Menu {{ index + 1 }} / {{ totalItems }}</span>
@@ -391,15 +359,21 @@ onUnmounted(() => { stopRoulette(); });
                                 <div class="action-area mt-6">
                                     <div v-if="item.id === 'profile'">
                                         <div class="welcome-msg mb-4"><span class="material-symbols-outlined check-icon">check_circle</span><span><span class="highlight">{{ nickname }}</span>님</span></div>
-                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary"><span class="material-symbols-outlined">logout</span>로그아웃</button>
+                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary">
+                                            <span class="material-symbols-outlined">Edit</span>수정하기
+                                        </button>
                                     </div>
                                     <div v-else-if="item.id === 'create'">
-                                        <button @click.stop="handleAction('create')" class="cartoon-btn primary large-btn animate-pulse-slow"><span class="material-symbols-outlined text-3xl">add_circle</span>방 만들기</button>
+                                        <button @click.stop="handleAction('create')" class="cartoon-btn primary large-btn animate-pulse-slow">
+                                            <span class="material-symbols-outlined text-3xl">add_circle</span>방 만들기
+                                        </button>
                                     </div>
                                     <div v-else-if="item.id === 'join'">
-                                        <button @click.stop="handleAction('join')" class="cartoon-btn secondary large-btn"><span class="material-symbols-outlined text-3xl">login</span>참여하기</button>
+                                        <button @click.stop="handleAction('join')" class="cartoon-btn primary large-btn">
+                                            <span class="material-symbols-outlined text-3xl">login</span>참여하기
+                                        </button>
                                     </div>
-                                    <div v-else class="info-msg"><span class="material-symbols-outlined text-4xl text-leaf-green mb-2">touch_app</span><p>휠을 돌려 메뉴를 선택하세요!</p></div>
+                                    <div v-else class="info-msg"><span class="material-symbols-outlined text-4xl text-leaf-green mb-2">touch_app</span><p>Comming Soon !</p></div>
                                 </div>
                             </div>
 
@@ -416,7 +390,7 @@ onUnmounted(() => { stopRoulette(); });
             <div class="bottom-nav-area">
                 <div class="scroll-indicator wood-text">
                     <span class="material-symbols-outlined arrow-icon">keyboard_double_arrow_up</span>
-                    SCROLL TO PLAY
+                    SCROLL TO DISCOVER
                     <span class="material-symbols-outlined arrow-icon">keyboard_double_arrow_up</span>
                 </div>
                 <div class="nav-bar-container">
@@ -471,44 +445,49 @@ onUnmounted(() => { stopRoulette(); });
 .cloud-type-3::before { width: 50px; height: 50px; top: -20px; left: 50px; }
 @keyframes moveClouds { 0% { left: 110%; } 100% { left: -25%; } }
 
-/* [수정] 인트로 컨테이너: 상단 7vh 위치 (5% 정도 위로 올림) */
-.intro-container { 
-    position: absolute; inset: 0; z-index: 20; 
-    display: flex; justify-content: center; 
-    align-items: flex-start; 
-    padding-top: 7vh; /* 기존 12vh -> 7vh */
-}
-
-/* [수정] 인트로 패널: 세로폭 축소 */
+/* 인트로 컨테이너: 상단 7vh (5% Up) */
+.intro-container { position: absolute; inset: 0; z-index: 20; display: flex; justify-content: center; align-items: flex-start; padding-top: 7vh; }
 .intro-panel { 
     width: 90%; max-width: 340px; 
     background: #fff8e1; border: 5px solid var(--wood-border); border-radius: 24px; 
-    padding: 25px 25px; /* 세로 패딩 줄임 */
+    padding: 25px; 
     box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15); 
-    text-align: center; display: flex; flex-direction: column; 
-    gap: 15px; /* 간격 줄임 */
+    text-align: center; display: flex; flex-direction: column; gap: 15px;
+    animation: floating 3s ease-in-out infinite;
+}
+@keyframes floating {
+    0%, 100% { transform: translateY(0px); box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15); }
+    50% { transform: translateY(-12px); box-shadow: 0 25px 0 rgba(93, 64, 55, 0.1), 0 40px 60px rgba(0,0,0,0.1); }
 }
 
-/* 타이틀 디자인 */
 .logo-area { margin-bottom: 5px; }
 .game-title { font-size: 3.5rem; margin: 0; color: var(--text-brown); text-shadow: 3px 3px 0 #fff; line-height: 1; }
 .game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
 
-/* 입력 영역 디자인 */
 .input-area { display: flex; flex-direction: column; gap: 12px; }
 .input-wrapper { position: relative; border-bottom: 3px solid #d7ccc8; transition: all 0.3s; }
 .input-wrapper:focus-within { border-bottom-color: var(--leaf-green); }
 .input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
 .input-area input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
 
-/* 시작 버튼 */
-.start-btn { width: 100%; padding: 12px; border: none; border-radius: 15px; background: var(--leaf-green); color: white; font-size: 1.4rem; font-family: 'Jua', sans-serif; cursor: pointer; box-shadow: 0 4px 0 var(--leaf-dark); transition: all 0.1s; display: flex; align-items: center; justify-content: center; gap: 5px; }
-.start-btn:active { transform: translateY(4px); box-shadow: 0 0 0 var(--leaf-dark); }
-.start-btn:hover { background: #8bc34a; }
+/* 버튼 스타일 (공통) */
+.cartoon-btn {
+    width: 100%; padding: 12px 20px; border: none; border-radius: 16px;
+    font-family: 'Jua', sans-serif; font-size: 1.4rem; color: white;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: all 0.1s ease; position: relative; top: 0;
+}
+.cartoon-btn.primary { background: #7cb342; box-shadow: 0 5px 0 #558b2f; }
+.cartoon-btn.primary:hover { background: #8bc34a; }
+.cartoon-btn.primary:active { top: 5px; box-shadow: 0 0 0 #558b2f; }
+
+.cartoon-btn.secondary { background: #ff7043; box-shadow: 0 5px 0 #d84315; }
+.cartoon-btn.secondary:hover { background: #ff8a65; }
+.cartoon-btn.secondary:active { top: 5px; box-shadow: 0 0 0 #d84315; }
 
 /* 메인 컨텐츠 */
 .main-container { position: absolute; inset: 0; z-index: 10; }
-.active-content { position: absolute; z-index: 30; top: -5%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 420px; text-align: center; }
+.active-content { position: absolute; z-index: 30; top: 5%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 420px; text-align: center; }
 .carousel-stage { position: relative; width: 100%; height: 450px; perspective: 1000px; display: flex; justify-content: center; align-items: center; }
 .carousel-item { position: absolute; top: 50%; left: 50%; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); transform-style: preserve-3d; }
 
@@ -573,39 +552,5 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .menu-fade-enter-active, .menu-fade-leave-active { transition: all 0.2s ease; }
 .menu-fade-enter-from { opacity: 0; transform: scale(0.95); }
 .menu-fade-leave-to { opacity: 0; transform: scale(1.05); }
-/* --- [수정] 인트로 패널: 둥둥 떠다니는 애니메이션 적용 --- */
-.intro-panel { 
-    width: 90%; 
-    max-width: 340px; 
-    background: #fff8e1; 
-    border: 5px solid var(--wood-border); 
-    border-radius: 24px; 
-    padding: 25px 25px; 
-    text-align: center; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 15px;
-
-    /* [핵심] 둥둥 떠다니는 애니메이션 (3초 주기로 무한 반복) */
-    animation: floating 3s ease-in-out infinite;
-}
-
-/* [신규] 둥둥 떠다니기 (Floating) + 그림자 효과 */
-@keyframes floating {
-    0% {
-        transform: translateY(0px);
-        /* 바닥에 가까울 때: 그림자가 진하고 좁음 */
-        box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15);
-    }
-    50% {
-        transform: translateY(-12px); /* 위로 둥실 떠오름 */
-        /* 공중에 떴을 때: 그림자가 연해지고 퍼짐 (원근감) */
-        box-shadow: 0 25px 0 rgba(93, 64, 55, 0.1), 0 40px 60px rgba(0,0,0,0.1);
-    }
-    100% {
-        transform: translateY(0px);
-        box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15);
-    }
-}
 @media (max-width: 768px) { .pos-left, .pos-right { opacity: 0; pointer-events: none; } .carousel-item { width: 90vw; } }
 </style>
