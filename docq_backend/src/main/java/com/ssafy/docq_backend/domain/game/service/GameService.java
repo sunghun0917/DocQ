@@ -319,6 +319,12 @@ public class GameService {
                 return;
             }
 
+            // 중복 시작 방지: 이미 진행 중이면 무시
+            if (room.getStatus() != RoomStatus.WAITING) {
+                log.warn("Start ignored. Room already started: {}", room.getStatus());
+                return;
+            }
+
             // 인원 체크
             if (room.getPlayers().size() < 2) {
                 sendError(userId, ErrorCode.NOT_ENOUGH_PLAYERS);

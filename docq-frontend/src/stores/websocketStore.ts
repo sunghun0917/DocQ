@@ -260,6 +260,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
             console.log('📨 MiniGame Event:', data)
 
             if (data?.type === 'START') {
+                gameStore.clearQuiz()
                 gameStore.queueMiniGame({
                     gameType: data.gameType,
                     timeLimit: data.timeLimit,
