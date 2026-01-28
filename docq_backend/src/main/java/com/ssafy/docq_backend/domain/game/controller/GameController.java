@@ -63,6 +63,11 @@ public class GameController {
             return ResponseEntity.ok(Map.of(
                     "message", "Quiz generation started",
                     "roomId", roomId));
+        } catch (com.ssafy.docq_backend.global.exception.DocqException e) {
+            log.error("Quiz generation failed (Managed): {}", e.getMessage());
+            return ResponseEntity
+                    .status(e.getErrorCode().getStatus())
+                    .body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
             log.error("Quiz generation failed", e);
             return ResponseEntity

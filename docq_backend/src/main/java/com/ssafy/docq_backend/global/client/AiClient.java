@@ -22,12 +22,18 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.web.client.HttpClientErrorException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.docq_backend.global.exception.DocqException;
+import com.ssafy.docq_backend.global.exception.ErrorCode;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class AiClient {
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${ai.url:http://localhost:8000}")
     private String aiUrl;
@@ -77,6 +83,19 @@ public class AiClient {
         } catch (IOException e) {
             log.error("Failed to read PDF file", e);
             throw new RuntimeException("Failed to process PDF file", e);
+        } catch (HttpClientErrorException e) {
+            log.error("AI Service HTTP Error: {}", e.getMessage());
+            try {
+                Map<String, String> map = objectMapper.readValue(e.getResponseBodyAsString(), Map.class);
+                String detail = map.get("detail");
+                log.error("Parsed AI Error Detail: {}", detail);
+                throw new DocqException(ErrorCode.AI_PROCESSING_ERROR, detail); // D002 or INVALID_FILE_TYPE
+            } catch (DocqException de) {
+                throw de;
+            } catch (Exception parseEx) {
+                log.error("Failed to parse AI error response", parseEx);
+                throw new RuntimeException("AI Service Error: " + e.getResponseBodyAsString());
+            }
         } catch (Exception e) {
             log.error("AI Service Call Error", e);
             throw new RuntimeException("AI Service unavailable", e);
