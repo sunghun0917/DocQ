@@ -51,29 +51,7 @@ services:
       - ../../docq-ai/.env
     environment:
       - PYTHONUNBUFFERED=1
-      - MINERU_API_URL=http://mineru-api:18000/file_parse
-    depends_on:
-      - mineru-api
-    networks:
-      - docq-network
-
-  mineru-api:
-    image: mineru:latest
-    container_name: mineru-api
-    restart: unless-stopped
-    ports:
-      - "18000:18000"
-    entrypoint: mineru-api
-    command:
-      --host 0.0.0.0
-      --port 18000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["0"]
-              capabilities: [gpu]
+      - MINERU_API_URL=http://host.docker.internal:18000/file_parse
     networks:
       - docq-network
 
