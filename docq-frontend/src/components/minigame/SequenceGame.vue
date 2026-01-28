@@ -90,14 +90,13 @@ const icons: Record<string, string> = { ArrowUp: '⇧', ArrowDown: '⇩', ArrowL
 </script>
 
 <template>
-  <div class="text-center w-full">
-    <h2 class="text-3xl font-black text-[#2d3436] mb-8">
+  <div class="text-center w-full h-full min-h-[500px] flex flex-col justify-center items-center gap-8">
+    <h2 class="text-3xl font-black text-[#2d3436] mb-12">
       틀리면 뒤로 밀려난다! 🕹️
-      <span class="block text-sm text-gray-400 font-normal mt-2">총 18개를 완주하세요</span>
     </h2>
     
     <div 
-      class="grid grid-cols-6 gap-3 mb-8 transition-transform max-w-2xl mx-auto"
+      class="grid grid-cols-6 gap-3 mb-8 transition-transform w-full max-w-xl mx-auto"
       :class="{ 'animate-shake': isWrong }"
     >
       <div 

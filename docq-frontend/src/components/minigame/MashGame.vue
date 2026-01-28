@@ -73,7 +73,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="text-center w-full">
+  <div class="text-center w-full h-full flex flex-col justify-center gap-8">
     <h2 class="text-3xl font-black text-[#2d3436] mb-8">좌우로 마구 연타해!! 🔥</h2>
     
     <div class="text-6xl font-black mb-4" :class="{'text-red-500': timeLeft <= 3}">

@@ -152,7 +152,7 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
                     class="wheel-section"
                     :style="sectionStyle(i, labelByIndex.length)"
                 >
-                    <span class="section-label" :style="{ transform: `skewY(${90 - (360 / labelByIndex.length)}deg) rotate(${360 / labelByIndex.length / 2}deg)` }">{{ label }}</span>
+                    <span class="section-label" :style="{ transform: `translateX(-50%) skewY(${90 - (360 / labelByIndex.length)}deg) rotate(${360 / labelByIndex.length / 2}deg)` }">{{ label }}</span>
                 </div>
                 </div>
             </div>
@@ -237,7 +237,6 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
   height: 200px;
   border-radius: 50%;
   border: 4px solid white;
-  background: #333;
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
@@ -248,7 +247,7 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
   width: 100%;
   height: 100%;
   transform-origin: 50% 50%;
-  clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 21%);
+  clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 50%);
 }
 
 .wheel-section:nth-child(odd) {
@@ -261,11 +260,11 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
 .section-label {
   position: absolute;
   top: 15%;
-  left: 62%;
+  left: 50%;
   color: #1e293b;
   font-weight: bold;
   font-size: 24px;
-  transform: rotate(30deg);
+  transform-origin: 50% 70px;
 }
 
 .info-text p {
