@@ -124,7 +124,7 @@ watch(
         if (winnerId) {
             const winnerName = roomStore.users.find(u => u.id === winnerId)?.nickname || '알 수 없음'
             const roleLabel = winnerId === currentTurnId ? '플레이어' : '고스트'
-            noticeText = `${roleLabel}${winnerName}가 문제를 맞추었습니다.`
+            noticeText = `${roleLabel} ${winnerName}가 문제를 맞추었습니다.`
         }
 
         await showSystemNotice(noticeText, 2000)
@@ -303,7 +303,7 @@ watch(
         }
         if (phase === 'STARTING' && !hasShownGameStartNotice.value) {
             hasShownGameStartNotice.value = true
-            await showSystemNotice('게임이 시작됩니다', 2000)
+            await showSystemNotice('게임이 시작됩니다.', 2000)
         }
     },
     { immediate: true }
@@ -318,7 +318,7 @@ watch(
         hasShownGameEndNotice.value = true
         const token = ++gameEndNoticeToken
         isGameEndNoticeActive.value = true
-        await showSystemNotice('게임이 종료되었습니다', 2000)
+        await showSystemNotice('게임이 종료되었습니다.', 2000)
         if (token !== gameEndNoticeToken) return
         isGameEndNoticeActive.value = false
     }
@@ -356,7 +356,7 @@ onMounted(() => {
 
     <div v-if="showMiniGameStartNotice" class="minigame-start-notice">
       <div class="minigame-start-card">
-        미니게임이 시작됩니다
+        미니게임이 시작됩니다.
       </div>
     </div>
 

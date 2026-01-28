@@ -159,10 +159,9 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
             
             <div class="info-text">
                 <p v-if="displayResult !== null">
-                    앞으로 {{ displayResult }} 칸 이동합니다
+                    앞으로 {{ displayResult }} 칸 이동합니다.
                 </p>
                 <p v-else>결과 확인 중...</p>
-                <small>(잠시 후 맵 이동 애니메이션)</small>
             </div>
         </div>
     </div>
@@ -271,10 +270,6 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
     font-size: 1.2rem;
     font-weight: bold;
     margin: 5px 0;
-}
-
-.info-text small {
-    color: #6b7280;
 }
 
 @keyframes popIn {
