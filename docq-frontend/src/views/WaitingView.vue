@@ -126,6 +126,12 @@ const loadQuizzes = async () => {
   }
 }
 
+const applyInitialQuizState = async (quizCount?: number) => {
+  if (!quizCount || quizCount <= 0) return
+  await loadQuizzes()
+  isGenerating.value = false
+}
+
 // [Frontend] 퀴즈 모달 열기
 const openQuizModal = async () => {
   await loadQuizzes()
@@ -349,22 +355,22 @@ onMounted(async () => {
     return
   }
 
-  if (roomStore.roomInfo.roomId !== roomId.value) {
-    try {
-      const room = await getRoomById(roomId.value)
-      roomStore.joinRoom({
-        roomId: room.roomId,
-        title: room.title,
-        capacity: room.capacity,
-        isPrivate: room.isPrivate,
-        status: room.status,
-        currentCount: room.currentCount
-      })
-    } catch (error) {
-      alert(getErrorMessage(error))
-      router.push('/')
-      return
-    }
+  try {
+    const room = await getRoomById(roomId.value)
+    roomStore.joinRoom({
+      roomId: room.roomId,
+      title: room.title,
+      capacity: room.capacity,
+      isPrivate: room.isPrivate,
+      status: room.status,
+      currentCount: room.currentCount,
+      quizCount: room.quizCount
+    })
+    await applyInitialQuizState(room.quizCount)
+  } catch (error) {
+    alert(getErrorMessage(error))
+    router.push('/')
+    return
   }
 
   await wsStore.connect()

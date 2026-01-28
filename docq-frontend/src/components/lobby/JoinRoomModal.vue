@@ -80,7 +80,8 @@ const joinRoom = async () => {
       capacity: room.capacity,
       isPrivate: room.isPrivate,
       status: room.status,
-      currentCount: room.currentCount
+      currentCount: room.currentCount,
+      quizCount: room.quizCount
     })
 
     await wsStore.connect()
