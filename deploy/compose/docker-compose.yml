@@ -1,4 +1,3 @@
-
 services:
   nginx:
     image: nginx:latest
@@ -52,6 +51,7 @@ services:
       - ../../docq-ai/.env
     environment:
       - PYTHONUNBUFFERED=1
+      - MINERU_API_URL=http://${EC2_HOST_IP}:18000/file_parse
     networks:
       - docq-network
 

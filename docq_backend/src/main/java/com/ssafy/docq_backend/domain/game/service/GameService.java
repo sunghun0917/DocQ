@@ -51,19 +51,26 @@ public class GameService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final GameEventStore gameEventStore;
     private final AckStore ackStore;
+    private static final int START_POSITION = 1;
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
     private static final long TURN_PREP_DELAY_MS = 1500;
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
+    private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
 
-
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
+
+        // [ADD] 퀴즈 생성 시작 알림 (프론트엔드 대기 화면 전환용)
+        Map<String, Object> startMsg = new HashMap<>();
+        startMsg.put("type", "QUIZ_GENERATING");
+        startMsg.put("fileName", pdfFile.getOriginalFilename());
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
 
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
@@ -97,6 +104,12 @@ public class GameService {
     }
 
     public int setDefaultQuizzes(String roomId, String type) {
+        // [ADD] 퀴즈 생성 시작 알림
+        Map<String, Object> startMsg = new HashMap<>();
+        startMsg.put("type", "QUIZ_GENERATING");
+        startMsg.put("quizType", type);
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
@@ -143,6 +156,13 @@ public class GameService {
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
 
         return quizzes.size();
+    }
+
+    public void resetQuiz(String roomId) {
+        // [MOD] 퀴즈 리셋 알림 -> "대기 중" 상태로 전환
+        Map<String, Object> resetMsg = new HashMap<>();
+        resetMsg.put("type", "QUIZ_RESET");
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", resetMsg);
     }
 
     private List<QuizDto.Response> loadQuizzesFromJson(String filename) {
@@ -299,6 +319,12 @@ public class GameService {
                 return;
             }
 
+            // 중복 시작 방지: 이미 진행 중이면 무시
+            if (room.getStatus() != RoomStatus.WAITING) {
+                log.warn("Start ignored. Room already started: {}", room.getStatus());
+                return;
+            }
+
             // 인원 체크
             if (room.getPlayers().size() < 2) {
                 sendError(userId, ErrorCode.NOT_ENOUGH_PLAYERS);
@@ -398,7 +424,7 @@ public class GameService {
             PlayerState ps = PlayerState.builder()
                     .userId(pid)
                     .score(0)
-                    .position(0)
+                    .position(START_POSITION)
                     .hasBuff(null)
                     .build();
             room.getPlayerStates().put(pid, ps);
@@ -408,8 +434,11 @@ public class GameService {
         room.getMapEvents().clear();
         Random random = new Random();
         Set<Integer> eventTiles = new HashSet<>();
+        int eventMinPosition = START_POSITION + 1;
+        int eventMaxPosition = TARGET_POSITION - 1;
+
         while (eventTiles.size() < 5) {
-            int pos = random.nextInt(29) + 1; // 1 ~ 29 (0번은 시작점이라 제외)
+            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) + eventMinPosition;
             if (eventTiles.add(pos)) {
                 room.getMapEvents().put(pos, "TILE_X2");
             }
@@ -521,7 +550,7 @@ public class GameService {
             PlayerState ps = PlayerState.builder()
                     .userId(pid)
                     .score(0)
-                    .position(0)
+                    .position(START_POSITION)
                     .hasBuff(null)
                     .build();
             room.getPlayerStates().put(pid, ps);
@@ -578,17 +607,11 @@ public class GameService {
 
             switch (effectiveAckType) {
                 case RESULT_DISPLAYED -> {
-                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED, keyId,
+                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED,
+                            keyId,
                             ApplyMovePayload.class);
                     if (payload != null) {
                         gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
-                    } else {
-                        ApplyMovePayload roulettePayload = ackStore.loadPayload(
-                                room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId, ApplyMovePayload.class);
-                        if (roulettePayload != null) {
-                            gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, roulettePayload,
-                                    ACK_FALLBACK_TIMEOUT_MS);
-                        }
                     }
                 }
                 case MOVE_COMPLETE -> {
@@ -608,7 +631,8 @@ public class GameService {
                     // handled via MINIGAME_COMPLETE normalization
                 }
                 case ROULETTE_COMPLETE -> {
-                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId,
+                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE,
+                            keyId,
                             ApplyMovePayload.class);
                     if (payload != null) {
                         gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
@@ -696,7 +720,7 @@ public class GameService {
 
             GameDto.QuizMessage quiz = GameDto.QuizMessage.builder()
                     .quizId(quizId)
-                    .question("Round " + room.getRound() + ": " + quizEntity.getQuestion())
+                    .question(quizEntity.getQuestion())
                     .options(quizEntity.getOptions())
                     .timeLimit(5000L)
                     .quizStartTime(quizStartTime)
@@ -832,8 +856,8 @@ public class GameService {
                 int currentPos = winnerState.getPosition();
                 int nextPos = currentPos + moveValue;
 
-                if (nextPos < 0)
-                    nextPos = 0;
+                if (nextPos < START_POSITION)
+                    nextPos = START_POSITION;
                 if (nextPos >= TARGET_POSITION) {
                     nextPos = TARGET_POSITION;
                     finishPlanned = true;
@@ -854,8 +878,8 @@ public class GameService {
                     nextPos += moveValue;
 
                     // Boundary Check
-                    if (nextPos < 0)
-                        nextPos = 0;
+                    if (nextPos < START_POSITION)
+                        nextPos = START_POSITION;
                     if (nextPos >= TARGET_POSITION) {
                         nextPos = TARGET_POSITION;
                         finishPlanned = true;
@@ -892,8 +916,8 @@ public class GameService {
                     if ("TILE_X2".equals(eventType)) {
                         nextPos += moveValue;
                         // Boundary Check
-                        if (nextPos < 0)
-                            nextPos = 0;
+                        if (nextPos < START_POSITION)
+                            nextPos = START_POSITION;
                         if (nextPos >= TARGET_POSITION) {
                             nextPos = TARGET_POSITION;
                             finishPlanned = true;
@@ -913,12 +937,12 @@ public class GameService {
                         continue;
 
                     PlayerState other = room.getPlayerStates().get(pid);
-                    if (other != null && other.getPosition() == nextPos && nextPos != 0) {
+                    if (other != null && other.getPosition() == nextPos && nextPos != START_POSITION) {
                         actions.add(GameDto.MoveAction.builder()
                                 .type("CATCH")
                                 .targetUserId(pid)
                                 .before(other.getPosition())
-                                .after(0)
+                                .after(START_POSITION)
                                 .build());
                     }
                 }
@@ -1078,7 +1102,8 @@ public class GameService {
                 return;
             }
             Room latest = roomRepository.findById(roomId).orElse(null);
-            if (latest == null || payload.getQuizId() == null || !payload.getQuizId().equals(latest.getCurrentQuizId())) {
+            if (latest == null || payload.getQuizId() == null
+                    || !payload.getQuizId().equals(latest.getCurrentQuizId())) {
                 return;
             }
 
@@ -1191,7 +1216,7 @@ public class GameService {
             ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                     .round(room.getRound())
                     .build();
-            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, ACK_FALLBACK_TIMEOUT_MS);
+            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, MINIGAME_RESUME_FALLBACK_MS);
             ackStore.clearAck(roomId, GameDto.AckType.MINIGAME_COMPLETE, roundKeyId);
             ackStore.clearAck(roomId, GameDto.AckType.BUFF_ROULETTE_COMPLETE, roundKeyId);
         } catch (Exception e) {
