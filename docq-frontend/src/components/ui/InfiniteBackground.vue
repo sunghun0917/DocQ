@@ -116,7 +116,8 @@ onUnmounted(() => {
 .grid-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .base-grid { opacity: 0.05; color: #ffffff; }
 .highlight-grid { opacity: 0.4; color: #ffffff; }
-.blur-spheres { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+.blur-spheres { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.grid-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
 .sphere { position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.4; }
 .sphere.orange { right: -20%; top: -20%; width: 40%; height: 40%; background: rgba(234, 88, 12, 0.4); }
 .sphere.primary { right: 10%; top: -10%; width: 20%; height: 20%; background: rgba(255, 255, 255, 0.2); }
