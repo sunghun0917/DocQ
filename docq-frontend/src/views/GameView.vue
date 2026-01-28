@@ -28,7 +28,7 @@ const canShowResultModal = computed(() =>
     isResultVisible.value && !isBoardMoving.value && !gameStore.movementInProgress
 )
 const roomId = computed(() => roomStore.roomInfo.roomId)
-const isHost = computed(() => roomStore.isHost)
+const isHost = computed(() => roomStore.isHost || roomStore.myUser?.isHost || false)
 const players = computed(() => gameStore.gameState.players || [])
 const miniGame = computed(() => gameStore.miniGame)
 const isMiniGameActive = computed(() => miniGame.value.phase === 'playing' || miniGame.value.phase === 'result')
