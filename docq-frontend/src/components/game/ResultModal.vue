@@ -113,6 +113,17 @@ const goLobby = () => {
 const restartGame = () => {
   const roomId = roomStore.roomInfo.roomId
   const userId = userStore.userId
+  if (!isHost.value) {
+    uiStore.openConfirm({
+      title: '대기방 이동',
+      message: '방장이 재시작하면 자동으로 입장합니다. 지금 대기방으로 이동할까요?',
+      confirmLabel: '대기방으로',
+      icon: 'meeting_room',
+      variant: 'primary',
+      onConfirm: () => goLobby()
+    })
+    return
+  }
   if (!roomId || !userId) {
     goLobby()
     return
@@ -185,7 +196,6 @@ const restartGame = () => {
           </button>
           
           <button 
-            v-if="isHost"
             @click="restartGame"
             class="flex-[2] h-14 rounded-[20px] font-black text-xl text-white 
                    bg-[#6c5ce7] shadow-[0_6px_0_0_#5f3dc4] 
