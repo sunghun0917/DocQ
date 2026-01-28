@@ -391,11 +391,11 @@ onMounted(() => {
           >
             <div class="player-name">{{ p.nickname }}</div>
             <div class="player-meta">
-              <span class="player-score">맞춘 문제: {{ p.score ?? 0 }}</span>
-              <span class="player-pos">POS {{ p.position ?? 0 }}</span>
               <span v-if="p.hasBuff" class="player-buff" :title="p.hasBuff">
                 ⚡
               </span>
+              <span class="player-score">맞춘 문제: {{ p.score ?? 0 }}</span>
+              <span class="player-pos">POS {{ p.position ?? 0 }}</span>
             </div>
           </div>
         </div>
