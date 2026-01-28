@@ -8,7 +8,7 @@ import fitz
 
 import requests
 
-DEFAULT_API_URL = os.getenv("MINERU_API_URL", "http://localhost:8000/file_parse")
+DEFAULT_API_URL = os.getenv("MINERU_API_URL", "http://localhost:18000/file_parse")
 _TAG_RE = re.compile(r"<[^>]+>")
 _MD_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*", re.MULTILINE)
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^\)]*\)")
