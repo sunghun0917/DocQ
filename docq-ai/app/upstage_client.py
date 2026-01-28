@@ -5,23 +5,22 @@ from openai import OpenAI, AsyncOpenAI
 load_dotenv()
 
 client = OpenAI(
-    api_key=os.getenv("UPSTAGE_API_KEY"),
-    base_url="https://api.upstage.ai/v1"
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL", "https://gms.ssafy.io/gmsapi/api.openai.com/v1"),
 )
 
 aclient = AsyncOpenAI(
-    api_key=os.getenv("UPSTAGE_API_KEY"),
-    base_url="https://api.upstage.ai/v1"
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL", "https://gms.ssafy.io/gmsapi/api.openai.com/v1"),
 )
 
 
 def call_llm(prompt: str) -> str:
     response = client.chat.completions.create(
-        model="solar-1-mini-chat",
+        model="gpt-4.1-nano",
         messages=[
             {"role": "user", "content": prompt}
         ],
-        temperature=0.3,
     )
 
     return response.choices[0].message.content
@@ -29,11 +28,10 @@ def call_llm(prompt: str) -> str:
 
 async def acall_llm(prompt: str) -> str:
     response = await aclient.chat.completions.create(
-        model="solar-1-mini-chat",
-        messages=[
+        model="gpt-4.1-nano",
+       messages=[
             {"role": "user", "content": prompt}
         ],
-        temperature=0.3,
     )
 
     return response.choices[0].message.content
