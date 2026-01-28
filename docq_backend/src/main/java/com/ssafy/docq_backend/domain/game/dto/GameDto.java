@@ -75,7 +75,8 @@ public class GameDto {
         ROULETTE_COMPLETE,
         MOVE_COMPLETE,
         MINIGAME_COMPLETE,
-        BUFF_ROULETTE_COMPLETE
+        BUFF_ROULETTE_COMPLETE,
+        CAMERA_END // 추가
     }
 
     @Getter

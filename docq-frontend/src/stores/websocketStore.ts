@@ -450,7 +450,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * ACK 전송
      */
-    const sendAck = (ackType: 'RESULT_DISPLAYED' | 'ROULETTE_COMPLETE' | 'MOVE_COMPLETE' | 'MINIGAME_COMPLETE' | 'BUFF_ROULETTE_COMPLETE', quizId?: number, round?: number) => {
+    const sendAck = (ackType: 'RESULT_DISPLAYED' | 'ROULETTE_COMPLETE' | 'MOVE_COMPLETE' | 'MINIGAME_COMPLETE' | 'BUFF_ROULETTE_COMPLETE' | 'CAMERA_END', quizId?: number, round?: number) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return

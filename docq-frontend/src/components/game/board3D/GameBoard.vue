@@ -342,52 +342,134 @@ const animate = (duration: number, update: (t: number) => void) => new Promise<v
   requestAnimationFrame(step)
 })
 
+// 카메라 이동 헬퍼 함수
+async function animateCameraTo(options: {
+  target: [number, number, number],
+  zoom?: number,
+  duration: number,
+  offset?: [number, number, number] // 목표 지점으로부터의 카메라 상대 위치 (없으면 현재 각도 유지)
+}) {
+  const startTarget = [...cameraTarget.value] as [number, number, number]
+  const startPos = [...cameraPosition.value] as [number, number, number]
+  const startZoom = cameraZoom.value
+
+  // 오프셋이 없으면 현재 오프셋(각도)을 유지하며 이동
+  const currentOffset : [number, number, number] = [
+    startPos[0] - startTarget[0],
+    startPos[1] - startTarget[1],
+    startPos[2] - startTarget[2]
+  ]
+  const finalOffset = options.offset || currentOffset
+
+  await animate(options.duration, (t) => {
+    const p = easeInOut(t)
+    
+    // 1. Target Interpolation
+    const nx = lerp(startTarget[0], options.target[0], p)
+    const ny = lerp(startTarget[1], options.target[1], p)
+    const nz = lerp(startTarget[2], options.target[2], p)
+    cameraTarget.value = [nx, ny, nz]
+
+    // 2. Position Interpolation (Target + Offset)
+    cameraPosition.value = [
+      nx + finalOffset[0],
+      ny + finalOffset[1],
+      nz + finalOffset[2]
+    ]
+
+    // 3. Zoom Interpolation
+    if (options.zoom !== undefined) {
+      cameraZoom.value = lerp(startZoom, options.zoom, p)
+    }
+  })
+}
+
 async function runIntroCamera() {
-  const initialPos = cameraPosition.value.slice() as [number, number, number]
-  const initialTarget = cameraTarget.value.slice() as [number, number, number]
+  if (players.value.length === 0) return
+
+  // 0. 현재 상태 저장 (복귀용)
+  const initialPos = [...cameraPosition.value] as [number, number, number]
+  const initialTarget = [...cameraTarget.value] as [number, number, number]
   const initialZoom = cameraZoom.value
 
-  const center: [number, number, number] = MAP_CENTER
+  // 기본 오프셋 (ZOOM OUT 상태의 각도)
+  const baseOffset: [number, number, number] = [
+    initialPos[0] - initialTarget[0],
+    initialPos[1] - initialTarget[1],
+    initialPos[2] - initialTarget[2]
+  ]
 
-  const dx = initialPos[0] - center[0]
-  const dz = initialPos[2] - center[2]
-  const orbitRadius = Math.hypot(dx, dz) || 22
-  const orbitHeight = initialPos[1]
-  const startAngle = Math.atan2(dz, dx)
+  // === 1. 캐릭터별 줌인 (하이라이트) ===
+  const ZOOM_IN_LEVEL = 0.35
+  for (const p of players.value) {
+    const pPos = getPlayerWorldPos(p)
+    
+    // 캐릭터에게 이동 & 줌인
+    await animateCameraTo({
+      target: [pPos.x, pPos.y, pPos.z],
+      zoom: ZOOM_IN_LEVEL,
+      duration: 800,
+      offset: baseOffset // 같은 각도 유지
+    })
+    
+    // 잠깐 대기 (포커싱)
+    await sleep(600)
+  }
 
-  const introZoom = Math.min(initialZoom, 0.08)
+  // === 2. 맵 경로 프리뷰 (Start -> End, 3칸씩 건너뛰며 스무스하게) ===
+  const PATH_ZOOM = 0.25
+  if (mapTiles.length > 0) {
+    // 시작점으로 이동
+    const startTile = mapTiles[0]!.position
+    await animateCameraTo({
+      target: [startTile.x, startTile.y, startTile.z],
+      zoom: PATH_ZOOM,
+      duration: 1000,
+      offset: baseOffset
+    })
 
-  await animate(2800, (t) => {
-    const p = easeInOut(t)
-    const angle = startAngle + p * Math.PI * 2
+    // 3칸 간격으로 웨이포인트 생성 (경로 단순화)
+    const STEP = 3
+    const waypoints = mapTiles.filter((_, i) => i % STEP === 0 || i === mapTiles.length - 1)
 
-    cameraTarget.value = center
-    cameraPosition.value = [
-      center[0] + Math.cos(angle) * orbitRadius,
-      center[1] + orbitHeight,
-      center[2] + Math.sin(angle) * orbitRadius
-    ]
-    cameraZoom.value = introZoom
+    // 경로 따라가기 (부드럽게)
+    await animate(3000, (t) => {
+      // 전체 웨이포인트 구간을 0~1로 매핑하여 현재 위치 계산
+      const totalSegments = waypoints.length - 1
+      const currentFloatIndex = t * totalSegments
+      
+      const idx = Math.floor(currentFloatIndex)
+      const nextIdx = Math.min(idx + 1, totalSegments)
+      const subT = currentFloatIndex - idx // 두 웨이포인트 사이의 진행률
+
+      const p1 = waypoints[idx]!.position
+      const p2 = waypoints[nextIdx]!.position
+
+      const tx = lerp(p1.x, p2.x, subT)
+      const ty = lerp(p1.y, p2.y, subT)
+      const tz = lerp(p1.z, p2.z, subT)
+
+      // 카메라 이동
+      cameraTarget.value = [tx, ty, tz]
+      cameraPosition.value = [
+        tx + baseOffset[0],
+        ty + baseOffset[1],
+        tz + baseOffset[2]
+      ]
+    })
+    await sleep(200)
+  }
+
+  // === 3. 원래 시점으로 복귀 ===
+  await animateCameraTo({
+    target: initialTarget,
+    zoom: initialZoom,
+    duration: 1200,
+    offset: baseOffset // 저장해둔 오프셋으로 정확히 복귀
   })
 
-  const returnPos = cameraPosition.value.slice() as [number, number, number]
-  const returnTarget = cameraTarget.value.slice() as [number, number, number]
-  const returnZoom = cameraZoom.value
-
-  await animate(600, (t) => {
-    const p = easeInOut(t)
-    cameraTarget.value = [
-      lerp(returnTarget[0], initialTarget[0], p),
-      lerp(returnTarget[1], initialTarget[1], p),
-      lerp(returnTarget[2], initialTarget[2], p)
-    ]
-    cameraPosition.value = [
-      lerp(returnPos[0], initialPos[0], p),
-      lerp(returnPos[1], initialPos[1], p),
-      lerp(returnPos[2], initialPos[2], p)
-    ]
-    cameraZoom.value = lerp(returnZoom, initialZoom, p)
-  })
+  // === 4. 카메라 애니메이션 종료 ===
+  wsStore.sendAck('CAMERA_END')
 }
 
 // === Animation Logic ===

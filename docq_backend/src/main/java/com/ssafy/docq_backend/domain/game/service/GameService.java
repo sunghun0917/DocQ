@@ -358,7 +358,8 @@ public class GameService {
             broadcastGameState(room);
 
             // 카메라 인트로 이후 퀴즈 시작
-            gameEventStore.schedule(room.getId(), GameEventType.START_QUIZ, null, INTRO_CAMERA_DURATION_MS);
+            // gameEventStore.schedule(room.getId(), GameEventType.START_QUIZ, null,
+            // INTRO_CAMERA_DURATION_MS);
 
         } catch (DocqException e) {
             sendError(userId, e.getErrorCode());
@@ -606,6 +607,10 @@ public class GameService {
             }
 
             switch (effectiveAckType) {
+                // 카메라 end case 추가
+                case CAMERA_END -> {
+                    gameEventStore.schedule(room.getId(), GameEventType.START_QUIZ, null, 0);
+                }
                 case RESULT_DISPLAYED -> {
                     ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED,
                             keyId,
@@ -714,7 +719,8 @@ public class GameService {
             Long quizId = quizEntity.getQuizId();
 
             long quizStartTimeMs = System.currentTimeMillis();
-            OffsetDateTime quizStartTime = OffsetDateTime.ofInstant(Instant.ofEpochMilli(quizStartTimeMs), ZoneOffset.UTC);
+            OffsetDateTime quizStartTime = OffsetDateTime.ofInstant(Instant.ofEpochMilli(quizStartTimeMs),
+                    ZoneOffset.UTC);
             log.info("Quiz start time (UTC): {}, server zone: {}, server now: {}",
                     quizStartTime, ZoneId.systemDefault(), Instant.now());
 
