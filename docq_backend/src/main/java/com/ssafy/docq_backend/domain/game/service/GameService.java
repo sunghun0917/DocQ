@@ -916,26 +916,30 @@ public class GameService {
                 }
 
                 if (room.getMapEvents().containsKey(nextPos)) {
-                    String eventType = room.getMapEvents().get(nextPos);
-                    int before = nextPos;
+                    Set<Integer> visitedTiles = new HashSet<>();
+                    while (room.getMapEvents().containsKey(nextPos) && !visitedTiles.contains(nextPos)) {
+                        visitedTiles.add(nextPos);
+                        String eventType = room.getMapEvents().get(nextPos);
+                        int before = nextPos;
 
-                    if ("TILE_X2".equals(eventType)) {
-                        nextPos += moveValue;
-                        // Boundary Check
-                        if (nextPos < START_POSITION)
-                            nextPos = START_POSITION;
-                        if (nextPos >= TARGET_POSITION) {
-                            nextPos = TARGET_POSITION;
-                            finishPlanned = true;
+                        if ("TILE_X2".equals(eventType)) {
+                            nextPos += moveValue;
+                            // Boundary Check
+                            if (nextPos < START_POSITION)
+                                nextPos = START_POSITION;
+                            if (nextPos >= TARGET_POSITION) {
+                                nextPos = TARGET_POSITION;
+                                finishPlanned = true;
+                            }
                         }
-                    }
 
-                    actions.add(GameDto.MoveAction.builder()
-                            .type("TILE_EFFECT")
-                            .effectType(eventType)
-                            .before(before)
-                            .after(nextPos)
-                            .build());
+                        actions.add(GameDto.MoveAction.builder()
+                                .type("TILE_EFFECT")
+                                .effectType(eventType)
+                                .before(before)
+                                .after(nextPos)
+                                .build());
+                    }
                 }
 
                 for (String pid : room.getPlayers()) {

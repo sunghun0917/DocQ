@@ -9,12 +9,14 @@ import { useGameStore } from '@/stores/gameStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useWebSocketStore } from '@/stores/websocketStore';
 import { useUserStore } from '@/stores/userStore';
+import { useUiStore } from '@/stores/uiStore';
 
 const router = useRouter();
 const gameStore = useGameStore();
 const roomStore = useRoomStore();
 const wsStore = useWebSocketStore();
 const userStore = useUserStore();
+const uiStore = useUiStore();
 
 // Store에서 랭킹 데이터 가져오기 (rankings getter 활용)
 const rankings = computed(() => gameStore.rankings)
@@ -111,13 +113,29 @@ const goLobby = () => {
 const restartGame = () => {
   const roomId = roomStore.roomInfo.roomId
   const userId = userStore.userId
+  if (!isHost.value) {
+    uiStore.openConfirm({
+      title: '대기방 이동',
+      message: '방장이 재시작하면 자동으로 입장합니다. 지금 대기방으로 이동할까요?',
+      confirmLabel: '대기방으로',
+      icon: 'meeting_room',
+      variant: 'primary',
+      onConfirm: () => goLobby()
+    })
+    return
+  }
   if (!roomId || !userId) {
     goLobby()
     return
   }
-  if (confirm("게임을 재시작하시겠습니까?")) {
-    wsStore.restartGame(roomId, userId)
-  }
+  uiStore.openConfirm({
+    title: '게임 재시작',
+    message: '게임을 재시작하시겠습니까?',
+    confirmLabel: '재시작',
+    icon: 'restart_alt',
+    variant: 'primary',
+    onConfirm: () => wsStore.restartGame(roomId, userId)
+  })
 }
 </script>
 
@@ -178,7 +196,6 @@ const restartGame = () => {
           </button>
           
           <button 
-            v-if="isHost"
             @click="restartGame"
             class="flex-[2] h-14 rounded-[20px] font-black text-xl text-white 
                    bg-[#6c5ce7] shadow-[0_6px_0_0_#5f3dc4] 

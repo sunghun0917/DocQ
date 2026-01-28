@@ -5,16 +5,18 @@ import { useRouter, useRoute } from 'vue-router';
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
+import { useUiStore } from '@/stores/uiStore'
 import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes } from '@/services/api'
 import type { QuizResponse } from '@/types/docq-api'
 import AlertModal from '@/components/common/AlertModal.vue';
-import ExitConfirmModal from '@/components/common/ExitConfirmModal.vue';
+import ConfirmModal from '@/components/common/ConfirmModal.vue';
 
 const router = useRouter();
 const route = useRoute();
 const roomStore = useRoomStore()
 const userStore = useUserStore()
 const wsStore = useWebSocketStore()
+const uiStore = useUiStore()
 
 const roomId = computed(() => String(route.params.roomId || ''))
 const roomInfo = computed(() => roomStore.roomInfo)
@@ -52,6 +54,28 @@ const handleFileChange = (event: Event) => {
   if (target.files && target.files.length > 0) {
     selectedFile.value = target.files[0] || null
   }
+}
+
+const openInfoModal = (message: string, title = '알림') => {
+  uiStore.openConfirm({
+    title,
+    message,
+    confirmLabel: '확인',
+    icon: 'info',
+    variant: 'primary',
+    showCancel: false
+  })
+}
+
+const openErrorModal = (message: string, title = '오류') => {
+  uiStore.openConfirm({
+    title,
+    message,
+    confirmLabel: '확인',
+    icon: 'warning',
+    variant: 'danger',
+    showCancel: false
+  })
 }
 
 // [Frontend] PDF 업로드 및 퀴즈 생성
@@ -295,7 +319,7 @@ const copyRoomCode = async () => {
 
 const handleStartGame = () => {
   if (!isAllReady.value) {
-    alert("모든 플레이어가 준비해야 합니다!");
+    openInfoModal('모든 플레이어가 준비해야 합니다!');
     return;
   }
   if (!userStore.userId) return;
@@ -350,7 +374,7 @@ onMounted(async () => {
   }
 
   if (!userStore.userId) {
-    alert('닉네임을 먼저 설정해주세요.')
+    openInfoModal('닉네임을 먼저 설정해주세요.')
     router.push('/')
     return
   }
@@ -368,7 +392,7 @@ onMounted(async () => {
     })
     await applyInitialQuizState(room.quizCount)
   } catch (error) {
-    alert(getErrorMessage(error))
+    openErrorModal(getErrorMessage(error))
     router.push('/')
     return
   }
@@ -672,8 +696,13 @@ onMounted(async () => {
             :type="toastType" 
             @close="isToastOpen = false"
           />
-          <ExitConfirmModal 
+          <ConfirmModal
             :isOpen="showExitModal"
+            title="방 나가기"
+            message="정말 대기실에서 나가시겠습니까?"
+            confirmLabel="나가기"
+            icon="logout"
+            variant="danger"
             @close="showExitModal = false"
             @confirm="handleExitConfirm"
           />

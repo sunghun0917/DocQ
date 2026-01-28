@@ -8,6 +8,7 @@ import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
 import MiniGameModal from '@/components/minigame/MiniGameModal.vue';
 import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import CloudBackground from '@/components/ui/CloudBackground.vue';
+import ConfirmModal from '@/components/common/ConfirmModal.vue';
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -31,6 +32,22 @@ const canShowResultModal = computed(() =>
 const roomId = computed(() => roomStore.roomInfo.roomId)
 const isHost = computed(() => roomStore.isHost || roomStore.myUser?.isHost || false)
 const players = computed(() => gameStore.gameState.players || [])
+const orderedPlayers = computed(() => {
+    const list = players.value.slice()
+    const order = gameStore.gameState.turnOrder || []
+    if (!order.length) return list
+    const byId = new Map(list.map(p => [p.userId, p]))
+    const ordered = order.map(id => byId.get(id)).filter((p): p is typeof list[number] => !!p)
+    const remaining = list.filter(p => !order.includes(p.userId))
+    return [...ordered, ...remaining]
+})
+const cornerPlayers = computed(() => {
+    const slots = Array.from({ length: 4 }, () => null as (typeof players.value[number] | null))
+    orderedPlayers.value.slice(0, 4).forEach((p, idx) => {
+        slots[idx] = p
+    })
+    return slots
+})
 const miniGame = computed(() => gameStore.miniGame)
 const isMiniGameActive = computed(() => miniGame.value.phase === 'playing' || miniGame.value.phase === 'result')
 const showBuffRoulette = computed(() =>
@@ -47,6 +64,8 @@ const isBoardMoving = ref(false)
 const showMiniGameStartNotice = ref(false)
 const isMiniGameStarting = ref(false)
 const systemNotice = ref<string | null>(null)
+const isMenuOpen = ref(false)
+const confirmAction = ref<'leave' | 'end' | 'restart' | null>(null)
 const isMiniGameWinnerNoticeActive = ref(false)
 const isGameEndNoticeActive = ref(false)
 const hasShownGameStartNotice = ref(false)
@@ -207,31 +226,79 @@ const submitAnswer = (index: number) => {
     }
 }
 
+const confirmConfig = computed(() => {
+    switch (confirmAction.value) {
+        case 'leave':
+            return {
+                title: '게임 나가기',
+                message: '정말 게임에서 나가시겠습니까?',
+                confirmLabel: '나가기',
+                icon: 'logout',
+                variant: 'danger' as const
+            }
+        case 'end':
+            return {
+                title: '게임 종료',
+                message: '정말 게임을 종료하시겠습니까?',
+                confirmLabel: '게임 종료',
+                icon: 'stop_circle',
+                variant: 'danger' as const
+            }
+        case 'restart':
+            return {
+                title: '게임 재시작',
+                message: '게임을 재시작하시겠습니까?',
+                confirmLabel: '재시작',
+                icon: 'restart_alt',
+                variant: 'primary' as const
+            }
+        default:
+            return {
+                title: '',
+                message: '',
+                confirmLabel: '',
+                icon: 'help',
+                variant: 'danger' as const
+            }
+    }
+})
+
+const openConfirm = (action: 'leave' | 'end' | 'restart') => {
+    confirmAction.value = action
+}
+
+const closeConfirm = () => {
+    confirmAction.value = null
+}
+
+const handleConfirm = () => {
+    const action = confirmAction.value
+    confirmAction.value = null
+    if (!action) return
+    if (action === 'leave') leaveGame()
+    if (action === 'end') endGame()
+    if (action === 'restart') restartGame()
+}
+
 const leaveGame = () => {
     if (!userStore.userId || !roomId.value) return
-    if (confirm("정말 게임에서 나가시겠습니까?")) {
-        wsStore.leaveGame(roomId.value, userStore.userId)
-        setTimeout(() => {
-            wsStore.cleanup()
-            roomStore.leaveRoom()
-            gameStore.reset()
-            router.push('/')
-        }, 150)
-    }
+    wsStore.leaveGame(roomId.value, userStore.userId)
+    setTimeout(() => {
+        wsStore.cleanup()
+        roomStore.leaveRoom()
+        gameStore.reset()
+        router.push('/')
+    }, 150)
 }
 
 const endGame = () => {
     if (!userStore.userId || !roomId.value) return
-    if (confirm("게임을 종료하시겠습니까?")) {
-        wsStore.endGame(roomId.value, userStore.userId)
-    }
+    wsStore.endGame(roomId.value, userStore.userId)
 }
 
 const restartGame = () => {
     if (!userStore.userId || !roomId.value) return
-    if (confirm("게임을 재시작하시겠습니까?")) {
-        wsStore.restartGame(roomId.value, userStore.userId)
-    }
+    wsStore.restartGame(roomId.value, userStore.userId)
 }
 
 watchEffect(() => {
@@ -384,27 +451,31 @@ onMounted(() => {
 
     <!-- UI 오버레이 -->
     <div v-if="!isMiniGameActive && !showMiniGameStartNotice" class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
-      <div class="player-panel pointer-events-auto">
-        <div class="player-panel-title">Players</div>
-        <div class="player-panel-turn">
-          현재 턴: <span>{{ currentTurnPlayer?.nickname || '결정 중...' }}</span>
-        </div>
-        <div class="player-panel-list">
-          <div
-            v-for="p in players"
-            :key="p.userId"
-            class="player-row"
-            :class="{ 'player-row-active': p.userId === currentTurnPlayer?.userId }"
-          >
-            <div class="player-name">{{ p.nickname }}</div>
-            <div class="player-meta">
-              <span v-if="p.hasBuff" class="player-buff" :title="p.hasBuff">
-                ⚡
-              </span>
-              <span class="player-score">맞춘 문제: {{ p.score ?? 0 }}</span>
-              <span class="player-pos">POS {{ p.position ?? 0 }}</span>
+      <div class="corner-players pointer-events-auto">
+        <div
+          v-for="(p, idx) in cornerPlayers"
+          :key="p?.userId ?? `corner-empty-${idx}`"
+          class="corner-card"
+          :class="[
+            `corner-${idx + 1}`,
+            { 'corner-card-active': p?.userId === currentTurnPlayer?.userId }
+          ]"
+        >
+          <template v-if="p">
+            <div class="corner-card-name">
+              {{ p.nickname }}
+              <span v-if="p.userId === myUserId" class="corner-card-me">MY</span>
+              <span v-if="p.userId === currentTurnPlayer?.userId" class="corner-card-turn">TURN</span>
             </div>
-          </div>
+            <div class="corner-card-meta">
+              <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
+              <span>맞춘 문제: {{ p.score ?? 0 }}</span>
+              <span>POS {{ p.position ?? 0 }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <div class="corner-card-empty">Empty Slot</div>
+          </template>
         </div>
       </div>
 
@@ -417,7 +488,7 @@ onMounted(() => {
       </transition>
       
       <!-- 상단 정보: 라운드, 타이머 -->
-      <header class="top-right-header flex justify-between items-start pointer-events-auto gap-4">
+      <header class="top-center-header flex justify-between items-start pointer-events-auto gap-4">
          <div class="bg-white/90 backdrop-blur rounded-xl p-4 shadow-lg border-2 border-slate-200">
             <h2 class="text-xl font-black text-slate-700">
                ROUND {{ gameStore.gameState.round || 1 }}
@@ -432,34 +503,53 @@ onMounted(() => {
             </div>
             <div class="text-white text-xs font-bold drop-shadow">SEC</div>
          </div>
-
-         <div class="flex flex-col gap-2 pointer-events-auto">
-            <button
-              class="bg-white/90 text-slate-700 font-bold px-4 py-2 rounded-lg border border-slate-200 shadow hover:bg-white"
-              @click="leaveGame"
-            >
-              나가기
-            </button>
-            <button
-              v-if="isHost"
-              class="bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-rose-600"
-              @click="endGame"
-            >
-              게임 종료
-            </button>
-            <button
-              v-if="isHost"
-              class="bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-emerald-600"
-              @click="restartGame"
-            >
-              재시작
-            </button>
-         </div>
       </header>
 
       <!-- 결과 모달 -->
       <ResultModal v-if="canShowResultModal && !isGameEndNoticeActive" class="pointer-events-auto" />
     </div>
+
+    <div class="global-controls pointer-events-auto">
+      <button
+        class="menu-button"
+        @click="isMenuOpen = !isMenuOpen"
+        aria-label="menu"
+      >
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <div v-if="isMenuOpen" class="menu-panel">
+        <button
+          class="bg-white text-slate-700 font-bold px-4 py-2 rounded-lg border border-slate-200 shadow hover:bg-white"
+          @click="isMenuOpen = false; openConfirm('leave')"
+        >
+          나가기
+        </button>
+        <button
+          v-if="isHost"
+          class="bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-rose-600"
+          @click="isMenuOpen = false; openConfirm('end')"
+        >
+          게임 종료
+        </button>
+        <button
+          v-if="isHost"
+          class="bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-emerald-600"
+          @click="isMenuOpen = false; openConfirm('restart')"
+        >
+          재시작
+        </button>
+      </div>
+    </div>
+    <ConfirmModal
+      :isOpen="!!confirmAction"
+      :title="confirmConfig.title"
+      :message="confirmConfig.message"
+      :confirmLabel="confirmConfig.confirmLabel"
+      :icon="confirmConfig.icon"
+      :variant="confirmConfig.variant"
+      @close="closeConfirm"
+      @confirm="handleConfirm"
+    />
   </div>
 </template>
 
@@ -522,42 +612,154 @@ onMounted(() => {
   pointer-events: auto;
 }
 
-.player-panel {
+.corner-players {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.corner-card {
+  position: absolute;
   width: 220px;
-  background: rgba(255, 255, 255, 0.9);
+  min-height: 90px;
+  background: rgba(255, 255, 255, 0.92);
   border: 2px solid #e2e8f0;
   border-radius: 16px;
   padding: 12px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-  z-index: 20;
+  pointer-events: auto;
 }
 
-.top-right-header {
-  position: absolute;
+.corner-card-active {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.corner-1 {
+  top: 20px;
+  left: 20px;
+}
+
+.corner-2 {
   top: 20px;
   right: 20px;
-  z-index: 20;
 }
 
-.player-panel-title {
-  font-weight: 800;
+.corner-3 {
+  bottom: 20px;
+  left: 20px;
+}
+
+.corner-4 {
+  bottom: 20px;
+  right: 20px;
+}
+
+.corner-card-name {
+  font-weight: 900;
   font-size: 14px;
   color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 8px;
 }
 
-.player-panel-turn {
+.corner-card-turn {
+  font-size: 10px;
+  font-weight: 900;
+  color: white;
+  background: #6366f1;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.corner-card-me {
+  font-size: 10px;
+  font-weight: 900;
+  color: #0f172a;
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.corner-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
   font-weight: 700;
   color: #64748b;
-  margin-bottom: 8px;
 }
 
-.player-panel-turn span {
-  color: #4f46e5;
+.corner-card-buff {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.2);
+  border: 1px solid rgba(250, 204, 21, 0.6);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.corner-card-empty {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.top-center-header {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+}
+
+.global-controls {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2600;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.menu-button {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 2px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.9);
+  color: #334155;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+
+.menu-button:hover {
+  background: white;
+}
+
+.menu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  min-width: 140px;
 }
 
 .player-panel-list {
