@@ -64,7 +64,7 @@ const handleUploadPdf = async () => {
     await loadQuizzes() // [ADD] 생성 직후 목록 갱신
     selectedFile.value = null // Reset check
   } catch (error) {
-    toastMessage.value = '퀴즈 생성 실패 : AI 서비스 연결 안됨';
+    toastMessage.value = '퀴즈 생성 실패: ' + getErrorMessage(error);
     toastType.value = 'error';
     isToastOpen.value = true;
   } finally {

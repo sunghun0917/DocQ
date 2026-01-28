@@ -56,7 +56,7 @@ async def upload_pdf(
             return JSONResponse(
                 status_code=400,
                 content={
-                    "detail": "텍스트가 너무 짧습니다. 더 많은 텍스트를 포함한 PDF를 업로드해주세요.",
+                    "detail": "PDF내용이 너무 짧습니다. 더 많은 내용을 포함한 PDF를 업로드해주세요.",
                     "text_preview": text[:2000],
                     "text_length": text_len,
                     "min_length": 3000,
