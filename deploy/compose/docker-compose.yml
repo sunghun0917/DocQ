@@ -1,4 +1,3 @@
-
 services:
   nginx:
     image: nginx:latest
@@ -45,6 +44,15 @@ services:
     networks:
       - docq-network
 
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - docq-network
+
   ai-service:
     build: ../../docq-ai
     restart: unless-stopped
@@ -52,6 +60,29 @@ services:
       - ../../docq-ai/.env
     environment:
       - PYTHONUNBUFFERED=1
+      - MINERU_API_URL=http://mineru-api:18000/file_parse
+    depends_on:
+      - mineru-api
+    networks:
+      - docq-network
+
+  mineru-api:
+    image: mineru:latest
+    container_name: mineru-api
+    restart: unless-stopped
+    ports:
+      - "18000:18000"
+    entrypoint: mineru-api
+    command:
+      --host 0.0.0.0
+      --port 18000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
     networks:
       - docq-network
 

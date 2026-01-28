@@ -6,8 +6,10 @@ from app.utils import extract_json
 import asyncio
 import json
 import re
+import random
 
 TARGET = 22
+MAX_SINGLE_CALL_CHARS = 15000  # 약 5k 토큰 (Ensure stability)
 REFINE_MIN_COUNT = 20
 MAX_FINAL_ATTEMPTS = 2
 MIN_RETURN = 20
@@ -59,6 +61,56 @@ def _is_valid_quiz(q: dict) -> bool:
     return True
 
 
+def _coerce_quiz_list(parsed):
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        for key in ("quizzes", "items", "data", "results"):
+            value = parsed.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def _normalize_quiz_fields(q: dict) -> dict:
+    if not isinstance(q, dict):
+        return {}
+    if "answerText" not in q:
+        for key in ("answer", "correct", "correctAnswer"):
+            if key in q:
+                q["answerText"] = q.get(key)
+                break
+    if "options" not in q:
+        for key in ("choices", "answers"):
+            if key in q:
+                q["options"] = q.get(key)
+                break
+    return q
+
+
+def _pad_options(options: list, answer_text: str) -> list:
+    if not isinstance(options, list):
+        options = []
+    cleaned = [_sanitize_text(str(opt)) for opt in options if str(opt).strip()]
+    if answer_text and answer_text not in cleaned:
+        cleaned.append(answer_text)
+
+    # Ensure at least 4 options by adding simple distractors
+    filler_pool = [
+        "해당 없음",
+        "모두 해당",
+        "기타",
+        "잘못된 설명",
+        "정답 없음",
+    ]
+    while len(cleaned) < 4:
+        candidate = random.choice(filler_pool)
+        if candidate not in cleaned:
+            cleaned.append(candidate)
+
+    return cleaned[:4]
+
+
 def _dedupe_quizzes(quizzes: list) -> list:
     seen = set()
     unique = []
@@ -82,21 +134,29 @@ async def generate_chunk_quiz(chunk: str, per_chunk: int) -> list:
     raw = await call_llm(prompt + "\n\n" + chunk)
     try:
         parsed = extract_json(raw)
-    except Exception:
+    except Exception as e:
+        print(f"JSON Parsing Failed: {e}")
+        print(f"Raw Response specific: {raw[:500]}...")  # 로그에서 확인 위해 앞부분 출력
         return []
 
     cleaned = []
-    for q in parsed:
+    for q in _coerce_quiz_list(parsed):
+        q = _normalize_quiz_fields(q)
+        if not q:
+            continue
         if not isinstance(q, dict):
             continue
-        if "options" in q and isinstance(q["options"], list):
-            q["options"] = [_sanitize_text(str(opt)) for opt in q["options"]]
+        answer_text = _sanitize_text(str(q.get("answerText", "")))
+        if "answerIndex" in q and isinstance(q["answerIndex"], int):
+            if "options" in q and 0 <= q["answerIndex"] < len(q["options"]):
+                answer_text = _sanitize_text(str(q["options"][q["answerIndex"]]))
+        q["options"] = _pad_options(q.get("options", []), answer_text)
         if "question" in q:
             q["question"] = _sanitize_text(str(q["question"]))
         if "explanation" in q:
             q["explanation"] = _sanitize_text(str(q["explanation"]))
-        if "answerText" in q:
-            q["answerText"] = _sanitize_text(str(q["answerText"]))
+        if answer_text:
+            q["answerText"] = answer_text
         if not _is_valid_quiz(q):
             continue
         answer_index = _resolve_answer_index(q["options"], str(q["answerText"]))
@@ -105,6 +165,10 @@ async def generate_chunk_quiz(chunk: str, per_chunk: int) -> list:
         q["answerIndex"] = answer_index
         cleaned.append(q)
 
+    print(
+        f"[quiz] requested={per_chunk} parsed={len(_coerce_quiz_list(parsed))} "
+        f"valid={len(cleaned)} text_len={len(chunk)}"
+    )
     return cleaned
 
 
@@ -152,46 +216,16 @@ async def _refine_quizzes(text: str, quizzes: list, target: int) -> list:
 
 
 async def generate_20_quizzes_fast(text: str) -> list:
-    chunks = chunk_text_by_count(text, max_chunks=2)
-
-    quizzes = []
-    per_chunk = TARGET // len(chunks)
+    max_chunks = min(6, max(3, len(text) // 6000 + 1))
+    chunks = chunk_text_by_count(text, max_chunks=max_chunks)
+    per_chunk = max(1, (TARGET + len(chunks) - 1) // len(chunks)) + 1
 
     tasks = [generate_chunk_quiz(chunk, per_chunk) for chunk in chunks]
     results = await asyncio.gather(*tasks)
 
+    quizzes = []
     for res in results:
         quizzes.extend(res)
 
     quizzes = _dedupe_quizzes(quizzes)
-
-    attempts = 0
-    fallback_context = " ".join(chunks)
-    while len(quizzes) < TARGET and attempts < 2:
-        missing = TARGET - len(quizzes)
-        refill = await generate_chunk_quiz(fallback_context, missing)
-        quizzes.extend(refill)
-        quizzes = _dedupe_quizzes(quizzes)
-        attempts += 1
-
-    final_attempts = 0
-    while len(quizzes) < TARGET and final_attempts < MAX_FINAL_ATTEMPTS:
-        if len(quizzes) < REFINE_MIN_COUNT:
-            quizzes = await _refine_quizzes(text, quizzes, TARGET)
-        if len(quizzes) >= TARGET:
-            break
-        missing = TARGET - len(quizzes)
-        refill = await generate_chunk_quiz(fallback_context, missing)
-        quizzes.extend(refill)
-        quizzes = _dedupe_quizzes(quizzes)
-        final_attempts += 1
-
-    if len(quizzes) < MIN_RETURN:
-        extra_attempts = 0
-        while len(quizzes) < MIN_RETURN and extra_attempts < 3:
-            missing = MIN_RETURN - len(quizzes)
-            refill = await generate_chunk_quiz(fallback_context, missing)
-            quizzes.extend(refill)
-            quizzes = _dedupe_quizzes(quizzes)
-            extra_attempts += 1
     return quizzes[:TARGET]

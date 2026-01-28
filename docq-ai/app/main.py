@@ -12,7 +12,7 @@ import fitz
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
-MAX_PAGES = 100
+MAX_PAGES = 50
 
 app = FastAPI()
 
@@ -42,7 +42,7 @@ async def upload_pdf(
             return JSONResponse(
                 status_code=400,
                 content={
-                    "detail": "PDF has too many pages. Please upload a shorter document.",
+                    "detail": "PDF페이지가 너무 많습니다. 50페이지 이하로 업로드해주세요.",
                     "page_count": page_count,
                     "max_pages": MAX_PAGES,
                 }
@@ -51,28 +51,15 @@ async def upload_pdf(
         text = extract_text_with_fallback(tmp_path)
         logger.info("Final Text preview (first 500 chars): %s", text[:500])
 
-        if len(text.strip()) < 200:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "detail": "Text is too short to generate quizzes. Please upload a clearer PDF.",
-                    "text_preview": text[:2000]
-                }
-            )
-        hangul_count = len(re.findall(r"[가-힣]", text))
-        allowed_count = len(re.findall(r"[0-9A-Za-z가-힣\s\.\,\?\!\:\;\-\(\)\"\'\+\=\*\/%]", text))
         text_len = len(text.strip())
-        hangul_ratio = (hangul_count / text_len) if text_len else 0
-        allowed_ratio = (allowed_count / text_len) if text_len else 0
-        if hangul_count < 50 or hangul_ratio < 0.2 or allowed_ratio < 0.85:
+        if text_len < 3000:
             return JSONResponse(
                 status_code=400,
                 content={
-                    "detail": "OCR result quality is too low (Korean text insufficient). Please upload a clearer PDF.",
+                    "detail": "텍스트가 너무 짧습니다. 더 많은 텍스트를 포함한 PDF를 업로드해주세요.",
                     "text_preview": text[:2000],
-                    "hangul_count": hangul_count,
-                    "hangul_ratio": round(hangul_ratio, 3),
-                    "allowed_ratio": round(allowed_ratio, 3),
+                    "text_length": text_len,
+                    "min_length": 3000,
                 }
             )
 
@@ -82,6 +69,67 @@ async def upload_pdf(
             "text_preview": text[:2000], 
             "total": len(quiz_pool),
             "quizzes": quiz_pool
+        }
+
+    except Exception as e:
+        error_msg = f"Server Error: {str(e)}\n{traceback.format_exc()}"
+        logger.exception("Server Error")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": error_msg}
+        )
+
+
+@app.post("/ai/parse_only/pdf")
+async def parse_only_pdf(
+    file: UploadFile = File(...)
+):
+    logger.info("ENDPOINT HIT: /ai/parse_only/pdf")
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        with fitz.open(tmp_path) as doc:
+            page_count = doc.page_count
+        if page_count > MAX_PAGES:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "PDF has too many pages. Please upload a shorter document.",
+                    "page_count": page_count,
+                    "max_pages": MAX_PAGES,
+                }
+            )
+
+        text = extract_text_with_fallback(tmp_path)
+        logger.info("Final Text preview (first 500 chars): %s", text[:500])
+
+        if len(text.strip()) < 50:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "Text is too short. Please upload a clearer PDF.",
+                    "text_preview": text[:2000]
+                }
+            )
+        
+        # Quality Check Metrics
+        hangul_count = len(re.findall(r"[가-힣]", text))
+        allowed_count = len(re.findall(r"[0-9A-Za-z가-힣\s\.\,\?\!\:\;\-\(\)\"\'\+\=\*\/%]", text))
+        text_len = len(text.strip())
+        hangul_ratio = (hangul_count / text_len) if text_len else 0
+        allowed_ratio = (allowed_count / text_len) if text_len else 0
+        
+        return {
+            "filename": file.filename,
+            "text_full": text,
+            "metrics": {
+                "length": text_len,
+                "hangul_count": hangul_count,
+                "hangul_ratio": round(hangul_ratio, 3),
+                "allowed_ratio": round(allowed_ratio, 3)
+            }
         }
 
     except Exception as e:
