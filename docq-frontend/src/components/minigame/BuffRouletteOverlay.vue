@@ -198,11 +198,11 @@ onMounted(() => {
 .section-label {
   position: absolute;
   top: 20%;
-  left: 60%;
+  left: 50%;
   color: #1e293b;
   font-weight: 800;
   font-size: 14px;
-  transform: rotate(30deg);
+  transform: translateX(-50%);
 }
 
 .info-text p {

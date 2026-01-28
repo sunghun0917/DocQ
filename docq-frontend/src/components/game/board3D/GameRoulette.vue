@@ -111,11 +111,11 @@ const labelStyle = (index: number) => {
 .section-label {
   position: absolute;
   top: 15%;
-  left: 62%;
+  left: 50%;
   color: white;
   font-weight: bold;
   font-size: 24px;
-  transform: rotate(30deg);
+  transform: translateX(-50%);
 }
 .spin-btn {
   margin-top: 20px;
