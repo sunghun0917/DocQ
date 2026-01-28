@@ -8,13 +8,13 @@ const timeRemaining = computed(() => gameStore.timeRemaining)
 // 5초 이하일 때 붉은색으로 강조
 const isUrgent = computed(() => timeRemaining.value <= 5)
 
-// 원형 진행도 계산 (30초 기준)
+// 원형 진행도 계산 (퀴즈 제한 시간 기준)
 // stroke-dasharray: 2 * PI * r (r=18 => approx 113)
 const FULL_DASH_ARRAY = 113
 const progress = computed(() => {
-  const total = 30 // 전체 시간
+  const total = gameStore.currentQuiz?.timeLimit ?? 7 // 전체 시간(초)
   const current = timeRemaining.value
-  const fraction = current / total
+  const fraction = total > 0 ? current / total : 0
   return (fraction * FULL_DASH_ARRAY).toFixed(0)
 })
 </script>

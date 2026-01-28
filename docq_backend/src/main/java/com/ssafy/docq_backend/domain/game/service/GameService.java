@@ -728,7 +728,7 @@ public class GameService {
                     .quizId(quizId)
                     .question(quizEntity.getQuestion())
                     .options(quizEntity.getOptions())
-                    .timeLimit(5000L)
+                    .timeLimit(7000L)
                     .quizStartTime(quizStartTime)
                     .quizStartTimeMs(quizStartTimeMs)
                     .build();

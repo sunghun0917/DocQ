@@ -17,7 +17,7 @@ export const useGameStore = defineStore('game', () => {
 
     // 게임 상태
     const isGameEnded = ref(false)
-    const timeRemaining = ref(30) // Default 30 seconds
+    const timeRemaining = ref(7) // Default 7 seconds
     const quizEndAt = ref<number | null>(null)
     const timerInterval = ref<number | null>(null)
 
@@ -129,7 +129,7 @@ export const useGameStore = defineStore('game', () => {
     }
 
     const applyQuiz = (quizData: QuizMessage) => {
-        const timeLimitMs = quizData.timeLimit ? Number(quizData.timeLimit) : 30000
+        const timeLimitMs = quizData.timeLimit ? Number(quizData.timeLimit) : 7000
         const startAtMs = quizData.quizStartTimeMs
         const startAtIso = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
         const effectiveStart = (startAtMs ?? startAtIso) ?? Date.now()
@@ -146,7 +146,7 @@ export const useGameStore = defineStore('game', () => {
         }
 
         currentQuizIndex.value = 0
-        timeRemaining.value = currentQuiz.value?.timeLimit || 30
+        timeRemaining.value = currentQuiz.value?.timeLimit || 7
         gameStatus.value = 'playing'
         lastAnswerResult.value = null
         currentRoundResult.value = null
@@ -226,7 +226,7 @@ export const useGameStore = defineStore('game', () => {
         currentQuizIndex.value = 0
         scores.value = {}
         gameStatus.value = 'waiting'
-        timeRemaining.value = 30
+        timeRemaining.value = 7
         quizEndAt.value = null
         lastAnswerResult.value = null
         gameState.value = {
