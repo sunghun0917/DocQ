@@ -12,6 +12,7 @@ export default defineConfig({
     vueDevTools(),
     tailwindcss(),
   ],
+  assetsInclude: ['**/*.glb', '**/*.gltf'],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -21,4 +22,5 @@ export default defineConfig({
     // SockJS를 위한 global 객체 정의
     global: 'globalThis',
   },
+
 })
