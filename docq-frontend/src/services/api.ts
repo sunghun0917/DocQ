@@ -1,12 +1,19 @@
 // REST API 통신 서비스
 // AxiosInstance 타입을 명시적으로 사용
 import axios, { type AxiosInstance } from 'axios'
+import type {
+    UserLoginRequest,
+    UserLoginResponse,
+    CreateRoomRequest,
+    CreateRoomResponse,
+    RoomResponse,
+    JoinRoomRequest,
+    JoinRoomResponse,
+    QuizResponse,
+    QuizGenerateResponse
+} from '@/types/docq-api'
 
 // Axios 인스턴스 생성
-// VITE_API_BASE_URL 사용
-/* JSON 헤더 기본 세팅이란,
-이 axios 인스턴스를 사용하는 모든 요청이
-“나는 JSON으로 말할게”라고 서버에 선언하는 것 */
 const apiClient: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
     timeout: 120000,
@@ -15,28 +22,7 @@ const apiClient: AxiosInstance = axios.create({
     }
 })
 
-// 요청 인터셉터, API 호출 전에 실행(필요시 토큰 추가 등)
-// 왜 필요한가
-/*
-매번 토큰을 수동으로 추가할 필요가 없다.
-*/
-
-// config 객체란? 요청에 대한 모든 정보를 담고 있는 객체
-apiClient.interceptors.request.use(
-    (config) => {
-        // 예: Authorization 헤더 추가
-        // const token = localStorage.getItem('token')
-        // if (token) {
-        //     config.headers.Authorization = `Bearer ${token}`
-        // }
-        return config
-    },
-    (error) => {
-        return Promise.reject(error)
-    }
-)
-
-// 응답 인터셉터, API 응답 후에 실행 (에러 처리)
+// 응답 인터셉터 (에러 로깅용)
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -45,60 +31,11 @@ apiClient.interceptors.response.use(
     }
 )
 
-// ==================== 타입 정의 ====================
-
-// 사용자 로그인 요청 (닉네임으로 userId 발급)
-export interface UserLoginRequest {
-    nickname: string
-}
-
-// 사용자 로그인 응답
-export interface UserLoginResponse {
-    userId: string
-    nickname: string
-}
-
-// 방 생성 요청
-export interface CreateRoomRequest {
-    userId: string
-    capacity: number
-    title: string
-    isPrivate?: boolean
-    password?: string
-}
-
-// 방 생성 응답
-export interface CreateRoomResponse {
-    roomId: string
-    inviteCode: string
-    hostId: string
-    isPrivate: boolean
-}
-
-// 방 정보 응답
-export interface RoomResponse {
-    roomId: string
-    title: string
-    isPrivate: boolean
-    status: string
-    currentCount: number
-    capacity: number
-}
-
-// 방 참가 요청
-export interface JoinRoomRequest {
-    roomId: string
-    password?: string
-}
-
-// 방 참가 응답
-export interface JoinRoomResponse {
-    roomId: string
-    roomCode: string
-    status: string
-}
-
-// ==================== API 함수 ====================
+/**
+ * ============================================================================
+ * 📡 API 함수 목록
+ * ============================================================================
+ */
 
 /**
  * 사용자 로그인 (닉네임으로 userId 발급)
@@ -147,21 +84,6 @@ export const verifyJoinRoom = async (data: JoinRoomRequest): Promise<JoinRoomRes
     return response.data
 }
 
-// ==================== 퀴즈 관련 API ====================
-
-export interface QuizResponse {
-    quizId: number
-    question: string
-    options: string[]
-    answerIndex: number
-    answerText: string
-}
-
-export interface QuizGenerateResponse {
-    message: string
-    roomId: string
-}
-
 /**
  * PDF 업로드 및 퀴즈 생성
  * POST /api/game/{roomId}/quiz/generate
@@ -197,7 +119,6 @@ export const setDefaultQuizzes = async (roomId: string, type: string): Promise<{
     })
     return response.data
 }
-
 
 // ==================== 에러 처리 헬퍼 ====================
 

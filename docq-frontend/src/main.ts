@@ -7,8 +7,11 @@ import router from './router'
 import '@/styles/reset.css'      // 1. 기본 초기화 (가장 먼저)
 import '@/styles/variables.css'  // 2. Tailwind가 포함된 설정 (가장 나중에)
 
+import Tres from '@tresjs/core'
+
 const app = createApp(App)
 
+app.use(Tres)
 app.use(createPinia())
 app.use(router)
 

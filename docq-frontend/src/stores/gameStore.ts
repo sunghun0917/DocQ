@@ -28,6 +28,7 @@ export const useGameStore = defineStore('game', () => {
     // [ADDED] Roulette State (for Overlay support)
     const rouletteTargetId = ref<string | null>(null)
     const rouletteResult = ref<number | null>(null)
+    const roulettePending = ref(false)
     const moveLocked = ref(false)
 
     // === GameBoard.vue support ===
@@ -129,8 +130,9 @@ export const useGameStore = defineStore('game', () => {
 
     const applyQuiz = (quizData: QuizMessage) => {
         const timeLimitMs = quizData.timeLimit ? Number(quizData.timeLimit) : 30000
-        const startAt = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
-        const effectiveStart = startAt ?? Date.now()
+        const startAtMs = quizData.quizStartTimeMs
+        const startAtIso = quizData.quizStartTime ? Date.parse(quizData.quizStartTime) : null
+        const effectiveStart = (startAtMs ?? startAtIso) ?? Date.now()
         const endAt = effectiveStart + timeLimitMs
         quizEndAt.value = endAt
         const remainingMs = Math.max(0, endAt - Date.now())
@@ -167,7 +169,8 @@ export const useGameStore = defineStore('game', () => {
 
         // [ADDED] Set roulette target if there's a winner
         const winnerUserId = resultData.winnerUserId ?? null
-        if (winnerUserId) {
+        if (winnerUserId && resultData.rouletteValue != null) {
+            roulettePending.value = true
             setTimeout(() => {
                 rouletteTargetId.value = winnerUserId
             }, 2000) // Show feedback first
@@ -182,6 +185,7 @@ export const useGameStore = defineStore('game', () => {
     const handleRouletteComplete = () => {
         rouletteTargetId.value = null
         rouletteResult.value = null
+        roulettePending.value = false
     }
 
     const submitAnswer = (userId: string, answerText: string) => {
@@ -203,7 +207,7 @@ export const useGameStore = defineStore('game', () => {
         timerInterval.value = window.setInterval(() => {
             if (!quizEndAt.value) return
             const remainingMs = Math.max(0, quizEndAt.value - Date.now())
-            timeRemaining.value = Math.max(0, Math.ceil(remainingMs / 1000))
+            timeRemaining.value = Math.max(0, remainingMs / 1000)
             if (remainingMs <= 0) {
                 stopTimer()
             }
@@ -311,6 +315,14 @@ export const useGameStore = defineStore('game', () => {
         }
     }
 
+    const clearQuiz = () => {
+        stopTimer()
+        currentQuiz.value = null
+        currentRoundResult.value = null
+        lastAnswerResult.value = null
+        quizEndAt.value = null
+    }
+
     const gamePhase = computed<RoomStatus | null>(() => gameState.value.state || null)
 
     return {
@@ -355,9 +367,11 @@ export const useGameStore = defineStore('game', () => {
         rouletteTargetId,
         setRouletteResult,
         handleRouletteComplete,
+        roulettePending,
         queueMiniGame,
         startMiniGame,
         setMiniGameResult,
-        clearMiniGame
+        clearMiniGame,
+        clearQuiz
     }
 })

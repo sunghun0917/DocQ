@@ -7,13 +7,18 @@ import { useRouter } from 'vue-router';
 import confetti from 'canvas-confetti';
 import { useGameStore } from '@/stores/gameStore';
 import { useRoomStore } from '@/stores/roomStore';
+import { useWebSocketStore } from '@/stores/websocketStore';
+import { useUserStore } from '@/stores/userStore';
 
 const router = useRouter();
 const gameStore = useGameStore();
 const roomStore = useRoomStore();
+const wsStore = useWebSocketStore();
+const userStore = useUserStore();
 
 // Store에서 랭킹 데이터 가져오기 (rankings getter 활용)
 const rankings = computed(() => gameStore.rankings)
+const isHost = computed(() => roomStore.isHost || roomStore.myUser?.isHost || false)
 
 const getAvatar = (userId: string) => {
     return roomStore.users.find(u => u.id === userId)?.avatar || '👤'
@@ -82,12 +87,38 @@ onMounted(() => {
   }, 400); //0.4초 후 폭죽
 });
 
-const goHome = () => router.push('/');
+const goHome = () => {
+  const roomId = roomStore.roomInfo.roomId
+  const userId = userStore.userId
+
+  if (roomId && userId) {
+    wsStore.leaveGame(roomId, userId)
+  }
+
+  setTimeout(() => {
+    wsStore.cleanup()
+    roomStore.leaveRoom()
+    gameStore.reset()
+    router.push('/')
+  }, 150)
+};
 const goLobby = () => {
     // If not in a room, just go home
     if (!roomStore.roomInfo.roomId) router.push('/');
     else router.push(`/waiting/${roomStore.roomInfo.roomId}`);
 } 
+
+const restartGame = () => {
+  const roomId = roomStore.roomInfo.roomId
+  const userId = userStore.userId
+  if (!roomId || !userId) {
+    goLobby()
+    return
+  }
+  if (confirm("게임을 재시작하시겠습니까?")) {
+    wsStore.restartGame(roomId, userId)
+  }
+}
 </script>
 
 <template>
@@ -112,7 +143,7 @@ const goLobby = () => {
               </div>
             </div>
             <h2 class="text-2xl font-black text-[#2d3436]">{{ winner?.nickname }}</h2>
-            <p class="text-[#fdcb6e] font-extrabold text-xl">{{ winner?.score }} pts</p>
+            <p class="text-[#fdcb6e] font-extrabold text-xl">맞춘 문제 {{ winner?.score }}</p>
           </div>
 
           <div class="flex-1 flex flex-col gap-3 justify-center">
@@ -147,7 +178,8 @@ const goLobby = () => {
           </button>
           
           <button 
-            @click="goLobby"
+            v-if="isHost"
+            @click="restartGame"
             class="flex-[2] h-14 rounded-[20px] font-black text-xl text-white 
                    bg-[#6c5ce7] shadow-[0_6px_0_0_#5f3dc4] 
                    hover:bg-[#5f3dc4] active:shadow-none active:translate-y-[6px] 

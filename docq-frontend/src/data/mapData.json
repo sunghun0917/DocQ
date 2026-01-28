@@ -1,0 +1,272 @@
+[
+  {
+    "name": "Tile_01_Start",
+    "type": "start",
+    "position": {
+      "x": -3.192,
+      "y": 0.947,
+      "z": -2.466
+    }
+  },
+  {
+    "name": "Tile_02_Normal",
+    "type": "normal",
+    "position": {
+      "x": -4.18,
+      "y": 0.947,
+      "z": -2.466
+    }
+  },
+  {
+    "name": "Tile_03_Normal",
+    "type": "normal",
+    "position": {
+      "x": -4.18,
+      "y": 0.947,
+      "z": -1.466
+    }
+  },
+  {
+    "name": "Tile_04_Normal",
+    "type": "normal",
+    "position": {
+      "x": -4.18,
+      "y": 0.947,
+      "z": -0.466
+    }
+  },
+  {
+    "name": "Tile_05_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.18,
+      "y": 0.947,
+      "z": -0.466
+    }
+  },
+  {
+    "name": "Tile_06_Bonus",
+    "type": "bonus",
+    "position": {
+      "x": -6.18,
+      "y": 0.947,
+      "z": -0.466
+    }
+  },
+  {
+    "name": "Tile_07_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.18,
+      "y": 0.947,
+      "z": -0.466
+    }
+  },
+  {
+    "name": "Tile_08_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.18,
+      "y": 0.947,
+      "z": -1.466
+    }
+  },
+  {
+    "name": "Tile_09_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.164,
+      "y": 1.108,
+      "z": -2.434
+    }
+  },
+  {
+    "name": "Tile_10_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.18,
+      "y": 0.947,
+      "z": -3.475
+    }
+  },
+  {
+    "name": "Tile_11_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.18,
+      "y": 0.947,
+      "z": -4.475
+    }
+  },
+  {
+    "name": "Tile_12_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.18,
+      "y": 0.947,
+      "z": -5.475
+    }
+  },
+  {
+    "name": "Tile_13_Bonus",
+    "type": "bonus",
+    "position": {
+      "x": -6.192,
+      "y": 0.947,
+      "z": -5.475
+    }
+  },
+  {
+    "name": "Tile_14_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.18,
+      "y": 0.947,
+      "z": -5.475
+    }
+  },
+  {
+    "name": "Tile_15_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.18,
+      "y": 0.947,
+      "z": -6.475
+    }
+  },
+  {
+    "name": "Tile_16_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.132,
+      "y": 1.212,
+      "z": -7.518
+    }
+  },
+  {
+    "name": "Tile_17_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.132,
+      "y": 1.192,
+      "z": -8.434
+    }
+  },
+  {
+    "name": "Tile_18_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.18,
+      "y": 0.947,
+      "z": -9.475
+    }
+  },
+  {
+    "name": "Tile_19_Normal",
+    "type": "normal",
+    "position": {
+      "x": -5.145,
+      "y": 0.947,
+      "z": -10.484
+    }
+  },
+  {
+    "name": "Tile_20_Normal",
+    "type": "normal",
+    "position": {
+      "x": -6.156,
+      "y": 0.947,
+      "z": -10.484
+    }
+  },
+  {
+    "name": "Tile_21_Normal",
+    "type": "normal",
+    "position": {
+      "x": -7.156,
+      "y": 0.947,
+      "z": -10.484
+    }
+  },
+  {
+    "name": "Tile_22_Snake",
+    "type": "snake",
+    "position": {
+      "x": -7.156,
+      "y": 0.947,
+      "z": -9.484
+    }
+  },
+  {
+    "name": "Tile_23_Normal",
+    "type": "normal",
+    "position": {
+      "x": -8.168,
+      "y": 0.947,
+      "z": -9.484
+    }
+  },
+  {
+    "name": "Tile_24_Normal",
+    "type": "normal",
+    "position": {
+      "x": -8.153,
+      "y": 1.108,
+      "z": -8.443
+    }
+  },
+  {
+    "name": "Tile_25_Normal",
+    "type": "normal",
+    "position": {
+      "x": -8.156,
+      "y": 0.947,
+      "z": -7.484
+    }
+  },
+  {
+    "name": "Tile_26_Bonus",
+    "type": "bonus",
+    "position": {
+      "x": -9.156,
+      "y": 0.947,
+      "z": -7.484
+    }
+  },
+  {
+    "name": "Tile_27_Normal",
+    "type": "normal",
+    "position": {
+      "x": -10.156,
+      "y": 0.947,
+      "z": -7.484
+    }
+  },
+  {
+    "name": "Tile_28_Normal",
+    "type": "normal",
+    "position": {
+      "x": -11.156,
+      "y": 0.947,
+      "z": -7.484
+    }
+  },
+  {
+    "name": "Tile_29_Normal",
+    "type": "normal",
+    "position": {
+      "x": -11.156,
+      "y": 0.947,
+      "z": -8.484
+    }
+  },
+  {
+    "name": "Tile_30_Goal",
+    "type": "goal",
+    "position": {
+      "x": -11.168,
+      "y": 0.947,
+      "z": -9.484
+    }
+  }
+]

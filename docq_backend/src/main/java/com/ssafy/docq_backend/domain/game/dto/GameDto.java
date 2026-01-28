@@ -8,6 +8,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -168,7 +169,8 @@ public class GameDto {
         private String question;
         private List<String> options; // 4 options
         private long timeLimit; // ms
-        private LocalDateTime quizStartTime;
+        private OffsetDateTime quizStartTime;
+        private Long quizStartTimeMs;
     }
 
     @Getter

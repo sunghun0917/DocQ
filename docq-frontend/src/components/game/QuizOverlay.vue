@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 
@@ -8,23 +8,47 @@ const roomStore = useRoomStore()
 
 const quiz = computed(() => gameStore.currentQuiz)
 const myUserId = computed(() => roomStore.myUser?.id || '')
-const isMyTurn = computed(() => {
-  if (!gameStore.currentTurnPlayer || !myUserId.value) return false
-  return gameStore.currentTurnPlayer.userId === myUserId.value
-})
+// Access currentTurnUserId via gameState since the getter was removed from store
+const isMyTurn = computed(() => gameStore.gameState.currentTurnUserId === myUserId.value)
+
+// Local state for submission feedback since store doesn't support it yet
+const localSelectedAnswer = ref<number | null>(null)
+
+// Computed property to match template expectation
+const mySubmission = computed(() => 
+  localSelectedAnswer.value !== null ? { answer: localSelectedAnswer.value } : null
+)
+
+const hasSubmitted = computed(() => localSelectedAnswer.value !== null)
 
 // 타이머 (Progress Bar Width%)
 const timePercentage = computed(() => {
-  const limit = quiz.value?.timeLimit || 30
-  return (gameStore.timeRemaining / limit) * 100
+  const limit = quiz.value?.timeLimit ?? 1
+  const ratio = limit > 0 ? (gameStore.timeRemaining / limit) * 100 : 0
+  return Math.min(100, Math.max(0, ratio))
 })
 
-// 답안 제출 핸들러 (WebSocket 버전은 GameView에서 처리)
-// 이 컴포넌트는 UI만 담당
+const emit = defineEmits(['submit'])
+
+// 답안 제출 핸들러
+const handleAnswer = (index: number) => {
+  if (!myUserId.value || hasSubmitted.value) return
+  
+  // Update local visual state
+  localSelectedAnswer.value = index
+  
+  // Emit event for parent to handle (WebSocket connection)
+  emit('submit', index)
+}
+
+// [FIX] Reset local state when quiz changes
+watch(quiz, () => {
+    localSelectedAnswer.value = null
+})
 </script>
 
 <template>
-  <div v-if="quiz && gameStore.gameStatus === 'playing'" class="quiz-overlay-container">
+  <div v-if="quiz && !gameStore.rouletteTargetId" class="quiz-overlay-container">
     
     <!-- 타이머 + 역할 메시지 -->
     <div class="status-header">
@@ -40,7 +64,7 @@ const timePercentage = computed(() => {
         <div 
           class="timer-bar" 
           :style="{ width: `${timePercentage}%` }"
-          :class="{ 'urgent': gameStore.timeRemaining <= 5 }"
+          :class="{ 'urgent': gameStore.timeRemaining <= 2 }"
         ></div>
       </div>
     </div>
@@ -54,12 +78,15 @@ const timePercentage = computed(() => {
       <div class="timer-text-display">남은 시간: {{ gameStore.timeRemaining.toFixed(1) }}s</div>
     </div>
 
-    <!-- 보기 버튼 영역 (실제 제출은 GameView에서 처리) -->
+    <!-- 보기 버튼 영역 -->
     <div class="options-grid">
       <button
         v-for="(option, idx) in quiz.options"
         :key="idx"
         class="option-btn"
+        :class="{ 'selected': mySubmission?.answer === idx, 'disabled': hasSubmitted }"
+        @click="handleAnswer(idx)"
+        :disabled="hasSubmitted"
       >
         {{ option }}
       </button>
@@ -69,6 +96,10 @@ const timePercentage = computed(() => {
 
 <style scoped>
 .quiz-overlay-container {
+  position: absolute; /* Added overlay positioning */
+  top: 0;
+  left: 0;
+  z-index: 100; /* Higher than UI overlay (10), lower than Roulette (2000) */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -77,7 +108,7 @@ const timePercentage = computed(() => {
   height: 100%;
   pointer-events: auto;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.3); /* 배경 어둡게 */
 }
 
 .status-header {
@@ -119,7 +150,7 @@ const timePercentage = computed(() => {
 .timer-bar {
   height: 100%;
   background: #00b894;
-  transition: width 1s linear, background 0.3s;
+  transition: width 0.25s linear, background 0.3s;
 }
 
 .timer-bar.urgent {
@@ -173,11 +204,29 @@ const timePercentage = computed(() => {
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-.option-btn:hover {
+.option-btn:hover:not(.disabled) {
   background: #74b9ff;
   border-color: #74b9ff;
   color: white;
   transform: translateY(-3px);
   box-shadow: 0 7px 14px rgba(0,0,0,0.2);
+}
+
+.option-btn:active:not(.disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.option-btn.selected {
+  background: #ffeaa7;
+  border-color: #fdcb6e;
+  color: #d35400;
+}
+
+.option-btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
 }
 </style>
