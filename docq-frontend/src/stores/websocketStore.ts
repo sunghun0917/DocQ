@@ -6,6 +6,7 @@ import type { GameStateResponse, PlayerInfo, RoundResult, MoveInfo, QuizMessage 
 import { useUserStore } from './userStore'
 import { useRoomStore } from './roomStore'
 import { useGameStore } from './gameStore'
+import { useUiStore } from './uiStore'
 import router from '@/router'
 
 export interface ErrorResponse {
@@ -237,7 +238,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
         // 방 종료/삭제 알림
         wsService.value.subscribe(`/topic/game/${roomId}/closed`, (data: any) => {
             console.log('📨 Room Closed:', data)
-            alert('방이 종료되었습니다.')
+            const uiStore = useUiStore()
+            uiStore.openConfirm({
+                title: '방 종료',
+                message: '방이 종료되었습니다.',
+                confirmLabel: '확인',
+                icon: 'warning',
+                variant: 'danger',
+                showCancel: false
+            })
             cleanup()
             roomStore.leaveRoom()
             gameStore.reset()
@@ -308,7 +317,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
             lastError.value = `[${data.code}] ${data.message}`
 
             // 에러 알림 표시 (Toast 등)
-            alert(`에러: ${data.message}`)
+            const uiStore = useUiStore()
+            uiStore.openConfirm({
+                title: '에러',
+                message: data.message,
+                confirmLabel: '확인',
+                icon: 'warning',
+                variant: 'danger',
+                showCancel: false
+            })
         })
     }
 

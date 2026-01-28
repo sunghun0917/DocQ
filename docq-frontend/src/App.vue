@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import GlobalConfirmModal from '@/components/common/GlobalConfirmModal.vue'
 </script>
 
 <template>
   <RouterView />
+  <GlobalConfirmModal />
 </template>
 
 <style>

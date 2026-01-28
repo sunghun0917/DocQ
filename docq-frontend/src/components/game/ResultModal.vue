@@ -9,12 +9,14 @@ import { useGameStore } from '@/stores/gameStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useWebSocketStore } from '@/stores/websocketStore';
 import { useUserStore } from '@/stores/userStore';
+import { useUiStore } from '@/stores/uiStore';
 
 const router = useRouter();
 const gameStore = useGameStore();
 const roomStore = useRoomStore();
 const wsStore = useWebSocketStore();
 const userStore = useUserStore();
+const uiStore = useUiStore();
 
 // Store에서 랭킹 데이터 가져오기 (rankings getter 활용)
 const rankings = computed(() => gameStore.rankings)
@@ -115,9 +117,14 @@ const restartGame = () => {
     goLobby()
     return
   }
-  if (confirm("게임을 재시작하시겠습니까?")) {
-    wsStore.restartGame(roomId, userId)
-  }
+  uiStore.openConfirm({
+    title: '게임 재시작',
+    message: '게임을 재시작하시겠습니까?',
+    confirmLabel: '재시작',
+    icon: 'restart_alt',
+    variant: 'primary',
+    onConfirm: () => wsStore.restartGame(roomId, userId)
+  })
 }
 </script>
 
