@@ -1,6 +1,6 @@
 <template>
   <div class="board-container">
-    <TresCanvas shadows alpha clear-color="#222222">
+    <TresCanvas :shadows="true" alpha clear-color="#222222"> 
       <TresOrthographicCamera
         :position="cameraPosition"
         :look-at="cameraTarget"
@@ -15,12 +15,20 @@
 
 
 
-      <TresAmbientLight :intensity="1.2" />
+      <TresAmbientLight :intensity="1.5" />
       <TresDirectionalLight
-        :position="[10, 15, 10]"
-        :intensity="2"
-        cast-shadow
-      />
+  :position="[-5, 50, 5]"
+  :intensity="1.5"
+  cast-shadow
+  :shadow-mapSize-width="2048"
+  :shadow-mapSize-height="2048"
+  :shadow-camera-left="-30"
+  :shadow-camera-right="30"
+  :shadow-camera-top="30"
+  :shadow-camera-bottom="-30"
+  :shadow-bias="-0.0001" 
+  :shadow-normal-bias="0.05"
+/>
 
       <primitive v-if="boardScene" :object="boardScene" />
 
@@ -519,10 +527,26 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// script setup 내부
 onMounted(async () => {
   const loader = new GLTFLoader()
   const gltf: GLTF = await loader.loadAsync('/assets/models/game_map.glb')
-  boardScene.value = gltf.scene as unknown as PointerEventsObject3D
+  
+  const model = gltf.scene
+  
+  // 모델 내부의 모든 메쉬를 순회하며 그림자 설정
+  model.traverse((child: any) => {
+    if (child.isMesh) {
+      child.castShadow = true    // 이 물체는 그림자를 만듦 (ex: 나무, 배)
+      child.receiveShadow = true // 이 물체 위에 그림자가 생김 (ex: 바닥 타일)
+      
+      // (선택사항) 재질이 빛에 더 잘 반응하도록 설정
+      // child.material.roughness = 1
+      // child.material.metalness = 0
+    }
+  })
+
+  boardScene.value = model as unknown as PointerEventsObject3D
 })
 </script>
 
