@@ -51,9 +51,7 @@ services:
       - ../../docq-ai/.env
     environment:
       - PYTHONUNBUFFERED=1
-      - MINERU_API_URL=http://host.docker.internal:18000/file_parse
-    extra_hosts:
-        - "host.docker.internal:host-gateway"
+      - MINERU_API_URL=http://${EC2_HOST_IP}:18000/file_parse
     networks:
       - docq-network
 
