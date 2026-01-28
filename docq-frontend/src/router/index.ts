@@ -7,6 +7,9 @@ const routes = [
   { path: '/waiting/:roomId', component: () => import('@/views/WaitingView.vue') },
   // 게임 본 화면 (결과 모달은 이 안에서 호출됨)
   { path: '/game', component: () => import('@/views/GameView.vue') },
+
+  // 테스트용 미니게임 화면
+  { path: '/test', component: () => import('@/views/TestMinigameView.vue') },
 ]
 
 const router = createRouter({
