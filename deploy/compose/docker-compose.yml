@@ -52,6 +52,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - MINERU_API_URL=http://host.docker.internal:18000/file_parse
+    extra_hosts:
+        - "host.docker.internal:host-gateway"
     networks:
       - docq-network
 
