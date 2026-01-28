@@ -81,7 +81,8 @@ const createRoom = async () => {
       capacity: maxUsers.value,
       isPrivate: room.isPrivate,
       status: 'WAITING',
-      currentCount: 0
+      currentCount: 0,
+      quizCount: 0
     })
 
     await wsStore.connect()

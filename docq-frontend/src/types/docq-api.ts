@@ -56,6 +56,7 @@ export interface RoomResponse {
     status: string
     currentCount: number
     capacity: number
+    quizCount: number
 }
 export interface JoinRoomRequest {
     roomId: string
