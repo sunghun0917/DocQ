@@ -196,9 +196,10 @@ const startRoulette = () => {
         onChange: (self: any) => {
             if (!isNicknameSet.value) return; // 로그인 전 휠 막기
             isInteracting = true;
-            let delta = self.deltaY * 0.3;
-            delta = Math.max(-60, Math.min(60, delta));
-            targetRotation += delta; // 휠 방향
+            const rawDelta = self.deltaY;
+            if (Math.abs(rawDelta) < 8) return;
+            const direction = rawDelta > 0 ? 1 : -1;
+            targetRotation += direction * anglePerItem; // 스크롤 1회당 1칸 이동
             clearTimeout(idleTimer);
             idleTimer = setTimeout(() => isInteracting = false, 1000);
         }
@@ -399,6 +400,7 @@ onUnmounted(() => { stopRoulette(); });
                         :key="'nav-' + item.id"
                         class="nav-dot"
                         :class="{ active: index === activeIndex }"
+                        @click="goToIndex(index)"
                     >
                         <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
                         <span class="nav-tooltip">{{ item.label }}</span>
@@ -528,7 +530,7 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .bottom-nav-area { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 50; }
 .scroll-indicator { position: static; margin-bottom: 5px; font-size: 1.1rem; color: white; text-shadow: 2px 2px 0 rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px; }
 .nav-bar-container { display: flex; justify-content: center; gap: 15px; padding: 12px 25px; background: rgba(255, 255, 255, 0.25); border-radius: 50px; backdrop-filter: blur(5px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid rgba(255,255,255,0.4); }
-.nav-dot { position: relative; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; background: #efebe9; border-radius: 50%; cursor: default; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 2px solid #a1887f; color: #5d4037; }
+.nav-dot { position: relative; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; background: #efebe9; border-radius: 50%; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 2px solid #a1887f; color: #5d4037; }
 .nav-icon { font-size: 24px; }
 .nav-dot.active { background: var(--leaf-green); color: white; transform: scale(1.15) translateY(-5px); border-color: #33691e; box-shadow: 0 5px 10px rgba(0,0,0,0.2); }
 .nav-tooltip { position: absolute; top: -40px; left: 50%; transform: translateX(-50%); background: rgba(93, 64, 55, 0.9); color: white; font-size: 0.85rem; padding: 5px 10px; border-radius: 8px; opacity: 0; pointer-events: none; transition: all 0.2s; white-space: nowrap; }
