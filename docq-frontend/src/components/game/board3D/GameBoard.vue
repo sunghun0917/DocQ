@@ -1,6 +1,6 @@
 <template>
   <div class="board-container">
-    <TresCanvas :shadows="true" alpha clear-color="#222222"> 
+    <TresCanvas :shadows="true" alpha :clear-alpha="0"> 
       <TresOrthographicCamera
         :position="cameraPosition"
         :look-at="cameraTarget"
@@ -30,29 +30,33 @@
   :shadow-normal-bias="0.05"
 />
 
-      <primitive v-if="boardScene" :object="boardScene" />
+      <TresGroup :rotation="[0, 0, 0]" :position="[0, 1.5, 0]">
+        <primitive v-if="boardScene" :object="boardScene" />
 
-      <!-- Special tile markers (from backend mapEvents) -->
-      <TresMesh
-        v-for="marker in specialTileMarkers"
-        :key="marker.key"
-        :position="[marker.x, marker.y + 0.05, marker.z]"
-        :scale="[0.25, 0.25, 0.25]"
-      >
-        <TresSphereGeometry :args="[0.35, 16, 16]" />
-        <TresMeshStandardMaterial color="#8b5cf6" />
-      </TresMesh>
+        <!-- Special tile markers (from backend mapEvents) -->
+        <TresMesh
+          v-for="marker in specialTileMarkers"
+          :key="marker.key"
+          :position="[marker.x, marker.y + 0.05, marker.z]"
+          :scale="[0.25, 0.25, 0.25]"
+        >
+          <TresSphereGeometry :args="[0.35, 16, 16]" />
+          <TresMeshStandardMaterial color="#8b5cf6" />
+        </TresMesh>
 
-      <!-- Players -->
-      <GameCharacter
-        v-for="p in players"
-        :key="p.userId"
-        :modelUrl="getPlayerModelUrl(p.userId)"
-        :position="getPlayerWorldPos(p)"
-        :isMoving="isPlayerMoving(p.userId)"
-        :lookTarget="getPlayerLookTarget(p)"
-      />
+        <!-- Players -->
+        <GameCharacter
+          v-for="p in players"
+          :key="p.userId"
+          :modelUrl="getPlayerModelUrl(p.userId)"
+          :position="getPlayerWorldPos(p)"
+          :isMoving="isPlayerMoving(p.userId)"
+          :lookTarget="getPlayerLookTarget(p)"
+        />
+      </TresGroup>
     </TresCanvas>
+
+    <CloudOverlay />
 
     <div v-if="actionNotice" class="action-notice">
       <div class="action-notice-card">
@@ -70,6 +74,7 @@ import * as THREE from 'three'
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
+import CloudOverlay from '@/components/ui/CloudOverlay.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import type { PlayerInfo } from '@/types/docq-api'
@@ -385,95 +390,101 @@ async function animateCameraTo(options: {
 }
 
 async function runIntroCamera() {
-  if (players.value.length === 0) return
+  if (mapTiles.length === 0) {
+  await sleep(2000)
+  wsStore.sendAck('CAMERA_END')
+    return
+  }
 
   // 0. 현재 상태 저장 (복귀용)
   const initialPos = [...cameraPosition.value] as [number, number, number]
   const initialTarget = [...cameraTarget.value] as [number, number, number]
   const initialZoom = cameraZoom.value
 
-  // 기본 오프셋 (ZOOM OUT 상태의 각도)
   const baseOffset: [number, number, number] = [
     initialPos[0] - initialTarget[0],
     initialPos[1] - initialTarget[1],
     initialPos[2] - initialTarget[2]
   ]
 
-  // === 1. 캐릭터별 줌인 (하이라이트) ===
-  const ZOOM_IN_LEVEL = 0.35
-  for (const p of players.value) {
-    const pPos = getPlayerWorldPos(p)
-    
-    // 캐릭터에게 이동 & 줌인
-    await animateCameraTo({
-      target: [pPos.x, pPos.y, pPos.z],
-      zoom: ZOOM_IN_LEVEL,
-      duration: 800,
-      offset: baseOffset // 같은 각도 유지
-    })
-    
-    // 잠깐 대기 (포커싱)
-    await sleep(600)
-  }
+  const startTile = mapTiles[0]!.position
 
-  // === 2. 맵 경로 프리뷰 (Start -> End, 3칸씩 건너뛰며 스무스하게) ===
-  const PATH_ZOOM = 0.25
-  if (mapTiles.length > 0) {
-    // 시작점으로 이동
-    const startTile = mapTiles[0]!.position
-    await animateCameraTo({
-      target: [startTile.x, startTile.y, startTile.z],
-      zoom: PATH_ZOOM,
-      duration: 1000,
-      offset: baseOffset
-    })
+  // 1) 시작 칸 확대
+  const START_ZOOM = 0.35
+  await animateCameraTo({
+    target: [startTile.x, startTile.y, startTile.z],
+    zoom: START_ZOOM,
+    duration: 900,
+    offset: baseOffset
+  })
 
-    // 3칸 간격으로 웨이포인트 생성 (경로 단순화)
-    const STEP = 3
-    const waypoints = mapTiles.filter((_, i) => i % STEP === 0 || i === mapTiles.length - 1)
+  await sleep(450)
 
-    // 경로 따라가기 (부드럽게)
-    await animate(3000, (t) => {
-      // 전체 웨이포인트 구간을 0~1로 매핑하여 현재 위치 계산
-      const totalSegments = waypoints.length - 1
-      const currentFloatIndex = t * totalSegments
-      
-      const idx = Math.floor(currentFloatIndex)
-      const nextIdx = Math.min(idx + 1, totalSegments)
-      const subT = currentFloatIndex - idx // 두 웨이포인트 사이의 진행률
+  // 2) 경로를 따라가기 (타겟 이동 + 적당한 줌)
+  const PATH_ZOOM = 0.22
+  await animateCameraTo({
+    target: [startTile.x, startTile.y, startTile.z],
+    zoom: PATH_ZOOM,
+    duration: 600,
+    offset: baseOffset
+  })
 
-      const p1 = waypoints[idx]!.position
-      const p2 = waypoints[nextIdx]!.position
+  // 경로 프리뷰는 3칸씩 샘플링해서(연출 단순화) 이동
+  const STEP = 3
+  const waypoints = mapTiles.filter((_, i) => i % STEP === 0 || i === mapTiles.length - 1)
 
-      const tx = lerp(p1.x, p2.x, subT)
-      const ty = lerp(p1.y, p2.y, subT)
-      const tz = lerp(p1.z, p2.z, subT)
+  await animate(3800, (t) => {
+    const totalSegments = Math.max(1, waypoints.length - 1)
+    const currentFloatIndex = t * totalSegments
 
-      // 카메라 이동
-      cameraTarget.value = [tx, ty, tz]
-      cameraPosition.value = [
-        tx + baseOffset[0],
-        ty + baseOffset[1],
-        tz + baseOffset[2]
-      ]
-    })
-    await sleep(200)
-  }
+    const idx = Math.min(Math.floor(currentFloatIndex), totalSegments - 1)
+    const nextIdx = Math.min(idx + 1, totalSegments)
+    const subT = currentFloatIndex - idx
 
-  // === 3. 원래 시점으로 복귀 ===
+    const p1 = waypoints[idx]!.position
+    const p2 = waypoints[nextIdx]!.position
+
+    const tx = lerp(p1.x, p2.x, subT)
+    const ty = lerp(p1.y, p2.y, subT)
+    const tz = lerp(p1.z, p2.z, subT)
+
+    cameraTarget.value = [tx, ty, tz]
+    cameraPosition.value = [
+      tx + baseOffset[0],
+      ty + baseOffset[1],
+      tz + baseOffset[2]
+    ]
+    cameraZoom.value = PATH_ZOOM
+  })
+
+  await sleep(150)
+
+  // 3) 처음 시점으로 정확히 복귀
   await animateCameraTo({
     target: initialTarget,
     zoom: initialZoom,
-    duration: 1200,
-    offset: baseOffset // 저장해둔 오프셋으로 정확히 복귀
+    duration: 900,
+    offset: baseOffset
   })
 
-  // === 4. 카메라 애니메이션 종료 ===
+  // floating-point 오차 없이 완전 동일하게 맞춤
+  cameraTarget.value = initialTarget
+  cameraPosition.value = initialPos
+  cameraZoom.value = initialZoom
+
+  await sleep(2000)
   wsStore.sendAck('CAMERA_END')
 }
 
 // === Animation Logic ===
 const MOVE_STEP_MS = 350
+
+// 이동 시 카메라 줌인/팔로우 설정값 (튜닝 포인트)
+const MOVE_FOCUS_ZOOM = 0.22
+const MOVE_FOCUS_IN_MS = 350
+const MOVE_FOCUS_FOLLOW_MS = 220
+const MOVE_FOCUS_OUT_MS = 450
+
 const lastMoveKey = ref<string | null>(null)
 
 const waitForMoveUnlock = async () => {
@@ -524,16 +535,23 @@ function getEffectLabel(effectType?: string) {
   }
 }
 
-const moveStep = async (userId: string, from: number, to: number) => {
+const moveStep = async (
+  userId: string,
+  from: number,
+  to: number,
+  onStep?: (position: number) => Promise<void>
+) => {
   if (to > from) {
     for (let i = from + 1; i <= to; i++) {
       animatingPlayers.value[userId] = i
-      await sleep(MOVE_STEP_MS)
+      const followPromise = onStep ? onStep(i) : Promise.resolve()
+      await Promise.all([sleep(MOVE_STEP_MS), followPromise])
     }
   } else if (to < from) {
     for (let i = from - 1; i >= to; i--) {
       animatingPlayers.value[userId] = i
-      await sleep(MOVE_STEP_MS)
+      const followPromise = onStep ? onStep(i) : Promise.resolve()
+      await Promise.all([sleep(MOVE_STEP_MS), followPromise])
     }
   }
 }
@@ -558,11 +576,47 @@ watch(() => gameStore.currentMove, async (move) => {
   emit('movement-change', true)
 
   const userId = move.userId
+
+  // 이동 시작 시점 카메라 스냅샷 저장
+  const cameraSnapshotPos = [...cameraPosition.value] as [number, number, number]
+  const cameraSnapshotTarget = [...cameraTarget.value] as [number, number, number]
+  const cameraSnapshotZoom = cameraZoom.value
+  const cameraSnapshotOffset: [number, number, number] = [
+    cameraSnapshotPos[0] - cameraSnapshotTarget[0],
+    cameraSnapshotPos[1] - cameraSnapshotTarget[1],
+    cameraSnapshotPos[2] - cameraSnapshotTarget[2]
+  ]
+
+  // 이동 중 카메라가 해당 플레이어를 따라가도록 step마다 타겟을 갱신
+  const followCameraStep = async (_position: number) => {
+    const movingPlayer = players.value.find(p => p.userId === userId)
+    if (!movingPlayer) return
+
+    const targetPos = getPlayerWorldPos(movingPlayer)
+    await animateCameraTo({
+      target: [targetPos.x, targetPos.y, targetPos.z],
+      duration: MOVE_FOCUS_FOLLOW_MS,
+      offset: cameraSnapshotOffset
+    })
+  }
+
+  // 이동 시작 시 줌인 + 타겟 이동
+  const movingPlayer = players.value.find(p => p.userId === userId)
+  if (movingPlayer) {
+    const targetPos = getPlayerWorldPos(movingPlayer)
+    await animateCameraTo({
+      target: [targetPos.x, targetPos.y, targetPos.z],
+      zoom: MOVE_FOCUS_ZOOM,
+      duration: MOVE_FOCUS_IN_MS,
+      offset: cameraSnapshotOffset
+    })
+  }
+
   let currentPos = move.startPosition
   const actions = Array.isArray(move.moveProcess) ? move.moveProcess : []
 
   if (actions.length === 0) {
-    await moveStep(userId, currentPos, move.endPosition)
+    await moveStep(userId, currentPos, move.endPosition, followCameraStep)
     currentPos = move.endPosition
   } else {
     for (const action of actions) {
@@ -574,7 +628,7 @@ watch(() => gameStore.currentMove, async (move) => {
       const after = action.after ?? currentPos
 
       if (before !== currentPos) {
-        await moveStep(userId, currentPos, before)
+        await moveStep(userId, currentPos, before, followCameraStep)
         currentPos = before
       }
 
@@ -587,7 +641,7 @@ watch(() => gameStore.currentMove, async (move) => {
         await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
       }
 
-      await moveStep(userId, currentPos, after)
+      await moveStep(userId, currentPos, after, followCameraStep)
       currentPos = after
     }
   }
@@ -598,6 +652,19 @@ watch(() => gameStore.currentMove, async (move) => {
       animatingPlayers.value[action.targetUserId] = action.after
     }
   })
+
+  // 이동 종료 시 카메라 원복(줌아웃)
+  await animateCameraTo({
+    target: cameraSnapshotTarget,
+    zoom: cameraSnapshotZoom,
+    duration: MOVE_FOCUS_OUT_MS,
+    offset: cameraSnapshotOffset
+  })
+
+  // floating-point 오차 없이 원래 상태로 맞춤
+  cameraTarget.value = cameraSnapshotTarget
+  cameraPosition.value = cameraSnapshotPos
+  cameraZoom.value = cameraSnapshotZoom
 
   isMovingGlobal.value = false
   gameStore.setMovementInProgress(false)

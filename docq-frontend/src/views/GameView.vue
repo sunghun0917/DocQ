@@ -7,6 +7,7 @@ import QuizOverlay from '@/components/game/QuizOverlay.vue';
 import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
 import MiniGameModal from '@/components/minigame/MiniGameModal.vue';
 import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
+import CloudBackground from '@/components/ui/CloudBackground.vue';
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -333,8 +334,14 @@ onMounted(() => {
 
 <template>
   <div class="game-page">
+    <CloudBackground class="game-background" />
+    <div class="map-focus-blur" aria-hidden="true" />
+
     <!-- 3D 보드게임 컴포넌트 (배경) -->
-    <GameBoard @movement-change="(moving) => (isBoardMoving = moving)" />
+    <GameBoard 
+      class="game-board-layer"
+      @movement-change="(moving) => (isBoardMoving = moving)" 
+    />
 
     <MiniGameModal
       v-if="isMiniGameActive && miniGameUiType && !showBuffRoulette"
@@ -461,9 +468,32 @@ onMounted(() => {
 .game-page {
   width: 100vw;
   height: 100vh;
-  background: #222; /* 3D 캔버스 로딩 전 배경색 */
+  /* background: #222;  <- 삭제: InfiniteBackground가 배경임 */
   position: relative;
   overflow: hidden;
+}
+
+.game-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.game-board-layer {
+  position: relative;
+  z-index: 2;
+}
+
+.map-focus-blur {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  backdrop-filter: blur(14px) saturate(1.05);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  background: rgba(0, 0, 0, 0.04);
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 55%, transparent 0%, transparent 45%, rgba(0,0,0,1) 65%, rgba(0,0,0,1) 100%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 55%, transparent 0%, transparent 45%, rgba(0,0,0,1) 65%, rgba(0,0,0,1) 100%);
 }
 
 /* UI 오버레이 스타일 */
