@@ -261,6 +261,10 @@ const isAllReady = computed(() => {
 });
 
 const isHost = computed(() => roomStore.isHost || myUser.value?.isHost || false)
+const startRequested = ref(false)
+const isStartDisabled = computed(() =>
+  !isAllReady.value || startRequested.value || roomInfo.value.status !== 'WAITING'
+)
 
 const toggleReady = () => {
   if (!myUser.value || !userStore.userId) return
@@ -289,7 +293,14 @@ const handleStartGame = () => {
     return;
   }
   if (!userStore.userId) return;
+  if (startRequested.value) return;
+  startRequested.value = true;
   wsStore.startGame(roomId.value, userStore.userId)
+  window.setTimeout(() => {
+    if (roomInfo.value.status === 'WAITING') {
+      startRequested.value = false;
+    }
+  }, 2000)
 };
 
 watchEffect(() => {
@@ -599,10 +610,10 @@ onMounted(async () => {
               
               <button 
                 @click="handleStartGame"
-                :disabled="!isAllReady"
+                :disabled="isStartDisabled"
                 class="w-full h-20 rounded-[12px] font-black text-2xl text-white transition-all 
                        flex items-center justify-center gap-3 shadow-lg"
-                :class="isAllReady 
+                :class="!isStartDisabled 
                   ? 'bg-gradient-to-r from-[#e11d48] to-[#be123c] shadow-rose-500/30 hover:shadow-[0_0_25px_rgba(225,29,72,0.4)] hover:scale-[1.02] active:scale-[0.98]' 
                   : 'bg-gray-300 cursor-not-allowed shadow-none opacity-50'"
               >
