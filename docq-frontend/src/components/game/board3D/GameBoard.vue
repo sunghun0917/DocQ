@@ -7,6 +7,10 @@
         :zoom="cameraZoom"
         :near="-100"
         :far="100"
+        :left="camLeft"
+        :right="camRight"
+        :top="camTop"
+        :bottom="camBottom"
       />
 
 
@@ -51,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 
 import * as THREE from 'three'
@@ -130,6 +134,25 @@ const cameraTarget = ref<[number, number, number]>([
 ])
 const cameraZoom = ref(0.12)
 const introPlayed = ref(false)
+
+const aspect = ref(window.innerWidth / window.innerHeight)
+
+const updateSlope = () => {
+  aspect.value = window.innerWidth / window.innerHeight
+}
+
+const camLeft = computed(() => -1 * aspect.value)
+const camRight = computed(() => 1 * aspect.value)
+const camTop = computed(() => 1)
+const camBottom = computed(() => -1)
+
+onMounted(() => {
+  window.addEventListener('resize', updateSlope)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateSlope)
+})
 
 type PointerEventsObject3D = THREE.Object3D & {
   setPointerCapture(pointerId: number): void

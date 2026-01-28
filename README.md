@@ -48,6 +48,48 @@ cd docq_backend
 
 ---
 
+## 🤖 DocQ AI (Python + FastAPI)
+
+AI 서버를 실행하려면 `docq-ai` 디렉토리로 이동해야 합니다.
+
+### 환경 설정 및 실행
+```bash
+# 디렉토리 이동
+cd docq-ai
+
+# 가상환경 생성 (최초 1회)
+python -m venv venv
+
+# 가상환경 활성화 (Windows)
+source venv/Scripts/activate
+# 또는
+.\venv\Scripts\activate
+
+# 가상환경 활성화 (Mac/Linux)
+source venv/bin/activate
+
+# 의존성 설치
+pip install -r requirements.txt
+
+# 서버 실행
+uvicorn app.main:app --reload
+```
+- **Local URL**: [http://localhost:8000](http://localhost:8000)
+
+---
+
+## 🗄️ Redis (Docker)
+
+Redis는 Docker 컨테이너를 통해 실행하는 것을 권장합니다.
+
+### 실행 명령어
+```bash
+# Redis 컨테이너 실행 (포트 6379)
+docker run -d --name redis -p 6379:6379 redis
+```
+
+---
+
 ## 🛠️ 주요 수정 사항 (2026-01-22)
 - **Build**: TypeScript 타입 에러 및 경로(Asset) 오류 수정
 - **WebSocket**: CORS 엔드포인트 패턴 허용 및 포트 불일치(8080->8081) 해결

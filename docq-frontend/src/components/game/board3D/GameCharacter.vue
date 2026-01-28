@@ -23,7 +23,7 @@ const props = withDefaults(defineProps<{
   color: '#ffffff'
 })
 
-const MODEL_YAW_OFFSET = Math.PI
+const MODEL_YAW_OFFSET = 0
 const STEP_DURATION_MS = 350
 const STEP_DURATION_S = STEP_DURATION_MS / 1000
 const JUMP_HEIGHT = 0.35
