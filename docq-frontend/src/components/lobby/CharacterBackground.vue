@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted,watch } from 'vue';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -51,7 +51,7 @@ const initThree = () => {
   container.value.appendChild(renderer.domElement);
 
   // 조명 설정 (밝게)
-  const ambientLight = new THREE.AmbientLight(0xffffff, 4.0);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 5.0);
   scene.add(ambientLight);
   
   const dirLight = new THREE.DirectionalLight(0xffffff, 3.0);
@@ -117,6 +117,7 @@ const initThree = () => {
     
     renderer.render(scene, camera);
   };
+  
   animate();
 };
 
