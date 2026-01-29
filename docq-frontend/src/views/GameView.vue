@@ -85,6 +85,18 @@ const handleBeforeUnload = () => {
     gameStore.reset()
 }
 
+/** 버프 코드 → 알림용 표시 이름 (버프 룰렛과 동일) */
+function getBuffLabelForNotice(buffCode?: string): string {
+  switch (buffCode) {
+    case 'DOUBLE_SCORE':
+      return '2배 이동'
+    case 'PLUS_THREE':
+      return '+3칸 이동'
+    default:
+      return buffCode || '아이템'
+  }
+}
+
 const showSystemNotice = (text: string, duration = 2000) => {
     if (systemNoticeTimer !== null) {
         clearTimeout(systemNoticeTimer)
@@ -160,7 +172,7 @@ watch(
                 noticeText = `승자는 고스트 ${winnerName}입니다.`
             }
         }
-        await showSystemNotice(noticeText, 2000)
+        await showSystemNotice(noticeText, 3500)
         if (token !== resultNoticeToken) return
         gameStore.unlockMove()
         wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
@@ -354,11 +366,6 @@ const handleMiniGameClose = () => {
     gameStore.clearMiniGame()
 }
 
-const handleBuffRouletteDone = () => {
-    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
-    gameStore.clearMiniGame()
-}
-
 watch(
     () => miniGame.value.phase,
     async (phase) => {
@@ -366,18 +373,30 @@ watch(
         const token = ++miniGameNoticeToken
         isMiniGameWinnerNoticeActive.value = true
         const name = winnerName.value
+        const rewardBuff = miniGame.value.result?.rewardBuff
         const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
         await showSystemNotice(noticeText, 2000)
         if (token !== miniGameNoticeToken) return
         isMiniGameWinnerNoticeActive.value = false
 
-        const rewardBuff = miniGame.value.result?.rewardBuff
         if (!rewardBuff || rewardBuff === 'NONE') {
             wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
             gameStore.clearMiniGame()
         }
     }
 )
+
+/** 버프 룰렛이 끝난 뒤(결과 확인 후) 획득 아이템 알림 */
+const handleBuffRouletteDone = async () => {
+    const name = winnerName.value
+    const buffCode = buffRouletteCode.value
+    const itemLabel = buffCode ? getBuffLabelForNotice(buffCode) : ''
+    if (name && itemLabel) {
+        await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+    }
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    gameStore.clearMiniGame()
+}
 
 watch(
     () => gamePhase.value,
@@ -461,7 +480,7 @@ onUnmounted(() => {
     />
 
     <QuizOverlay
-      v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isMiniGameActive && !showMiniGameStartNotice"
+      v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isBoardMoving && !gameStore.movementInProgress && !isMiniGameActive && !showMiniGameStartNotice"
       @submit="submitAnswer"
     />
 

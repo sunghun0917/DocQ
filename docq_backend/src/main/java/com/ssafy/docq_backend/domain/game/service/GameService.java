@@ -57,7 +57,7 @@ public class GameService {
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
-    private static final long TURN_PREP_DELAY_MS = 1500;
+    private static final long TURN_PREP_DELAY_MS = 500;
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
     private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
@@ -1035,7 +1035,8 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                moveValue = new Random().nextInt(4) + 1;
+                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -1047,8 +1048,8 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                    int[] range = { -2, -1, 1, 2 };
-                    moveValue = range[new Random().nextInt(range.length)];
+                    int[] ghostRange = { -1, 1, 2, 3 };
+                    moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
                 }
             }
 

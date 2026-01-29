@@ -11,7 +11,7 @@ const wsStore = useWebSocketStore();
 const isSpinning = ref(false);
 const rotation = ref(0);
 const isVisible = ref(false); // [NEW] 내부 표시 관리
-const labelByIndex = ref<number[]>([1, 2, 3, 4]);
+const labelByIndex = ref<number[]>([-1, 1, 2, 3, 4, 5, 6, 7]);
 const displayResult = ref<number | null>(null);
 
 // 컴포넌트 마운트 여부 (Store 상태 의존)
@@ -21,11 +21,12 @@ const rouletteValue = computed(() => gameStore.currentRoundResult?.rouletteValue
 const targetUser = computed(() => roomStore.users.find(u => u.id === targetUserId.value));
 
 // Init labels when target is set (Snapshot to prevent changing during spin)
+// 플레이어 턴 승리: 8칸(-1~7, 0제외) / 고스트 턴 승리: 4칸(-1~3, 0제외)
 watch(() => gameStore.rouletteTargetId, (targetId) => {
     if (targetId) {
         const currentTurnUserId = gameStore.gameState.currentTurnUserId;
         const isTurnOwner = targetId === currentTurnUserId;
-        labelByIndex.value = isTurnOwner ? [1, 2, 3, 4] : [-2, -1, 1, 2];
+        labelByIndex.value = isTurnOwner ? [-1, 1, 2, 3, 4, 5, 6, 7] : [-1, 1, 2, 3];
     }
 }, { immediate: true });
 
@@ -53,7 +54,7 @@ const sectionStyle = (n: number, total: number) => {
  * 룰렛 자동 실행 로직
  * 컴포넌트가 마운트되거나 visible해지면 자동 실행
  */
-const RESULT_HOLD_MS = 1500
+const RESULT_HOLD_MS = 1000
 const FADE_OUT_MS = 300
 const ACK_DELAY_MS = 500
 
