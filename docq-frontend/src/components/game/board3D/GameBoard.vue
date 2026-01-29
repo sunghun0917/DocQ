@@ -244,12 +244,19 @@ const getPlayerSlotIndex = (userId: string) => {
   return idx >= 0 ? idx : 0
 }
 
+// const getPlayerModelUrl = (userId: string): string => {
+//   const idx = getPlayerSlotIndex(userId)
+//   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
+// }
+
 const getPlayerModelUrl = (userId: string): string => {
-  const idx = getPlayerSlotIndex(userId)
+  const p = players.value.find(player => player.userId === userId)
+  // [MOD] 아바타 선택 ID를 우선 사용 (없으면 슬롯 순서)
+  const idx = (p && typeof p.avatarId === 'number') ? p.avatarId : getPlayerSlotIndex(userId)
   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
 }
 
-const applyStartSpread = (base: Vec3, userId: string): Vec3 => {
+  const applyStartSpread = (base: Vec3, userId: string): Vec3 => {
   const count = Math.min(playerOrderIds.value.length, CHARACTER_MODELS.length)
   if (count <= 1) return base
 
