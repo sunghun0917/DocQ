@@ -39,11 +39,12 @@ const getAvatarIndex = (avatarVal: any) => {
   if (avatarVal === undefined || avatarVal === null || avatarVal === '') return -1;
   if (typeof avatarVal === 'string') {
       const num = Number(avatarVal);
-      if (!isNaN(num)) return num; 
-      const idx = characters.indexOf(avatarVal); 
-      return idx !== -1 ? idx : 0;
+      if (!isNaN(num) && num >= 0 && num < characters.length) return num;
+      const idx = characters.indexOf(avatarVal);
+      return idx; // -1이면 미선택(❓ 등), 0~3이면 선택된 캐릭터
   }
-  return Number(avatarVal);
+  const n = Number(avatarVal);
+  return Number.isFinite(n) && n >= 0 && n < characters.length ? n : -1;
 };
 
 watchEffect(() => {
@@ -238,7 +239,7 @@ const selectCharacter = (charEmoji: string) => {
 const isAllReady = computed(() => {
   const realUsers = users.value.filter(user => user.nickname);
   return realUsers.length > 1 && realUsers.every(user => user.isReady || user.isHost);
-});
+})
 
 const isHost = computed(() => roomStore.isHost || myUser.value?.isHost || false)
 const startRequested = ref(false)
@@ -247,7 +248,7 @@ const toggleReady = () => {
   if (!myUser.value || !userStore.userId) return
   const currentIdx = getAvatarIndex(myUser.value.avatar);
   if (currentIdx === -1) {
-    toastMessage.value = '캐릭터를 먼저 선택해주세요!'; toastType.value = 'error'; isToastOpen.value = true;
+    toastMessage.value = '캐릭터를 먼저 설정해주세요!'; toastType.value = 'error'; isToastOpen.value = true;
     return
   }
   wsStore.setReady(roomId.value, userStore.userId, !myUser.value?.isReady)
@@ -286,6 +287,8 @@ watchEffect(() => {
 const leaveRoom = () => { showExitModal.value = true; };
 const handleExitConfirm = () => {
   if (userStore.userId && roomId.value) wsStore.leaveGame(roomId.value, userStore.userId)
+  // 방 나가면 캐릭터 초기화 → 다른 방 들어갈 때 이전 방 캐릭터로 자동 로딩되지 않도록
+  userStore.updateAvatar('❓')
   setTimeout(() => { wsStore.cleanup(); roomStore.leaveRoom(); router.push('/'); }, 150)
   showExitModal.value = false;
 };

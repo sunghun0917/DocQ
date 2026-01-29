@@ -132,18 +132,19 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 const isReady = player.isReady !== undefined ? player.isReady : (player.ready !== undefined ? player.ready : false)
                 const isHost = player.isHost !== undefined ? player.isHost : (player.host !== undefined ? player.host : false)
 
-                // 아바타 결정 로직:
+                // 아바타 결정 로직: state의 avatarId가 기준. 없으면 캐시 사용 안 함(나갔다 들어온 유저 예전 캐릭터 제거)
                 let avatar = '❓'
-                const cachedAvatar = avatarCache.value[player.userId]
-
                 if (player.avatarId !== null && player.avatarId !== undefined) {
                     avatar = AVATAR_MAP[player.avatarId] || '❓'
-                    avatarCache.value[player.userId] = avatar // 캐시 업데이트
-                } else if (cachedAvatar) {
-                    avatar = cachedAvatar
-                } else if (isMe) {
-                    avatar = userStore.avatar
                     avatarCache.value[player.userId] = avatar
+                } else {
+                    if (isMe) {
+                        avatar = userStore.avatar
+                        avatarCache.value[player.userId] = avatar
+                    } else {
+                        avatar = '❓'
+                        delete avatarCache.value[player.userId]
+                    }
                 }
 
                 return {
@@ -522,12 +523,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
-     * 모든 구독 해제 및 연결 종료
+     * 모든 구독 해제 및 연결 종료 (방 나갈 때 아바타 캐시도 초기화)
      */
     const cleanup = () => {
         disconnect()
         lastError.value = null
         quizGeneratedNotice.value = null
+        avatarCache.value = {}
     }
 
     const clearQuizGeneratedNotice = () => {
