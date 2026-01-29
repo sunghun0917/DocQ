@@ -22,15 +22,15 @@
         "answerText": "우하하"
     },
     {
-        "question": "바다가 화나면?",
+        "question": "왕이 넘어지면?",
         "options": [
-            "파도침",
-            "성질남",
-            "해일",
-            "바다怒"
+            "왕 넘어짐",
+            "킹콩",
+            "다이",
+            "전하"
         ],
-        "answerIndex": 2,
-        "answerText": "해일"
+        "answerIndex": 1,
+        "answerText": "킹콩"
     },
     {
         "question": "도둑이 가장 싫어하는 아이스크림은?",
@@ -44,15 +44,15 @@
         "answerText": "누가바"
     },
     {
-        "question": "항상 손에 들고 다니는 나무는?",
+        "question": "자동차가 놀라면?",
         "options": [
-            "소나무",
-            "대나무",
-            "손나무",
-            "나무젓가락"
+            "카놀라유",
+            "서프라이즈",
+            "카카오",
+            "급정거"
         ],
-        "answerIndex": 3,
-        "answerText": "나무젓가락"
+        "answerIndex": 0,
+        "answerText": "카놀라유"
     },
     {
         "question": "가장 게으른 동물은?",
@@ -99,15 +99,15 @@
         "answerText": "아야"
     },
     {
-        "question": "세상에서 가장 뜨거운 바다는?",
+        "question": "세상에서 가장 뜨거운 과일은?",
         "options": [
-            "태평양",
-            "대서양",
-            "열받아",
-            "홍해"
+            "불사과",
+            "용과",
+            "천도복숭아",
+            "열대과일"
         ],
         "answerIndex": 2,
-        "answerText": "열받아"
+        "answerText": "천도복숭아"
     },
     {
         "question": "신발이 화나면?",
@@ -121,15 +121,15 @@
         "answerText": "신발질"
     },
     {
-        "question": "달이 아플 때 먹는 약은?",
+        "question": "콩이 바쁘면?",
         "options": [
-            "진통제",
-            "달약",
-            "반달",
-            "감기약"
+            "콩나물",
+            "콩비지",
+            "킹콩",
+            "콩국수"
         ],
-        "answerIndex": 2,
-        "answerText": "반달"
+        "answerIndex": 1,
+        "answerText": "콩비지"
     },
     {
         "question": "바람이 귀엽게 불면?",
@@ -165,37 +165,37 @@
         "answerText": "그물"
     },
     {
-        "question": "눈이 아프면 가는 곳은?",
+        "question": "남자는 정중히 두 무뤂을 꿇는데 여자는 엉덩이로 깔아 뭉게는 것은?",
         "options": [
-            "안과",
-            "병원",
-            "눈병원",
-            "안경점"
-        ],
-        "answerIndex": 0,
-        "answerText": "안과"
-    },
-    {
-        "question": "호랑이가 차를 타면?",
-        "options": [
-            "호차",
-            "타이거",
-            "호랑이차",
-            "무섭다"
+            "방석",
+            "요강",
+            "이불",
+            "사랑의자"
         ],
         "answerIndex": 1,
-        "answerText": "타이거"
+        "answerText": "요강"
     },
     {
-        "question": "우체국에서 가장 바쁜 사람은?",
+        "question": "사람의 몸무게가 가장 많이 나갈 때는?",
         "options": [
-            "집배원",
-            "편지",
-            "우표",
-            "사장"
+            "밥 먹을 때",
+            "철 들 때",
+            "나이 먹을 때",
+            "공부 할 때"
+        ],
+        "answerIndex": 1,
+        "answerText": "철 들 때"
+    },
+    {
+        "question": "세상에서 가장 착한 사자는?",
+        "options": [
+            "자원봉사자",
+            "저승사자",
+            "감사하자",
+            "심바"
         ],
         "answerIndex": 0,
-        "answerText": "집배원"
+        "answerText": "자원봉사자"
     },
     {
         "question": "세상에서 가장 추운 바다는?",
@@ -203,21 +203,21 @@
             "북극해",
             "남극해",
             "썰렁해",
-            "차가워"
+            "시원해"
         ],
         "answerIndex": 2,
         "answerText": "썰렁해"
     },
     {
-        "question": "소금이 아프면?",
+        "question": "딸기가 직장은 잃으면?",
         "options": [
-            "짜증",
-            "소금병",
-            "절임",
-            "소금약"
+            "딸기잼",
+            "산딸기",
+            "백수",
+            "딸기시럽"
         ],
-        "answerIndex": 0,
-        "answerText": "짜증"
+        "answerIndex": 3,
+        "answerText": "딸기시럽"
     },
     {
         "question": "침을 뱉는 나무는?",
@@ -242,91 +242,91 @@
         "answerText": "킹콩"
     },
     {
-        "question": "개가 좋아하는 숫자는?",
+        "question": "소가 불에 타면?",
         "options": [
-            "1",
-            "2",
-            "멍멍",
-            "10"
+            "탄소",
+            "소고기",
+            "소화기",
+            "우유"
+        ],
+        "answerIndex": 0,
+        "answerText": "탄소"
+    },
+    {
+        "question": "'자가용'의 반대말은 무엇일까요?",
+        "options": [
+            "영업용",
+            "남의 차",
+            "커용",
+            "대중교통"
         ],
         "answerIndex": 2,
-        "answerText": "멍멍"
+        "answerText": "커용"
     },
     {
-        "question": "달걀이 길을 건너면?",
+        "question": "세상에서 가장 지루한 중학교는?",
         "options": [
-            "후라이",
-            "계란찜",
-            "에그",
-            "알"
+            "공부중",
+            "회의중",
+            "로딩중",
+            "노잼중"
         ],
-        "answerIndex": 0,
-        "answerText": "후라이"
+        "answerIndex": 2,
+        "answerText": "로딩중"
     },
     {
-        "question": "가장 무거운 펜은?",
+        "question": "세상에서 가장 가난한 왕은?",
         "options": [
-            "만년필",
-            "볼펜",
-            "연필",
-            "무거운펜"
+            "최대임금",
+            "거지왕 김춘삼",
+            "제왕",
+            "최소임금"
         ],
         "answerIndex": 3,
-        "answerText": "무거운펜"
+        "answerText": "최소임금"
     },
     {
-        "question": "물은 물인데 마시면 안 되는 물은?",
+        "question": "가수 '비'의 매니저가 하는 일은?",
         "options": [
-            "바닷물",
-            "약수",
-            "눈물",
-            "수영장"
+            "비만관리",
+            "월드투어",
+            "스케줄 관리",
+            "우산 들기"
         ],
         "answerIndex": 0,
-        "answerText": "바닷물"
+        "answerText": "비만관리"
     },
     {
-        "question": "세상에서 가장 큰 코는?",
+        "question": "불이 4곳에 나면?",
         "options": [
-            "사람코",
-            "코끼리코",
-            "피노키오",
-            "콧구멍"
+            "사파이어",
+            "파이어볼",
+            "캠프파이어",
+            "산불"
+        ],
+        "answerIndex": 0,
+        "answerText": "사파이어"
+    },
+    {
+        "question": "세상 사람들의 머리카락 수를 모두 곱하면?",
+        "options": [
+            "불계",
+            "계산 불가",
+            "무한대",
+            "0"
+        ],
+        "answerIndex": 3,
+        "answerText": "0"
+    },
+    {
+        "question": "개그맨들이 찾아서 헤매는 거리는?",
+        "options": [
+            "텅빈거리",
+            "웃음거리",
+            "충무로거리",
+            "웃찾사"
         ],
         "answerIndex": 1,
-        "answerText": "코끼리코"
-    },
-    {
-        "question": "바늘이 싫어하는 옷은?",
-        "options": [
-            "면",
-            "실크",
-            "가죽",
-            "니트"
-        ],
-        "answerIndex": 3,
-        "answerText": "니트"
-    },
-    {
-        "question": "항상 배고픈 사람은?",
-        "options": [
-            "학생",
-            "아기",
-            "헝그리",
-            "요리사"
-        ],
-        "answerIndex": 2,
-        "answerText": "헝그리"
-    },
-    {
-        "question": "가장 조용한 총은?",
-        "options": [
-            "권총",
-            "대포",
-            "물총",
-            "소총"
-        ],
-        "answerIndex": 2,
-        "answerText": "물총"
+        "answerText": "웃음거리"
     }
 ]

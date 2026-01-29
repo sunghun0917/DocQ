@@ -123,6 +123,12 @@ public class GameService {
         if ("nonsense".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("nonsense.json"));
         }
+        if ("movie".equals(type) || "mixed".equals(type)) {
+            loadedQuizzes.addAll(loadQuizzesFromJson("movie.json"));
+        }
+        if ("sports".equals(type) || "mixed".equals(type)) {
+            loadedQuizzes.addAll(loadQuizzesFromJson("sports.json"));
+        }
 
         if (loadedQuizzes.isEmpty()) {
             throw new RuntimeException("No quizzes loaded for type: " + type);
@@ -673,7 +679,8 @@ public class GameService {
                 }
             }
             case MOVE_COMPLETE -> {
-                NextTurnPayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.MOVE_COMPLETE, resolution.keyId,
+                NextTurnPayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.MOVE_COMPLETE,
+                        resolution.keyId,
                         NextTurnPayload.class);
                 if (payload != null) {
                     gameEventStore.schedule(room.getId(), GameEventType.NEXT_TURN, payload, 0);
