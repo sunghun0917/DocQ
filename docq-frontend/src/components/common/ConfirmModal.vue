@@ -30,7 +30,7 @@ const cancelText = computed(() => props.cancelLabel || '취소');
 
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="fixed inset-0 z-[2600] flex items-center justify-center px-4" role="dialog">
+    <div v-if="isOpen" class="fixed inset-0 z-[9999] flex items-center justify-center px-4" role="dialog">
       <div
         class="absolute inset-0 bg-[#0f172a]/35 backdrop-blur-sm animate-fade-in"
         @click="emit('close')"

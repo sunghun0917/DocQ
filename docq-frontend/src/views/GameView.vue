@@ -10,6 +10,7 @@ import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import CloudBackground from '@/components/ui/CloudBackground.vue';
 import CloudOverlay from '@/components/ui/CloudOverlay.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
+import AvatarViewer from '@/components/common/AvatarViewer.vue'; // Import AvatarViewer
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -63,6 +64,89 @@ const buffRouletteCode = computed(() => {
     return miniGame.value.result?.rewardBuff ?? null
 })
 
+const AVATAR_REVERSE_MAP: Record<string, string> = {
+    '🐔': '0',
+    '🐶': '1',
+    '🐷': '2',
+    '🐑': '3'
+}
+
+const rankingResults = computed(() => {
+    const gamePlayers = gameStore.gameState.players || []
+    // score 내림차순 정렬
+    const sorted = [...gamePlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    
+    return sorted.map((p, index) => {
+        const user = roomStore.users.find(u => u.id === p.userId)
+        let avatarVal = user?.avatar || '0'
+        const mapped = AVATAR_REVERSE_MAP[avatarVal]
+        if (mapped) {
+            avatarVal = mapped
+        }
+        return {
+            rank: index + 1,
+            nickname: user?.nickname || p.nickname || (gamePhase.value === 'FINISHED' ? p.nickname : 'Unknown'),
+            score: p.score ?? 0,
+            isMe: p.userId === myUserId.value,
+            avatar: avatarVal,
+            userId: p.userId
+        }
+    })
+})
+
+// Avatar Animation State
+const playerAnimations = ref<Record<string, 'idle' | 'win'>>({})
+
+watch(
+    () => cornerPlayers.value,
+    (newPlayers) => {
+        newPlayers.forEach(p => {
+            if (p?.userId && !playerAnimations.value[p.userId]) {
+                // Randomly assign 'idle' or 'win'
+                playerAnimations.value[p.userId] = Math.random() > 0.5 ? 'idle' : 'win'
+            }
+        })
+    },
+    { deep: true, immediate: true }
+)
+
+// Snapshot logic for results
+const finalRankingResults = ref<any[] | null>(null)
+
+watch(
+    () => isResultVisible.value,
+    (visible) => {
+        if (visible && !finalRankingResults.value) {
+            // Snapshot the results at the moment game ends
+            // Forcefully map current players to ensure we capture nicknames even if roomStore is updating
+            const currentPlayers = gameStore.gameState.players || []
+            const sorted = [...currentPlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            
+            finalRankingResults.value = sorted.map((p, index) => {
+                const user = roomStore.users.find(u => u.id === p.userId)
+                let avatarVal = user?.avatar || '0'
+                const mapped = AVATAR_REVERSE_MAP[avatarVal]
+                if (mapped) {
+                    avatarVal = mapped
+                }
+                return {
+                    rank: index + 1,
+                    // Prioritize gameStore nickname if roomStore user is missing (e.g. they left)
+                    nickname: user?.nickname || p.nickname || 'Unknown Player', 
+                    score: p.score ?? 0,
+                    isMe: p.userId === myUserId.value,
+                    avatar: avatarVal,
+                    userId: p.userId
+                }
+            })
+        } else if (!visible) {
+            // Reset if game restarts or we leave result screen
+            finalRankingResults.value = null
+        }
+    },
+    { immediate: true }
+)
+
 const isBoardMoving = ref(false)
 const showMiniGameStartNotice = ref(false)
 const isMiniGameStarting = ref(false)
@@ -83,6 +167,18 @@ const handleBeforeUnload = () => {
     wsStore.cleanup()
     roomStore.leaveRoom()
     gameStore.reset()
+}
+
+/** 버프 코드 → 알림용 표시 이름 (버프 룰렛과 동일) */
+function getBuffLabelForNotice(buffCode?: string): string {
+  switch (buffCode) {
+    case 'DOUBLE_SCORE':
+      return '2배 이동'
+    case 'PLUS_THREE':
+      return '+3칸 이동'
+    default:
+      return buffCode || '아이템'
+  }
 }
 
 const showSystemNotice = (text: string, duration = 2000) => {
@@ -152,17 +248,21 @@ watch(
         const winnerId = result.winnerUserId ?? null
         const currentTurnId = gameStore.gameState.currentTurnUserId ?? null
         let noticeText = '맞춘 사람이 없습니다.'
-
         if (winnerId) {
             const winnerName = roomStore.users.find(u => u.id === winnerId)?.nickname || '알 수 없음'
-            const roleLabel = winnerId === currentTurnId ? '플레이어' : '고스트'
-            noticeText = `${roleLabel} ${winnerName}가 문제를 맞추었습니다.`
+            if (winnerId === currentTurnId) {
+                noticeText = `플레이어 ${winnerName}가 정답을 맞추었습니다.`
+            } else {
+                noticeText = `승자는 고스트 ${winnerName}입니다.`
+            }
         }
-
-        await showSystemNotice(noticeText, 2000)
+        await showSystemNotice(noticeText, 3500)
         if (token !== resultNoticeToken) return
         gameStore.unlockMove()
         wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
+        if (winnerId && result.rouletteValue != null) {
+            gameStore.rouletteTargetId = winnerId
+        }
     }
 )
 
@@ -350,11 +450,6 @@ const handleMiniGameClose = () => {
     gameStore.clearMiniGame()
 }
 
-const handleBuffRouletteDone = () => {
-    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
-    gameStore.clearMiniGame()
-}
-
 watch(
     () => miniGame.value.phase,
     async (phase) => {
@@ -362,18 +457,30 @@ watch(
         const token = ++miniGameNoticeToken
         isMiniGameWinnerNoticeActive.value = true
         const name = winnerName.value
+        const rewardBuff = miniGame.value.result?.rewardBuff
         const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
         await showSystemNotice(noticeText, 2000)
         if (token !== miniGameNoticeToken) return
         isMiniGameWinnerNoticeActive.value = false
 
-        const rewardBuff = miniGame.value.result?.rewardBuff
         if (!rewardBuff || rewardBuff === 'NONE') {
             wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
             gameStore.clearMiniGame()
         }
     }
 )
+
+/** 버프 룰렛이 끝난 뒤(결과 확인 후) 획득 아이템 알림 */
+const handleBuffRouletteDone = async () => {
+    const name = winnerName.value
+    const buffCode = buffRouletteCode.value
+    const itemLabel = buffCode ? getBuffLabelForNotice(buffCode) : ''
+    if (name && itemLabel) {
+        await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+    }
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    gameStore.clearMiniGame()
+}
 
 watch(
     () => gamePhase.value,
@@ -457,7 +564,7 @@ onUnmounted(() => {
     />
 
     <QuizOverlay
-      v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving && !isMiniGameActive && !showMiniGameStartNotice && !systemNotice"
+      v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isBoardMoving && !gameStore.movementInProgress && !isMiniGameActive && !showMiniGameStartNotice"
       @submit="submitAnswer"
     />
 
@@ -490,26 +597,45 @@ onUnmounted(() => {
         <div
           v-for="(p, idx) in cornerPlayers"
           :key="p?.userId ?? `corner-empty-${idx}`"
-          class="corner-card"
+          class="corner-card flex flex-row items-center overflow-visible"
           :class="[
             `corner-${idx + 1}`,
             { 'corner-card-active': p?.userId === currentTurnPlayer?.userId }
           ]"
         >
           <template v-if="p">
-            <div class="corner-card-name">
-              {{ p.nickname }}
-              <span v-if="p.userId === myUserId" class="corner-card-me">MY</span>
-              <span v-if="p.userId === currentTurnPlayer?.userId" class="corner-card-turn">TURN</span>
+            <!-- Left: Avatar (3D) -->
+            <div class="relative w-[120px] h-[140px] -ml-4 pointer-events-none z-10">
+                <AvatarViewer
+                    v-if="AVATAR_REVERSE_MAP[roomStore.users.find(u => u.id === p.userId)?.avatar || '0']"
+                    :avatarIndex="Number(AVATAR_REVERSE_MAP[roomStore.users.find(u => u.id === p.userId)?.avatar || '0'])"
+                    :scale="2.2"
+                    :autoRotate="false"
+                    :cameraY="0.6"
+                    :cameraZ="3.5"
+                    :action="playerAnimations[p.userId] || 'idle'"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center text-4xl">
+                    {{ roomStore.users.find(u => u.id === p.userId)?.avatar || '👤' }}
+                </div>
             </div>
-            <div class="corner-card-meta">
-              <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
-              <span>맞춘 문제: {{ p.score ?? 0 }}</span>
-              <span>POS {{ p.position ?? 0 }}</span>
+
+            <!-- Right: Info -->
+            <div class="flex flex-col flex-1 pl-2 z-0">
+                <div class="corner-card-name text-lg">
+                {{ p.nickname }}
+                <span v-if="p.userId === myUserId" class="corner-card-me">MY</span>
+                <span v-if="p.userId === currentTurnPlayer?.userId" class="corner-card-turn">TURN</span>
+                </div>
+                <div class="corner-card-meta">
+                <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
+                <span class="text-sm">맞춘 문제: {{ p.score ?? 0 }}</span>
+                <span class="text-xs text-slate-500">POS {{ p.position ?? 0 }}</span>
+                </div>
             </div>
           </template>
           <template v-else>
-            <div class="corner-card-empty">Empty Slot</div>
+            <div class="corner-card-empty w-full text-center">Empty Slot</div>
           </template>
         </div>
       </div>
@@ -540,8 +666,7 @@ onUnmounted(() => {
          </div>
       </header>
 
-      <!-- 결과 모달 -->
-      <ResultModal v-if="canShowResultModal && !isGameEndNoticeActive" class="pointer-events-auto" />
+      <!-- ResultModal was moved to bottom -->
     </div>
 
     <div class="global-controls pointer-events-auto">
@@ -575,6 +700,17 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+    
+    <!-- 결과 모달 (Global Scope) -->
+    <ResultModal 
+      v-if="canShowResultModal && !isGameEndNoticeActive" 
+      :is-open="true"
+      :ranking-results="finalRankingResults ?? rankingResults"
+      :is-host="isHost"
+      @close="openConfirm('leave')"
+      @restart="openConfirm('restart')"
+    />
+
     <ConfirmModal
       :isOpen="!!confirmAction"
       :title="confirmConfig.title"
@@ -660,14 +796,15 @@ onUnmounted(() => {
 
 .corner-card {
   position: absolute;
-  width: 220px;
-  min-height: 90px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  width: 280px;
+  height: 110px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 3px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 12px 16px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
   pointer-events: auto;
+  transition: all 0.3s ease;
 }
 
 .corner-card-active {
@@ -891,8 +1028,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: 2300;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 .system-notice-card {

@@ -67,6 +67,11 @@ public class Room {
     @Builder.Default
     private Map<String, GameDto.SubmitAnswer> quizAnswers = new ConcurrentHashMap<>();
     private Long quizStartTimeMs;
+    @Builder.Default
+    private boolean ghostOptionsRevealed = false;
+    private Long ghostPhaseEndTimeMs;
+    @Builder.Default
+    private boolean ghostPhaseTimerScheduled = false;
 
     // userId -> PlayerState
     @Builder.Default
@@ -75,6 +80,9 @@ public class Room {
     // 퀴즈 목록
     @Builder.Default
     private List<Quiz> quizList = new ArrayList<>();
+
+    @Builder.Default
+    private int quizCursor = 0;
 
     // MiniGame State: UserId -> Score
     @Builder.Default

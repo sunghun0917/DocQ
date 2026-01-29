@@ -175,6 +175,23 @@ public class GameDto {
     }
 
     @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class QuizOptionsMessage {
+        private Long quizId;
+        private List<String> options;
+        private Long extraTimeMs;
+    }
+
+    /** 턴 플레이어에게만 전송하는 즉시 정답/오답 피드백 */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class AnswerFeedbackMessage {
+        private boolean correct; // true: 맞췄습니다, false: 틀렸습니다
+    }
+
+    @Getter
     @Setter
     @NoArgsConstructor
     @AllArgsConstructor

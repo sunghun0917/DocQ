@@ -57,13 +57,15 @@ public class GameService {
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
-    private static final long TURN_PREP_DELAY_MS = 1500;
+    private static final long TURN_PREP_DELAY_MS = 500;
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
     private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
+    private static final long ROULETTE_FALLBACK_MS = 7000;
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
+    private static final long QUIZ_TIME_LIMIT_MS = 7000;
 
     public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
         log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
@@ -295,6 +297,7 @@ public class GameService {
 
             if (removed) {
                 handlePlayerExitAcks(room, userId);
+                scheduleRouletteFallbackIfNeeded(room);
             }
 
             roomRepository.save(room);
@@ -568,6 +571,9 @@ public class GameService {
         room.setCurrentTurnUserId(null);
         room.setCurrentQuizId(null);
         room.setQuizStartTimeMs(null);
+        room.setGhostOptionsRevealed(false);
+        room.setGhostPhaseEndTimeMs(null);
+        room.setGhostPhaseTimerScheduled(false);
         room.getQuizAnswers().clear();
         room.getTurnOrder().clear();
         room.getCardDrawResult().clear();
@@ -584,6 +590,7 @@ public class GameService {
                     .build();
             room.getPlayerStates().put(pid, ps);
         }
+        room.setQuizCursor(0);
     }
 
     private void sendError(String userId, ErrorCode errorCode) {
@@ -614,7 +621,8 @@ public class GameService {
                 return;
             }
 
-            long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId, request.getUserId());
+            long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId,
+                    request.getUserId());
             int expected = resolveExpectedAckCount(room);
             if (count < expected) {
                 return;
@@ -659,6 +667,22 @@ public class GameService {
             return connected;
         }
         return room.getPlayers().size();
+    }
+
+    private void scheduleRouletteFallbackIfNeeded(Room room) {
+        if (room == null || room.getCurrentQuizId() == null) {
+            return;
+        }
+        if (room.getStatus() != RoomStatus.JUDGMENT) {
+            return;
+        }
+        String keyId = String.valueOf(room.getCurrentQuizId());
+        ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId,
+                ApplyMovePayload.class);
+        if (payload == null) {
+            return;
+        }
+        gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, ROULETTE_FALLBACK_MS);
     }
 
     private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
@@ -776,14 +800,12 @@ public class GameService {
                 return;
             }
 
-            // 2. Select Quiz (Rotate per turn to avoid repeating per round)
-            int turnIndex = 0;
-            if (room.getTurnOrder() != null && !room.getTurnOrder().isEmpty() && room.getCurrentTurnUserId() != null) {
-                turnIndex = Math.max(0, room.getTurnOrder().indexOf(room.getCurrentTurnUserId()));
-            }
-            int totalTurnIndex = (room.getRound() - 1) * Math.max(1, room.getTurnOrder().size()) + turnIndex;
-            int quizIndex = totalTurnIndex % room.getQuizList().size();
+            // 2. Select Quiz (Use persistent cursor)
+            int quizIndex = room.getQuizCursor() % room.getQuizList().size();
             Quiz quizEntity = room.getQuizList().get(quizIndex);
+
+            // Advance cursor
+            room.setQuizCursor(room.getQuizCursor() + 1);
 
             Long quizId = quizEntity.getQuizId();
 
@@ -797,7 +819,14 @@ public class GameService {
                     .quizId(quizId)
                     .question(quizEntity.getQuestion())
                     .options(quizEntity.getOptions())
-                    .timeLimit(7000L)
+                    .timeLimit(QUIZ_TIME_LIMIT_MS)
+                    .quizStartTime(quizStartTime)
+                    .quizStartTimeMs(quizStartTimeMs)
+                    .build();
+            GameDto.QuizMessage quizForGhosts = GameDto.QuizMessage.builder()
+                    .quizId(quizId)
+                    .question(quizEntity.getQuestion())
+                    .timeLimit(QUIZ_TIME_LIMIT_MS)
                     .quizStartTime(quizStartTime)
                     .quizStartTimeMs(quizStartTimeMs)
                     .build();
@@ -806,6 +835,9 @@ public class GameService {
             room.setCurrentQuizId(quizId);
             room.getQuizAnswers().clear();
             room.setQuizStartTimeMs(quizStartTimeMs);
+            room.setGhostOptionsRevealed(false);
+            room.setGhostPhaseEndTimeMs(null);
+            room.setGhostPhaseTimerScheduled(false);
             room.setStatus(RoomStatus.QUIZ_TIME);
             roomRepository.save(room);
 
@@ -815,7 +847,12 @@ public class GameService {
             broadcastGameState(room);
 
             // Broadcast Quiz
-            messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quiz);
+            messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quizForGhosts);
+            if (room.getCurrentTurnUserId() != null) {
+                messagingTemplate.convertAndSend(
+                        "/queue/game/" + room.getCurrentTurnUserId() + "/quiz",
+                        quiz);
+            }
 
             // Schedule Quiz End
             gameEventStore.schedule(roomId, GameEventType.PROCESS_ROUND_RESULT,
@@ -843,12 +880,72 @@ public class GameService {
                 sendError(request.getUserId(), ErrorCode.ALREADY_SUBMITTED);
                 return;
             }
+
+            String turnUserId = room.getCurrentTurnUserId();
+            if (turnUserId != null
+                    && !turnUserId.equals(request.getUserId())
+                    && !room.isGhostOptionsRevealed()) {
+                sendError(request.getUserId(), ErrorCode.GHOST_OPTIONS_HIDDEN);
+                return;
+            }
+            if (turnUserId != null
+                    && turnUserId.equals(request.getUserId())
+                    && room.isGhostOptionsRevealed()) {
+                sendError(request.getUserId(), ErrorCode.TURN_SUBMISSION_CLOSED);
+                return;
+            }
             // Save Answer with Timestamp
             request.setSubmitTime(LocalDateTime.now());
             room.getQuizAnswers().put(request.getUserId(), request);
             roomRepository.save(room); // Persistence Fix
             log.info("User {} submitted answer: {} at {}", request.getUserId(), request.getAnswer(),
                     request.getSubmitTime());
+
+            if (turnUserId != null
+                    && turnUserId.equals(request.getUserId())
+                    && !room.isGhostOptionsRevealed()) {
+                Quiz quizEntity = room.getQuizList().stream()
+                        .filter(q -> q.getQuizId().equals(room.getCurrentQuizId()))
+                        .findFirst()
+                        .orElse(null);
+                if (quizEntity != null) {
+                    boolean isCorrect = quizEntity.getAnswerText().equals(request.getAnswer());
+                    if (isCorrect) {
+                        // 턴 플레이어 정답 → 즉시 판정
+                        processRoundResult(room.getId(), room.getCurrentQuizId());
+                    } else {
+                        // 턴 플레이어 오답 → 화면에 "틀렸습니다" 전송 후 고스트 페이즈
+                        GameDto.AnswerFeedbackMessage feedback = GameDto.AnswerFeedbackMessage.builder()
+                                .correct(false)
+                                .build();
+                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getUserId(),
+                                feedback);
+                        room.setGhostOptionsRevealed(true);
+                        long ghostEndAt = System.currentTimeMillis() + QUIZ_TIME_LIMIT_MS;
+                        room.setGhostPhaseEndTimeMs(ghostEndAt);
+                        room.setGhostPhaseTimerScheduled(true);
+                        roomRepository.save(room);
+                        GameDto.QuizOptionsMessage optionsMessage = GameDto.QuizOptionsMessage.builder()
+                                .quizId(room.getCurrentQuizId())
+                                .options(quizEntity.getOptions())
+                                .extraTimeMs(QUIZ_TIME_LIMIT_MS)
+                                .build();
+                        messagingTemplate.convertAndSend(
+                                "/topic/game/" + room.getId() + "/quiz/options",
+                                optionsMessage);
+                        gameEventStore.schedule(room.getId(), GameEventType.PROCESS_ROUND_RESULT,
+                                RoundResultPayload.builder().quizId(room.getCurrentQuizId()).build(),
+                                QUIZ_TIME_LIMIT_MS);
+                    }
+                }
+            }
+
+            if (turnUserId != null
+                    && !turnUserId.equals(request.getUserId())
+                    && room.isGhostOptionsRevealed()
+                    && areAllGhostsSubmitted(room, turnUserId)) {
+                processRoundResult(room.getId(), room.getCurrentQuizId());
+            }
 
             // Check if all players submitted
             // User Request update: "Wait for time limit even if all submitted"
@@ -875,6 +972,20 @@ public class GameService {
                 return;
 
             String turnUser = room.getCurrentTurnUserId();
+            long nowMs = System.currentTimeMillis();
+            Long ghostEndAt = room.getGhostPhaseEndTimeMs();
+            boolean allGhostsSubmitted = turnUser != null && areAllGhostsSubmitted(room, turnUser);
+            if (room.isGhostOptionsRevealed() && ghostEndAt != null && nowMs < ghostEndAt && !allGhostsSubmitted) {
+                if (!room.isGhostPhaseTimerScheduled()) {
+                    long remaining = ghostEndAt - nowMs;
+                    room.setGhostPhaseTimerScheduled(true);
+                    roomRepository.save(room);
+                    gameEventStore.schedule(roomId, GameEventType.PROCESS_ROUND_RESULT,
+                            RoundResultPayload.builder().quizId(quizId).build(),
+                            remaining);
+                }
+                return;
+            }
 
             Quiz quizEntity = room.getQuizList().stream()
                     .filter(q -> q.getQuizId().equals(quizId))
@@ -898,6 +1009,26 @@ public class GameService {
             GameDto.SubmitAnswer turnUserSubmit = room.getQuizAnswers().get(turnUser);
             boolean isTurnUserCorrect = turnUserSubmit != null && correctAnswer.equals(turnUserSubmit.getAnswer());
 
+            if (!room.isGhostOptionsRevealed() && !isTurnUserCorrect) {
+                room.setGhostOptionsRevealed(true);
+                long ghostPhaseEnd = System.currentTimeMillis() + QUIZ_TIME_LIMIT_MS;
+                room.setGhostPhaseEndTimeMs(ghostPhaseEnd);
+                room.setGhostPhaseTimerScheduled(true);
+                roomRepository.save(room);
+                GameDto.QuizOptionsMessage optionsMessage = GameDto.QuizOptionsMessage.builder()
+                        .quizId(room.getCurrentQuizId())
+                        .options(quizEntity.getOptions())
+                        .extraTimeMs(QUIZ_TIME_LIMIT_MS)
+                        .build();
+                messagingTemplate.convertAndSend(
+                        "/topic/game/" + room.getId() + "/quiz/options",
+                        optionsMessage);
+                gameEventStore.schedule(roomId, GameEventType.PROCESS_ROUND_RESULT,
+                        RoundResultPayload.builder().quizId(quizId).build(),
+                        QUIZ_TIME_LIMIT_MS);
+                return;
+            }
+
             String winnerUserId = null;
             String rouletteType = "NONE";
             int moveValue = 0;
@@ -905,7 +1036,8 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                moveValue = new Random().nextInt(4) + 1;
+                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -917,8 +1049,8 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                    int[] range = { -2, -1, 1, 2 };
-                    moveValue = range[new Random().nextInt(range.length)];
+                    int[] ghostRange = { -1, 1, 2, 3 };
+                    moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
                 }
             }
 
@@ -1057,6 +1189,8 @@ public class GameService {
                     .build();
 
             room.setStatus(RoomStatus.JUDGMENT);
+            room.setGhostPhaseEndTimeMs(null);
+            room.setGhostPhaseTimerScheduled(false);
             roomRepository.save(room);
             broadcastGameState(room);
             messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/result", result);
@@ -1094,6 +1228,15 @@ public class GameService {
         } catch (Exception e) {
             log.error("Error in processRoundResult", e);
         }
+    }
+
+    private boolean areAllGhostsSubmitted(Room room, String turnUserId) {
+        if (room == null || room.getPlayers() == null || room.getPlayers().isEmpty()) {
+            return false;
+        }
+        return room.getPlayers().stream()
+                .filter(userId -> !userId.equals(turnUserId))
+                .allMatch(userId -> room.getQuizAnswers().containsKey(userId));
     }
 
     public void applyMove(String roomId, ApplyMovePayload payload) {

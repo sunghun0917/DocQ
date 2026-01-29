@@ -20,6 +20,12 @@ const mySubmission = computed(() =>
 )
 
 const hasSubmitted = computed(() => localSelectedAnswer.value !== null)
+const optionsAvailable = computed(() => (quiz.value?.options?.length ?? 0) > 0)
+const canAnswer = computed(() => {
+  if (!optionsAvailable.value) return false
+  if (isMyTurn.value && gameStore.ghostPhaseActive) return false
+  return true
+})
 
 // 타이머 (Progress Bar Width%)
 const timePercentage = computed(() => {
@@ -28,11 +34,21 @@ const timePercentage = computed(() => {
   return Math.min(100, Math.max(0, ratio))
 })
 
+// 누군가 맞췄을 때 정답 보기 인덱스 (결과가 있으면 정답 표시)
+const correctAnswerIndex = computed(() => {
+  const result = gameStore.currentRoundResult
+  const opts = quiz.value?.options
+  if (!result?.correctAnswer || !opts?.length) return null
+  const idx = opts.findIndex((o: string) => o === result.correctAnswer)
+  return idx >= 0 ? idx : null
+})
+const showCorrectAnswer = computed(() => correctAnswerIndex.value !== null)
+
 const emit = defineEmits(['submit'])
 
 // 답안 제출 핸들러
 const handleAnswer = (index: number) => {
-  if (!myUserId.value || hasSubmitted.value) return
+  if (!myUserId.value || hasSubmitted.value || !canAnswer.value) return
   
   // Update local visual state
   localSelectedAnswer.value = index
@@ -50,6 +66,18 @@ watch(quiz, () => {
 <template>
   <div v-if="quiz && !gameStore.rouletteTargetId" class="quiz-overlay-container">
     
+    <!-- 턴 플레이어/고스트 공통: 맞췄습니다 / 틀렸습니다 -->
+    <div
+      v-if="gameStore.turnPlayerFeedback"
+      class="turn-feedback-overlay"
+      :class="gameStore.turnPlayerFeedback === 'correct' ? 'correct' : 'wrong'"
+    >
+      <span class="feedback-icon">{{ gameStore.turnPlayerFeedback === 'correct' ? '⭕' : '❌' }}</span>
+      <span class="feedback-text">
+        {{ gameStore.turnPlayerFeedback === 'correct' ? '맞췄습니다!' : '틀렸습니다.' }}
+      </span>
+    </div>
+
     <!-- 타이머 + 역할 메시지 -->
     <div class="status-header">
       <div v-if="isMyTurn" class="turn-message my-turn">
@@ -79,17 +107,29 @@ watch(quiz, () => {
     </div>
 
     <!-- 보기 버튼 영역 -->
-    <div class="options-grid">
+    <div v-if="optionsAvailable" class="options-grid">
       <button
         v-for="(option, idx) in quiz.options"
         :key="idx"
         class="option-btn"
-        :class="{ 'selected': mySubmission?.answer === idx, 'disabled': hasSubmitted }"
+        :class="{
+          'selected': mySubmission?.answer === idx,
+          'disabled': hasSubmitted,
+          'correct-answer': showCorrectAnswer && correctAnswerIndex === idx
+        }"
         @click="handleAnswer(idx)"
-        :disabled="hasSubmitted"
+        :disabled="hasSubmitted || !canAnswer"
       >
-        {{ option }}
+        <span class="option-text">{{ option }}</span>
+        <span v-if="showCorrectAnswer && correctAnswerIndex === idx" class="correct-badge">✓ 정답</span>
       </button>
+    </div>
+    <div v-else class="options-waiting">
+      <span v-if="isMyTurn">보기를 불러오는 중입니다. 잠시만 기다려 주세요.</span>
+      <span v-else>턴 플레이어가 푸는 중입니다. 보기가 공개되면 빠르게 선택하세요!</span>
+    </div>
+    <div v-if="optionsAvailable && isMyTurn && gameStore.ghostPhaseActive" class="options-waiting">
+      턴 시간이 종료되었습니다. 고스트가 푸는 동안 잠시 기다려 주세요.
     </div>
   </div>
 </template>
@@ -116,6 +156,52 @@ watch(quiz, () => {
   max-width: 800px;
   margin-bottom: 20px;
   text-align: center;
+}
+
+.turn-feedback-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 48px;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  animation: feedbackPop 0.35s ease-out;
+}
+.turn-feedback-overlay.correct {
+  background: rgba(46, 204, 113, 0.95);
+  color: white;
+  border: 4px solid rgba(255,255,255,0.8);
+}
+.turn-feedback-overlay.wrong {
+  background: rgba(231, 76, 60, 0.95);
+  color: white;
+  border: 4px solid rgba(255,255,255,0.8);
+}
+.feedback-icon {
+  font-size: 4rem;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+}
+.feedback-text {
+  font-size: 2rem;
+  font-weight: 900;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+@keyframes feedbackPop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 .turn-message {
@@ -191,6 +277,19 @@ watch(quiz, () => {
   max-width: 800px;
 }
 
+.options-waiting {
+  width: 100%;
+  max-width: 800px;
+  text-align: center;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
 .option-btn {
   background: white;
   border: 3px solid #dfe6e9;
@@ -221,6 +320,29 @@ watch(quiz, () => {
   background: #ffeaa7;
   border-color: #fdcb6e;
   color: #d35400;
+}
+
+.option-btn.correct-answer {
+  background: #d5f5e3;
+  border-color: #2ecc71;
+  color: #1e8449;
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.4);
+}
+
+.option-btn .option-text {
+  display: block;
+  text-align: left;
+}
+
+.option-btn .correct-badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 12px;
+  background: #2ecc71;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 800;
+  border-radius: 8px;
 }
 
 .option-btn.disabled {

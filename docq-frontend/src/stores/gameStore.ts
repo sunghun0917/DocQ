@@ -30,6 +30,9 @@ export const useGameStore = defineStore('game', () => {
     const rouletteResult = ref<number | null>(null)
     const roulettePending = ref(false)
     const moveLocked = ref(false)
+    const ghostPhaseActive = ref(false)
+    /** 턴 플레이어 전용: 'correct' = 맞췄습니다, 'wrong' = 틀렸습니다 */
+    const turnPlayerFeedback = ref<'correct' | 'wrong' | null>(null)
 
     // === GameBoard.vue support ===
     const gameState = ref<GameStateResponse>({
@@ -120,10 +123,22 @@ export const useGameStore = defineStore('game', () => {
                 currentQuiz.value = null
                 currentRoundResult.value = null
             }
+            // 다음 턴 시작(STARTING) 시 이전 퀴즈/결과 비우기 → 새 퀴즈 수신 전 깜빡임 방지
+            if (newState.state === 'STARTING') {
+                currentQuiz.value = null
+                currentRoundResult.value = null
+            }
+            // 이동/룰렛 중에는 퀴즈 오버레이 데이터 비우기 → 이동 중 퀴즈 노출 방지
+            if (newState.state === 'MOVE' || newState.state === 'ROULETTE') {
+                currentQuiz.value = null
+                currentRoundResult.value = null
+            }
         }
     }
 
     const handleMove = (moveInfo: MoveInfo) => {
+        currentQuiz.value = null
+        currentRoundResult.value = null
         currentMove.value = moveInfo
         setMovementInProgress(true)
     }
@@ -136,11 +151,12 @@ export const useGameStore = defineStore('game', () => {
         const endAt = effectiveStart + timeLimitMs
         quizEndAt.value = endAt
         const remainingMs = Math.max(0, endAt - Date.now())
+        const options = Array.isArray(quizData.options) ? quizData.options : []
 
         currentQuiz.value = {
             quizId: quizData.quizId,
             question: quizData.question,
-            options: quizData.options,
+            options,
             timeLimit: Math.max(1, Math.ceil(remainingMs / 1000)),
             answer: -1
         }
@@ -151,30 +167,74 @@ export const useGameStore = defineStore('game', () => {
         lastAnswerResult.value = null
         currentRoundResult.value = null
         moveLocked.value = true
+        ghostPhaseActive.value = false
+        turnPlayerFeedback.value = null
 
         startTimer()
     }
 
     const onQuizReceived = (quizData: QuizMessage) => {
+        const incomingOptions = Array.isArray(quizData.options) ? quizData.options : []
         if (movementInProgress.value) {
+            if (pendingQuiz.value && pendingQuiz.value.quizId === quizData.quizId) {
+                if (incomingOptions.length > 0) {
+                    pendingQuiz.value = {
+                        ...pendingQuiz.value,
+                        options: incomingOptions
+                    }
+                }
+                return
+            }
             pendingQuiz.value = quizData
+            return
+        }
+        if (currentQuiz.value && currentQuiz.value.quizId === quizData.quizId) {
+            if (incomingOptions.length > 0 && currentQuiz.value.options.length === 0) {
+                currentQuiz.value.options = incomingOptions
+            }
             return
         }
         applyQuiz(quizData)
     }
 
+    const revealQuizOptions = (quizId: number, options: string[], extraTimeMs?: number) => {
+        if (!Array.isArray(options) || options.length === 0) return
+        ghostPhaseActive.value = true
+        if (extraTimeMs && extraTimeMs > 0) {
+            quizEndAt.value = Date.now() + extraTimeMs
+            const remainingMs = Math.max(0, extraTimeMs)
+            timeRemaining.value = Math.max(0, remainingMs / 1000)
+            startTimer()
+        }
+        if (currentQuiz.value && currentQuiz.value.quizId === quizId) {
+            currentQuiz.value.options = options
+        }
+        if (pendingQuiz.value && pendingQuiz.value.quizId === quizId) {
+            pendingQuiz.value = {
+                ...pendingQuiz.value,
+                options
+            }
+        }
+    }
+
+    const setTurnPlayerFeedback = (correct: boolean) => {
+        turnPlayerFeedback.value = correct ? 'correct' : 'wrong'
+    }
+
+    const clearTurnPlayerFeedback = () => {
+        turnPlayerFeedback.value = null
+    }
+
     const onRoundResultReceived = (resultData: RoundResult) => {
         stopTimer()
         currentRoundResult.value = resultData
+        ghostPhaseActive.value = false
 
-        // [ADDED] Set roulette target if there's a winner
         const winnerUserId = resultData.winnerUserId ?? null
         if (winnerUserId && resultData.rouletteValue != null) {
             roulettePending.value = true
-            setTimeout(() => {
-                rouletteTargetId.value = winnerUserId
-            }, 2000) // Show feedback first
         }
+        // rouletteTargetId는 GameView에서 결과 2초 표시 후 설정
     }
 
     // [ADDED] Roulette helpers
@@ -183,6 +243,8 @@ export const useGameStore = defineStore('game', () => {
     }
 
     const handleRouletteComplete = () => {
+        currentQuiz.value = null
+        currentRoundResult.value = null
         rouletteTargetId.value = null
         rouletteResult.value = null
         roulettePending.value = false
@@ -244,6 +306,8 @@ export const useGameStore = defineStore('game', () => {
         moveLocked.value = false
         movementInProgress.value = false
         pendingQuiz.value = null
+        ghostPhaseActive.value = false
+        turnPlayerFeedback.value = null
     }
 
     const reset = () => {
@@ -253,6 +317,8 @@ export const useGameStore = defineStore('game', () => {
         lastAnswerResult.value = null
         currentRoundResult.value = null
         quizEndAt.value = null
+        ghostPhaseActive.value = false
+        turnPlayerFeedback.value = null
         miniGame.value = {
             phase: 'idle',
             gameType: null,
@@ -321,6 +387,8 @@ export const useGameStore = defineStore('game', () => {
         currentRoundResult.value = null
         lastAnswerResult.value = null
         quizEndAt.value = null
+        ghostPhaseActive.value = false
+        turnPlayerFeedback.value = null
     }
 
     const gamePhase = computed<RoomStatus | null>(() => gameState.value.state || null)
@@ -352,6 +420,7 @@ export const useGameStore = defineStore('game', () => {
         setGameState,
         handleMove,
         onQuizReceived,
+        revealQuizOptions,
         onRoundResultReceived,
         submitAnswer,
         updateScore,
@@ -368,6 +437,10 @@ export const useGameStore = defineStore('game', () => {
         setRouletteResult,
         handleRouletteComplete,
         roulettePending,
+        ghostPhaseActive,
+        turnPlayerFeedback,
+        setTurnPlayerFeedback,
+        clearTurnPlayerFeedback,
         queueMiniGame,
         startMiniGame,
         setMiniGameResult,
