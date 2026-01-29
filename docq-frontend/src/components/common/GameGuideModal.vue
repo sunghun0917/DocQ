@@ -20,14 +20,14 @@ const slides = [
   },
   {
     title: "스틸 찬스 (Ghost)",
-    desc: "상대가 틀리면 기회!\n가장 빨리 맞힌 사람이 대신 이동합니다.",
+    desc: "턴 주인이 오답이면 기회!\n고스트 중 가장 빨리 맞히면 대신 이동합니다.",
     images: ["/images/steal_turn.png", "/images/steal_turn2.png"],
     icon: "sentiment_very_dissatisfied",
     color: "#ef5350"
   },
   {
     title: "아이템 & 미니게임",
-    desc: "2배 타일, 버프, 미니게임 등\n다양한 변수가 기다리고 있어요!",
+    desc: "2배 타일, 버프, 미니게임 등\n매 판 다른 변수가 등장해요!",
     images: ["/images/buff.png", "/images/minigame.png"],
     icon: "bolt",
     color: "#42a5f5"
