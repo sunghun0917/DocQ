@@ -576,6 +576,9 @@ watch(() => gameStore.currentMove, async (move) => {
   if (lastMoveKey.value === moveKey) return
   lastMoveKey.value = moveKey
 
+  // 이동 애니메이션 전에 즉시 출발지로 고정 → gameState가 먼저 도착지로 와도 깜빡임/점프 방지
+  animatingPlayers.value[move.userId] = move.startPosition
+
   await waitForMoveUnlock()
 
   isMovingGlobal.value = true

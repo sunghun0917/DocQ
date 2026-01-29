@@ -16,7 +16,7 @@ const isVisible = ref(true);
 const showResult = ref(false);
 
 const labels = [
-  { code: 'DOUBLE_SCORE', label: '점수 2배' },
+  { code: 'DOUBLE_SCORE', label: '2배 이동' },
   { code: 'PLUS_THREE', label: '+3칸 이동' }
 ];
 
