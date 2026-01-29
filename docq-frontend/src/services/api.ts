@@ -4,6 +4,8 @@ import axios, { type AxiosInstance } from 'axios'
 import type {
     UserLoginRequest,
     UserLoginResponse,
+    UserNicknameUpdateRequest,
+    UserNicknameUpdateResponse,
     CreateRoomRequest,
     CreateRoomResponse,
     RoomResponse,
@@ -43,6 +45,17 @@ apiClient.interceptors.response.use(
  */
 export const userLogin = async (nickname: string): Promise<UserLoginResponse> => {
     const response = await apiClient.post<UserLoginResponse>('/users/login', { nickname })
+    return response.data
+}
+
+/**
+ * 사용자 닉네임 변경
+ * PUT /users/{userId}/nickname
+ */
+export const updateNickname = async (userId: string, nickname: string): Promise<UserNicknameUpdateResponse> => {
+    const response = await apiClient.put<UserNicknameUpdateResponse>(`/users/${userId}/nickname`, {
+        nickname
+    } as UserNicknameUpdateRequest)
     return response.data
 }
 
@@ -145,6 +158,7 @@ export const getErrorCode = (error: any): string | null => {
 // 기본 export
 export default {
     userLogin,
+    updateNickname,
     createRoom,
     getRoomById,
     getRoomByInviteCode,

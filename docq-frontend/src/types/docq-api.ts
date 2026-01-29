@@ -33,6 +33,14 @@ export interface UserLoginResponse {
     nickname: string
 }
 
+export interface UserNicknameUpdateRequest {
+    nickname: string
+}
+export interface UserNicknameUpdateResponse {
+    userId: string
+    nickname: string
+}
+
 // 방 생성
 export interface CreateRoomRequest {
     userId: string

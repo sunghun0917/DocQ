@@ -23,4 +23,20 @@ public class UserDto {
         private String userId;
         private String nickname;
     }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UserNicknameUpdateRequest {
+        @NotBlank(message = "닉네임은 필수입니다.")
+        private String nickname;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class UserNicknameUpdateResponse {
+        private String userId;
+        private String nickname;
+    }
 }
