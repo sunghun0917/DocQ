@@ -1036,8 +1036,7 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                // int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
-                int[] turnPlayerRange = { 31, 32, 33, 34, 35, 36, 37, 38, 39, 40 };
+                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
                 moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
