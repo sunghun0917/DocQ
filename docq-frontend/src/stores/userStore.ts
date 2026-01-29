@@ -213,7 +213,7 @@ export const useUserStore = defineStore('user', () => {
      * 랜덤 아바타 생성 (이모지)
      */
     const getRandomAvatar = (): string => {
-        const avatars = ['🐱', '🐶', '🦊', '🐰', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🦄', '🐝', '🦋', '🐙']
+        const avatars = ['❓']
         return avatars[Math.floor(Math.random() * avatars.length)] || '👤'
     }
 

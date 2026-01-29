@@ -22,14 +22,10 @@ export interface QuizGeneratedNotice {
 }
 
 const AVATAR_MAP: Record<number, string> = {
-    0: '🐱',
+    0: '🐔',
     1: '🐶',
-    2: '🦊',
-    3: '🐰',
-    4: '🐯',
-    5: '🐸',
-    6: '🐨',
-    7: '🐷'
+    2: '🐷',
+    3: '🐑'
 }
 
 export const useWebSocketStore = defineStore('websocket', () => {
@@ -137,11 +133,11 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 const isHost = player.isHost !== undefined ? player.isHost : (player.host !== undefined ? player.host : false)
 
                 // 아바타 결정 로직:
-                let avatar = '🎮'
+                let avatar = '❓'
                 const cachedAvatar = avatarCache.value[player.userId]
 
                 if (player.avatarId !== null && player.avatarId !== undefined) {
-                    avatar = AVATAR_MAP[player.avatarId] || '🎮'
+                    avatar = AVATAR_MAP[player.avatarId] || '❓'
                     avatarCache.value[player.userId] = avatar // 캐시 업데이트
                 } else if (cachedAvatar) {
                     avatar = cachedAvatar
@@ -191,7 +187,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         // 아바타 전용 구독 (경량 업데이트용)
         wsService.value.subscribe(`/topic/game/${roomId}/avatar`, (data: any) => {
             console.log('📨 Avatar Update:', data)
-            const emoji = AVATAR_MAP[data.avatarId] || '🎮'
+            const emoji = AVATAR_MAP[data.avatarId] || '❓'
 
             // 캐시 먼저 업데이트
             avatarCache.value[data.userId] = emoji

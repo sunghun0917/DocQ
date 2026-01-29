@@ -201,14 +201,18 @@ const displayUsers = computed(() => {
   return filled
 })
 
-const characters = ['🐱', '🐶', '🦊', '🐰', '🐯', '🐸', '🐨', '🐷'];
-const selectedChar = ref('🐱');
+const characters = ['🐔', '🐶', '🐷', '🐑'];
+const selectedChar = ref('❓');
 
+// [MOD] 2. '❓' 기본값 처리 로직 (자동 배정 삭제)
 watchEffect(() => {
-  if (myUser.value?.avatar) {
-    selectedChar.value = myUser.value.avatar
+  if (!myUser.value || !userStore.userId) return;
+
+  // 내 아바타가 유효한 목록에 있다면 선택 상태로 반영
+  if (myUser.value.avatar && characters.includes(myUser.value.avatar)) {
+    selectedChar.value = myUser.value.avatar;
   }
-})
+});
 
 watch(
   () => wsStore.quizGeneratedNotice,
@@ -298,7 +302,16 @@ const isStartDisabled = computed(() =>
 
 const toggleReady = () => {
   if (!myUser.value || !userStore.userId) return
-  wsStore.setReady(roomId.value, userStore.userId, !myUser.value.isReady)
+
+  // [ADD] 캐릭터 선택 강제 ('❓' 상태면 준비 불가)
+  if (myUser.value?.avatar === '❓' || !characters.includes(myUser.value?.avatar || '')) {
+    toastMessage.value = '캐릭터를 먼저 선택해주세요!'
+    toastType.value = 'error'
+    isToastOpen.value = true
+    return
+  }
+
+  wsStore.setReady(roomId.value, userStore.userId, !myUser.value?.isReady)
 }
 
 const copyRoomCode = async () => {
@@ -318,6 +331,16 @@ const copyRoomCode = async () => {
 };
 
 const handleStartGame = () => {
+  if (!myUser.value) return;
+
+  // [ADD] 방장도 캐릭터 선택 강제
+  if (myUser.value?.avatar === '❓' || !characters.includes(myUser.value?.avatar || '')) {
+    toastMessage.value = '캐릭터를 먼저 선택해주세요!'
+    toastType.value = 'error'
+    isToastOpen.value = true
+    return
+  }
+
   if (!isAllReady.value) {
     openInfoModal('모든 플레이어가 준비해야 합니다!');
     return;
