@@ -30,6 +30,8 @@ public enum ErrorCode {
     /* G001 : 게임 로직 (Game) */
     NOT_YOUR_TURN(HttpStatus.BAD_REQUEST, "G001", "턴 오류"),
     ALREADY_SUBMITTED(HttpStatus.BAD_REQUEST, "G002", "이미 제출했습니다"),
+    GHOST_OPTIONS_HIDDEN(HttpStatus.BAD_REQUEST, "G003", "고스트 보기 공개 전입니다."),
+    TURN_SUBMISSION_CLOSED(HttpStatus.BAD_REQUEST, "G004", "턴 응답 시간이 종료되었습니다."),
 
     /* D001 ~ D003 : 문서/AI (Document) */
     FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "D001", "파일 업로드 실패"),

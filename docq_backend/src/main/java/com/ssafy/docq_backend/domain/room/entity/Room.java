@@ -67,6 +67,11 @@ public class Room {
     @Builder.Default
     private Map<String, GameDto.SubmitAnswer> quizAnswers = new ConcurrentHashMap<>();
     private Long quizStartTimeMs;
+    @Builder.Default
+    private boolean ghostOptionsRevealed = false;
+    private Long ghostPhaseEndTimeMs;
+    @Builder.Default
+    private boolean ghostPhaseTimerScheduled = false;
 
     // userId -> PlayerState
     @Builder.Default
