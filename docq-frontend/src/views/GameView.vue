@@ -303,6 +303,7 @@ const restartGame = () => {
 
 watchEffect(() => {
     if (roomStore.roomInfo.status === 'WAITING' && roomId.value) {
+        gameStore.reset()
         router.push(`/waiting/${roomId.value}`)
     }
 })
