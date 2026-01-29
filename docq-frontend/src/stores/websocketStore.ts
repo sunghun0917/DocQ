@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { WebSocketService } from '@/services/websocket'
-import type { GameStateResponse, PlayerInfo, RoundResult, MoveInfo, QuizMessage } from '@/types/docq-api'
+import type { GameStateResponse, PlayerInfo, RoundResult, MoveInfo, QuizMessage, QuizOptionsMessage } from '@/types/docq-api'
 import { useUserStore } from './userStore'
 import { useRoomStore } from './roomStore'
 import { useGameStore } from './gameStore'
@@ -225,9 +225,35 @@ export const useWebSocketStore = defineStore('websocket', () => {
             }
         })
 
-        // 라운드 결과 수신
+        if (userStore.userId) {
+            wsService.value.subscribe(`/queue/game/${userStore.userId}/quiz`, (data: QuizMessage) => {
+                console.log('📨 Private Quiz Received:', data)
+                if (data?.question) {
+                    gameStore.onQuizReceived(data)
+                }
+            })
+        }
+
+        wsService.value.subscribe(`/topic/game/${roomId}/quiz/options`, (data: QuizOptionsMessage) => {
+            console.log('📨 Quiz Options Revealed:', data)
+            if (data?.quizId && Array.isArray(data.options)) {
+                gameStore.revealQuizOptions(data.quizId, data.options, data.extraTimeMs)
+            }
+        })
+
+        if (userStore.userId) {
+            wsService.value.subscribe(`/queue/game/answer-feedback/${userStore.userId}`, (data: { correct?: boolean }) => {
+                console.log('📨 Answer Feedback:', data)
+                if (data && typeof data.correct === 'boolean') {
+                    gameStore.setTurnPlayerFeedback(data.correct)
+                }
+            })
+        }
+
+        // 라운드 결과 수신 시 턴 피드백(틀렸습니다) 제거 → 시스템 알림 + 정답 체크만 표시
         wsService.value.subscribe(`/topic/game/${roomId}/result`, (data: RoundResult) => {
             console.log('📨 Round Result:', data)
+            gameStore.clearTurnPlayerFeedback()
             gameStore.onRoundResultReceived(data)
         })
 
