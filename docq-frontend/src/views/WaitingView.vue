@@ -302,51 +302,60 @@ onMounted(async () => {
          pl-6 md:pl-16 pr-10 md:pr-24 pt-6 md:pt-8 pb-10 md:pb-14 relative z-10 animate-fade-in"
 >
 
-      <header class="flex justify-between items-center mb-8 px-4">
-        <div class="flex items-center gap-6">
-          <div class="icon-circle h-14 w-14">
-            <span class="leaf-icon material-symbols-outlined text-3xl">{{ roomTypeIcon }}</span>
-          </div>
-          <div class="flex flex-col gap-1">
-            <span class="text-xs font-bold text-wood-dark opacity-75 uppercase tracking-wider px-1">{{ roomInfo.isPrivate ? 'Private' : 'Public' }} Room</span>
-            <div class="flex items-center gap-4">
-              <h1 class="text-2xl md:text-3xl lg:text-4xl font-black text-wood-text drop-shadow-sm tracking-tight leading-none uppercase">
-                {{ roomInfo.title || '대기실' }}
-              </h1>
-              <!-- 초대 코드 (클릭 시 복사) -->
-              <div 
-                @click="copyRoomCode" 
-                v-if="roomInfo.inviteCode || roomInfo.roomId" 
-                class="cartoon-btn secondary h-10 px-5 text-lg flex items-center gap-2 cursor-pointer shadow-[0_3px_0_0_#b45309] hover:scale-105"
-                title="복사하려면 클릭하세요"
-              >
-                <span class="material-symbols-outlined text-xl">share</span>
-                <span class="tracking-widest">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="flex items-center gap-3 bg-white/60 border-4 border-wood-border px-6 py-3 rounded-2xl font-black text-2xl text-wood-dark shadow-sm">
-          <span class="material-symbols-outlined text-[24px]">group</span>
-          <span>{{ currentCount }} / {{ maxUsers || '-' }}</span>
-        </div>
-      </header>
+<header class="header">
+  <!-- LEFT -->
+  <div class="header-left">
+    <div class="icon-circle">
+      <span class="leaf-icon material-symbols-outlined">{{ roomTypeIcon }}</span>
+    </div>
 
+    <div class="title-block">
+
+      <div class="title-line">
+        <h1 class="room-title">
+          {{ roomInfo.title || '대기실' }}
+        </h1>
+
+        <!-- 초대코드: 제목 옆, 줄어들면 아래로 내려가게 -->
+        <button
+          v-if="roomInfo.inviteCode || roomInfo.roomId"
+          class="invite-chip"
+          @click="copyRoomCode"
+          title="복사하려면 클릭하세요"
+        >
+          <span class="material-symbols-outlined">public</span>
+          <span class="code">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
+          <span class="material-symbols-outlined copy">content_copy</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="header-right">
+    <div class="count-pill">
+      <span class="material-symbols-outlined">group</span>
+      <span class="count">{{ currentCount }}</span>
+      <span class="sep">/</span>
+      <span class="max">{{ maxUsers || '-' }}</span>
+    </div>
+  </div>
+</header>
       <div class="grid grid-cols-12 gap-6 md:gap-8 flex-1 min-h-0">
         <main class="col-span-8 bg-white/40 rounded-[32px] md:rounded-[40px] border-4 border-wood-border py-16 px-20 flex items-center justify-center shadow-inner">
-          <div class="grid grid-cols-2 grid-rows-2 gap-8 w-full max-w-[850px] h-[90%] mx-auto">
+          <div class="grid grid-cols-2 grid-rows-2 gap-8 w-full max-w-[800px] h-[90%] mx-auto">
             <UserCard v-for="user in displayUsers" :key="user.id" :user="user" class="w-full h-full transform transition-transform hover:scale-[1.02]" />
           </div>
         </main>
 
         <aside class="col-span-4 flex flex-col gap-8 px-10">
-          <div class="bg-white/70 p-7 rounded-[40px] border-4 border-wood-border flex flex-col items-center shadow-sm">
-            <h3 class="w-full text-xl font-black mb-6 text-wood-dark flex items-center justify-center gap-2">
+          <div class="h-[400px] bg-white/70 px-7 rounded-[40px] border-4 border-wood-border flex flex-col items-center shadow-sm">
+            <div class="w-full h-6 flex-none"></div>
+            <h3 class="w-full text-2xl font-black mb-4 text-wood-dark flex items-center justify-center gap-2">
               <span class="material-symbols-outlined text-leaf-green text-2xl">face</span>
               캐릭터 선택
             </h3>
-            <div class="grid grid-cols-4 gap-4 w-full max-w-[320px] mx-auto justify-items-center">
+            <div class="flex-1 grid grid-cols-2 gap-6 w-full max-w-[300px] content-center justify-items-center">
               <button v-for="char in characters" :key="char" @click="selectCharacter(char)"
                 :disabled="isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost)"
                 class="aspect-square w-full rounded-2xl text-3xl flex items-center justify-center transition-all relative border-4 bg-white"
@@ -430,17 +439,21 @@ onMounted(async () => {
         </aside>
       </div>
 
-      <footer class="mt-10 flex justify-between items-end border-t-4 border-wood-border/20 pt-8 px-4">
+      <footer class="mt-10 flex items-end border-t-4 border-wood-border/20 pt-8 px-4">
+        <div class="w-16 flex-shrink-0"></div>
         <div class="flex flex-col gap-1">
           <h2 class="text-wood-text text-2xl font-black opacity-90 tracking-tighter">DOCQ</h2>
           <p class="text-wood-dark font-bold text-xs opacity-60 uppercase tracking-widest">Interactive PDF Quiz Game</p>
         </div>
-        <div class="flex gap-4 relative -left-10 -top-3">
-          <button @click="leaveRoom" class="cartoon-btn secondary !w-[120px] flex-shrink-0 px-8 h-8 text-xl font-black bg-orange-500 box-shadow-orange">
-            <span class="material-symbols-outlined text-2xl">logout</span>
-            LEAVE
-          </button>
-        </div>
+        <div class="footer-right">
+  <button
+    @click="leaveRoom"
+    class="cartoon-btn secondary leave-btn"
+  >
+    <span class="material-symbols-outlined text-2xl">logout</span>
+    LEAVE
+  </button>
+</div>
       </footer>
     </div>
 
@@ -476,6 +489,146 @@ onMounted(async () => {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Jua&family=Nanum+Pen+Script&family=Bungee&display=swap');
+/* Footer right pinned */
+.footer-right{
+  margin-left: auto;            /* 오른쪽 끝으로 */
+  display: flex;
+  align-items: flex-end;
+  padding-right: 12px;          /* “약간 간격” */
+  padding-bottom: 6px;          /* 살짝 아래 여백 */
+}
+
+/* leave 버튼은 지금 스타일 유지하면서 폭만 고정 */
+.leave-btn{
+  width: 140px;                 /* 기존 120보다 여유 */
+  height: 52px;                 /* 기존 h-8(32px) 너무 작아서 추천 */
+  font-size: 22px;
+  font-weight: 900;
+  background: #ff7043;          /* secondary 톤 유지 */
+  box-shadow: 0 10px 0 #e65100; /* 기존 box-shadow-orange 효과 */
+}
+
+/* Header layout */
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 16px;
+  padding: 10px 32px 0; 
+  margin-bottom: 24px;
+}
+
+.header-left{
+  display:flex;
+  align-items:center;
+  gap: 14px;
+  min-width: 0; /* 제목이 길 때 줄바꿈/말줄임 허용 */
+  flex: 1;
+}
+
+.title-block{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  min-width:0;
+}
+
+.meta-line{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  opacity: .9;
+}
+
+.room-badge{
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.6);
+  border: 3px solid var(--wood-border);
+}
+
+.sub{
+  font-size: 12px;
+  font-weight: 800;
+  opacity: .7;
+}
+
+.dot{ opacity:.4; font-weight:900; }
+
+.title-line{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  flex-wrap: wrap; /* 공간 부족하면 초대코드가 아래로 내려감 */
+}
+
+.room-title{
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap; /* 제목은 말줄임 */
+}
+
+/* Invite chip */
+.invite-chip{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 4px solid var(--wood-border);
+  background: rgba(255,255,255,.75);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(93,64,55,.25);
+  transition: transform .08s ease;
+}
+.invite-chip:hover{ transform: translateY(-1px); }
+.invite-chip:active{ transform: translateY(2px); box-shadow: 0 2px 0 rgba(93,64,55,.25); }
+
+.invite-chip .material-symbols-outlined{ font-size: 20px; }
+.invite-chip .code{
+  letter-spacing: .18em;
+  font-size: 14px;
+}
+.invite-chip .copy{ opacity: .6; }
+
+/* Right side */
+.header-right{ flex: none; }
+
+.count-pill{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 4px solid var(--wood-border);
+  background: rgba(255,255,255,.6);
+  box-shadow: 0 4px 0 rgba(93,64,55,.2);
+  font-weight: 900;
+}
+.count-pill .material-symbols-outlined{ font-size: 22px; }
+.count-pill .count{ font-size: 20px; }
+.count-pill .sep{ opacity: .5; }
+.count-pill .max{ font-size: 18px; opacity: .85; }
+
+/* Mobile */
+@media (max-width: 768px){
+  .header{ padding: 0 16px; }
+  .room-title{ font-size: 22px; }
+  .invite-chip{ height: 36px; padding: 0 12px; }
+}
 
 .cartoon-theme {
   --text-brown: #5d4037; --text-light: #efebe9; --wood-light: #d7ccc8; --wood-medium: #bcaaa4; --wood-dark: #8d6e63;
@@ -531,12 +684,12 @@ onMounted(async () => {
 
 /* Icon Circle */
 .icon-circle {
-  width: 72px; height: 72px; background: var(--leaf-green); border-radius: 50%;
+  width: 54px; height: 54px; background: var(--leaf-green); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  border: 4px solid var(--leaf-dark); color: white;
-  box-shadow: inset 0 -6px 0 rgba(0,0,0,0.2), 0 6px 12px rgba(0,0,0,0.1);
+  border: 3px solid var(--leaf-dark); color: white;
+  box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.1);
 }
-.leaf-icon { font-size: 36px; }
+.leaf-icon { font-size: 28px; }
 
 /* Clouds */
 .cloud { position: absolute; background: #fff; left: 110%; animation: moveClouds linear infinite; }
