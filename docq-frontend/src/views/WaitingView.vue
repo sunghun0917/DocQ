@@ -461,7 +461,7 @@ onMounted(async () => {
     <div class="w-full max-w-7xl bg-white/60 backdrop-blur-xl rounded-[12px] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.15)] py-12 px-12 border border-white relative z-10">       
       
       <header class="flex justify-between items-center mb-10 px-4">
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-6 flex-wrap">
           <span class="bg-[#fff1f2] text-[#e11d48] border border-[#fecdd3] px-3 py-1.5 rounded-full text-sm font-bold tracking-wide shadow-sm flex items-center gap-1.5">
             <span class="material-symbols-outlined text-[18px]">
               {{ roomTypeIcon }}
@@ -473,6 +473,14 @@ onMounted(async () => {
           <h1 class="text-4xl font-extrabold text-[#881337] tracking-tight drop-shadow-sm">
             {{ roomInfo.title || '대기실' }}
           </h1>
+          <button
+            @click="copyRoomCode"
+            class="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl font-black text-[#e11d48] shadow-sm border-2 border-[#ffe4e6] hover:bg-[#fff1f2] transition"
+          >
+            <span class="material-symbols-outlined text-[22px]">add_link</span>
+            <span class="text-[#9f1239] text-sm">초대 코드</span>
+            <span class="text-xl tracking-widest">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
+          </button>
         </div>
         
         <div class="flex items-center gap-2 bg-white px-5 py-2.5 rounded-2xl font-bold text-[#e11d48] shadow-sm border border-[#ffe4e6]">
@@ -743,11 +751,6 @@ onMounted(async () => {
         </div>
         
         <div class="flex gap-4">
-          <button @click="copyRoomCode" class="px-6 py-3 rounded-xl font-bold bg-white border border-[#fecdd3] text-[#9f1239] hover:bg-[#fff1f2] transition flex items-center gap-2 shadow-sm">
-            <span class="material-symbols-outlined">add_link</span>
-            <span class="text-[#e11d48] font-black tracking-wider">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
-          </button>
-          
           <button 
             @click="leaveRoom" 
             class="px-8 py-3 rounded-xl font-bold bg-[#fff1f2] text-[#e11d48] border border-transparent hover:bg-[#ffe4e6] transition shadow-sm flex items-center gap-2"

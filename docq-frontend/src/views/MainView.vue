@@ -347,6 +347,11 @@ onUnmounted(() => { stopRoulette(); });
         </div>
     </div>
 
+    <div v-if="isNicknameSet" class="main-title-banner">
+        <h1 class="game-title">DocQ</h1>
+        <p class="game-subtitle">PDF 퀴즈 배틀</p>
+    </div>
+
     <transition name="intro-fade">
         <div v-if="!isNicknameSet" class="intro-container">
             <div class="intro-panel wood-panel">
@@ -608,6 +613,22 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .menu-fade-enter-from { opacity: 0; transform: scale(0.95); }
 .menu-fade-leave-to { opacity: 0; transform: scale(1.05); }
 @media (max-width: 768px) { .pos-left, .pos-right { opacity: 0; pointer-events: none; } .carousel-item { width: 90vw; } }
+
+.main-title-banner {
+  position: absolute;
+  top: 23px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  text-align: center;
+}
+.main-title-banner .game-title {
+  font-size: 2.6rem;
+}
+.main-title-banner .game-subtitle {
+  font-size: 0.95rem;
+  margin-top: 2px;
+}
 
 .edit-nickname-backdrop {
   position: absolute;
