@@ -77,6 +77,7 @@ let systemNoticeResolver: (() => void) | null = null
 
 const handleBeforeUnload = () => {
     if (!userStore.userId || !roomId.value) return
+    sessionStorage.setItem('docq:lastPage', 'game')
     wsStore.leaveGame(roomId.value, userStore.userId)
     wsStore.cleanup()
     roomStore.leaveRoom()
@@ -406,7 +407,9 @@ watch(
 onMounted(() => {
     window.addEventListener('beforeunload', handleBeforeUnload)
     const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    if (nav?.type === 'reload') {
+    const lastPage = sessionStorage.getItem('docq:lastPage')
+    if (nav?.type === 'reload' && lastPage === 'game') {
+        sessionStorage.removeItem('docq:lastPage')
         uiStore.openConfirm({
             title: '연결 끊김',
             message: '연결이 끊겼습니다. 메인으로 이동합니다.',
@@ -418,6 +421,7 @@ onMounted(() => {
         })
         return
     }
+    sessionStorage.removeItem('docq:lastPage')
     if (roomId.value) {
         wsStore.subscribeMiniGame(roomId.value)
     }

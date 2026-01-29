@@ -37,6 +37,7 @@ import com.ssafy.docq_backend.domain.game.event.MovePlanPayload;
 import com.ssafy.docq_backend.domain.game.event.NextTurnPayload;
 import com.ssafy.docq_backend.domain.game.event.RoundResultPayload;
 import com.ssafy.docq_backend.domain.game.event.ResumeAfterMiniGamePayload;
+import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 
 @Slf4j
 @Service
@@ -51,6 +52,7 @@ public class GameService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final GameEventStore gameEventStore;
     private final AckStore ackStore;
+    private final SessionRegistry sessionRegistry;
     private static final int START_POSITION = 1;
     private static final int TARGET_POSITION = 30;
     private static final int DEFAULT_QUIZ_COUNT = 30;
@@ -607,7 +609,8 @@ public class GameService {
             }
 
             long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId, request.getUserId());
-            if (count < room.getPlayers().size()) {
+            int expected = resolveExpectedAckCount(room);
+            if (count < expected) {
                 return;
             }
             advanceAfterAck(room, resolution, request.getRound());
@@ -617,7 +620,7 @@ public class GameService {
     }
 
     private void handlePlayerExitAcks(Room room, String userId) {
-        int expected = room.getPlayers().size();
+        int expected = resolveExpectedAckCount(room);
         for (AckStore.AckKeyInfo info : ackStore.removeUserFromRoomAcks(room.getId(), userId)) {
             if (info.getCount() < expected) {
                 continue;
@@ -642,6 +645,14 @@ public class GameService {
         }
         String resolvedKey = keyId != null ? keyId : String.valueOf(room.getRound());
         return new AckResolution(ackType, ackType, resolvedKey);
+    }
+
+    private int resolveExpectedAckCount(Room room) {
+        int connected = sessionRegistry.getConnectedCount(room.getId());
+        if (connected > 0) {
+            return connected;
+        }
+        return room.getPlayers().size();
     }
 
     private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
