@@ -10,7 +10,6 @@ import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import CloudBackground from '@/components/ui/CloudBackground.vue';
 import CloudOverlay from '@/components/ui/CloudOverlay.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
-import AvatarViewer from '@/components/common/AvatarViewer.vue'; // Import AvatarViewer
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -93,22 +92,6 @@ const rankingResults = computed(() => {
         }
     })
 })
-
-// Avatar Animation State
-const playerAnimations = ref<Record<string, 'idle' | 'win'>>({})
-
-watch(
-    () => cornerPlayers.value,
-    (newPlayers) => {
-        newPlayers.forEach(p => {
-            if (p?.userId && !playerAnimations.value[p.userId]) {
-                // Randomly assign 'idle' or 'win'
-                playerAnimations.value[p.userId] = Math.random() > 0.5 ? 'idle' : 'win'
-            }
-        })
-    },
-    { deep: true, immediate: true }
-)
 
 // Snapshot logic for results
 const finalRankingResults = ref<any[] | null>(null)
@@ -604,20 +587,9 @@ onUnmounted(() => {
           ]"
         >
           <template v-if="p">
-            <!-- Left: Avatar (3D) -->
-            <div class="relative w-[120px] h-[140px] -ml-4 pointer-events-none z-10">
-                <AvatarViewer
-                    v-if="AVATAR_REVERSE_MAP[roomStore.users.find(u => u.id === p.userId)?.avatar || '0']"
-                    :avatarIndex="Number(AVATAR_REVERSE_MAP[roomStore.users.find(u => u.id === p.userId)?.avatar || '0'])"
-                    :scale="2.2"
-                    :autoRotate="false"
-                    :cameraY="0.6"
-                    :cameraZ="3.5"
-                    :action="playerAnimations[p.userId] || 'idle'"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center text-4xl">
-                    {{ roomStore.users.find(u => u.id === p.userId)?.avatar || '👤' }}
-                </div>
+            <!-- Left: Avatar (Static Emoji) -->
+            <div class="w-[80px] h-[80px] flex items-center justify-center text-6xl pointer-events-none z-10 -ml-2">
+                {{ roomStore.users.find(u => u.id === p.userId)?.avatar || '👤' }}
             </div>
 
             <!-- Right: Info -->
