@@ -23,7 +23,8 @@ defineProps<{
     <!-- 방장 크라운 -->
     <span 
       v-if="user.isHost" 
-      class="material-symbols-outlined text-amber-500 text-4xl absolute -top-2 -right-2 drop-shadow-[0_3px_0_rgba(217,119,6,1)] rotate-12 z-30 font-black" 
+      class="material-symbols-outlined text-amber-500 absolute -top-8 -right-8 drop-shadow-[0_4px_0_rgba(217,119,6,1)] rotate-12 z-30 font-black select-none" 
+      style="font-size: 80px !important;"
     >
       crown
     </span>
@@ -40,20 +41,24 @@ defineProps<{
     </div>
 
     <!-- 닉네임 영역 -->
-    <div v-if="user.nickname" class="text-2xl font-black text-wood-dark mb-3 truncate w-full text-center tracking-tight leading-none">
-      {{ user.nickname }}
-      <span v-if="user.isMe" class="text-[10px] font-black bg-leaf-green text-white px-2 py-0.5 rounded-full align-middle ml-1 shadow-sm">ME</span>
+    <div v-if="user.nickname" class="w-full flex items-center justify-center gap-2 mb-8 px-4">
+      <span class="text-2xl font-black text-wood-dark truncate max-w-[150px] tracking-tight leading-none">
+        {{ user.nickname }}
+      </span>
+      <span v-if="user.isMe" class="flex-shrink-0 text-[11px] font-black bg-[#7cb342] text-white px-2.5 py-1 rounded-full shadow-sm leading-none border border-[#558b2f]">
+        ME
+      </span>
     </div>
     <div v-else class="text-xl font-black text-wood-dark opacity-10 mb-2 uppercase tracking-widest">
       Empty
     </div>
     
     <!-- 상태 배지 -->
-    <div v-if="user.nickname" class="mt-auto w-full px-2">
+    <div v-if="user.nickname" class="mt-auto w-full flex justify-center">
       <div 
-        class="py-1.5 rounded-xl text-base font-black shadow-[0_3px_0_0_rgba(0,0,0,0.1)] transition-all block text-center uppercase tracking-wider border-2"
+        class="py-2 px-8 rounded-2xl text-base font-black shadow-[0_4px_0_0_rgba(0,0,0,0.1)] transition-all inline-block text-center uppercase tracking-wider border-2"
         :class="{
-          'bg-amber-50 text-amber-700 border-amber-200 shadow-amber-100': user.isHost,
+          'bg-amber-50 text-amber-700 border-amber-300 shadow-amber-200': user.isHost,
           'bg-leaf-green text-white border-leaf-dark shadow-leaf-dark/20': !user.isHost && user.isReady,
           'bg-gray-50 text-gray-400 border-gray-100 shadow-none opacity-60': !user.isHost && !user.isReady
         }"
@@ -82,7 +87,7 @@ defineProps<{
   box-shadow: inset 0 4px 8px rgba(0,0,0,0.05);
 }
 
-* {
+.relative {
   font-family: 'Jua', sans-serif;
 }
 </style>

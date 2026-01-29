@@ -299,7 +299,7 @@ onMounted(async () => {
 
     <div
   class="w-full max-w-[1400px] h-[88vh] md:h-[90vh] wood-panel flex flex-col
-         px-6 md:px-10 py-6 md:py-8 relative z-10 animate-fade-in overflow-hidden"
+         pl-6 md:pl-16 pr-10 md:pr-24 pt-6 md:pt-8 pb-10 md:pb-14 relative z-10 animate-fade-in"
 >
 
       <header class="flex justify-between items-center mb-8 px-4">
@@ -307,11 +307,23 @@ onMounted(async () => {
           <div class="icon-circle h-14 w-14">
             <span class="leaf-icon material-symbols-outlined text-3xl">{{ roomTypeIcon }}</span>
           </div>
-          <div>
-            <span class="text-xs font-bold text-wood-dark opacity-75 uppercase tracking-wider">{{ roomInfo.isPrivate ? 'Private' : 'Public' }} Room</span>
-            <h1 class="text-2xl md:text-3xl lg:text-4xl font-black text-wood-text drop-shadow-sm tracking-tight leading-none uppercase">
-              {{ roomInfo.title || '대기실' }}
-            </h1>
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-bold text-wood-dark opacity-75 uppercase tracking-wider px-1">{{ roomInfo.isPrivate ? 'Private' : 'Public' }} Room</span>
+            <div class="flex items-center gap-4">
+              <h1 class="text-2xl md:text-3xl lg:text-4xl font-black text-wood-text drop-shadow-sm tracking-tight leading-none uppercase">
+                {{ roomInfo.title || '대기실' }}
+              </h1>
+              <!-- 초대 코드 (클릭 시 복사) -->
+              <div 
+                @click="copyRoomCode" 
+                v-if="roomInfo.inviteCode || roomInfo.roomId" 
+                class="cartoon-btn secondary h-10 px-5 text-lg flex items-center gap-2 cursor-pointer shadow-[0_3px_0_0_#b45309] hover:scale-105"
+                title="복사하려면 클릭하세요"
+              >
+                <span class="material-symbols-outlined text-xl">share</span>
+                <span class="tracking-widest">{{ roomInfo.inviteCode || roomInfo.roomId }}</span>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -322,22 +334,22 @@ onMounted(async () => {
       </header>
 
       <div class="grid grid-cols-12 gap-6 md:gap-8 flex-1 min-h-0">
-        <main class="col-span-8 bg-white/40 rounded-[32px] md:rounded-[40px] border-4 border-wood-border p-5 md:p-7 shadow-inner">
-          <div class="grid grid-cols-2 grid-rows-2 gap-5 md:gap-7 h-full">
+        <main class="col-span-8 bg-white/40 rounded-[32px] md:rounded-[40px] border-4 border-wood-border py-16 px-20 flex items-center justify-center shadow-inner">
+          <div class="grid grid-cols-2 grid-rows-2 gap-8 w-full max-w-[850px] h-[90%] mx-auto">
             <UserCard v-for="user in displayUsers" :key="user.id" :user="user" class="w-full h-full transform transition-transform hover:scale-[1.02]" />
           </div>
         </main>
 
-        <aside class="col-span-4 flex flex-col gap-8">
-          <div class="bg-white/70 p-7 rounded-[40px] border-4 border-wood-border flex flex-col shadow-sm">
-            <h3 class="text-xl font-black mb-4 text-wood-dark flex items-center gap-2">
+        <aside class="col-span-4 flex flex-col gap-8 px-10">
+          <div class="bg-white/70 p-7 rounded-[40px] border-4 border-wood-border flex flex-col items-center shadow-sm">
+            <h3 class="w-full text-xl font-black mb-6 text-wood-dark flex items-center justify-center gap-2">
               <span class="material-symbols-outlined text-leaf-green text-2xl">face</span>
               캐릭터 선택
             </h3>
-            <div class="grid grid-cols-4 gap-4">
+            <div class="grid grid-cols-4 gap-4 w-full max-w-[320px] mx-auto justify-items-center">
               <button v-for="char in characters" :key="char" @click="selectCharacter(char)"
                 :disabled="isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost)"
-                class="aspect-square rounded-2xl text-4xl flex items-center justify-center transition-all relative border-4 bg-white"
+                class="aspect-square w-full rounded-2xl text-3xl flex items-center justify-center transition-all relative border-4 bg-white"
                 :class="[ selectedChar === char ? 'border-leaf-green bg-green-50 -translate-y-1 shadow-[0_4px_0_0_rgba(85,139,47,1)]' : 'border-wood-light hover:border-leaf-green hover:bg-green-50 shadow-[0_2px_0_0_rgba(141,110,99,0.3)]' ]">
                 {{ char }}
                 <div v-if="isCharacterTaken(char)" class="absolute inset-0 flex items-center justify-center bg-gray-500/10 rounded-2xl">
@@ -347,35 +359,35 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="bg-white/70 p-7 rounded-[40px] border-4 border-wood-border flex-1 flex flex-col shadow-sm">
-            <h3 class="text-xl font-black text-wood-dark mb-4 flex items-center gap-2">
+          <div class="bg-white/70 p-7 rounded-[40px] border-4 border-wood-border flex-1 flex flex-col items-center shadow-sm">
+            <h3 class="w-full text-xl font-black text-wood-dark mb-6 flex items-center justify-center gap-2">
               <span class="material-symbols-outlined text-leaf-green text-2xl">quiz</span>
               퀴즈 설정
             </h3>
 
-            <div v-if="isHost" class="flex flex-col gap-6">
+            <div v-if="isHost" class="flex flex-col gap-6 w-full max-w-[400px]">
               <template v-if="generatedQuizzes.length === 0">
                 <template v-if="isPdfUploadDisabled">
-                  <div @click="showPdfMaintenance" class="relative w-full h-32 rounded-3xl border-4 border-dashed border-wood-light bg-white/40 flex flex-col items-center justify-center text-center cursor-not-allowed hover:bg-white/60 transition-all">
-                    <div class="w-12 h-12 rounded-full bg-white border-4 border-wood-border flex items-center justify-center mb-2">
-                      <span class="material-symbols-outlined text-wood-dark text-3xl">cloud_upload</span>
+                  <div @click="showPdfMaintenance" class="relative w-full h-40 rounded-3xl border-4 border-dashed border-wood-light bg-white/40 flex flex-col items-center justify-center text-center cursor-not-allowed hover:bg-white/60 transition-all">
+                    <div class="w-16 h-16 rounded-full bg-white border-4 border-wood-border flex items-center justify-center mb-3">
+                      <span class="material-symbols-outlined text-wood-dark text-4xl">cloud_upload</span>
                     </div>
-                    <p class="text-xl font-black text-wood-dark">PDF 업로드</p>
-                    <p class="text-sm text-wood-dark/60 font-bold opacity-80 mt-1">🚧 시스템 점검중</p>
+                    <p class="text-2xl font-black text-wood-dark">PDF 업로드</p>
+                    <p class="text-base text-wood-dark/60 font-bold opacity-80 mt-1">🚧 시스템 점검중</p>
                   </div>
-                  <button @click="isBasicQuizModalOpen = true" class="cartoon-btn secondary h-16 text-xl font-black">
+                  <button @click="isBasicQuizModalOpen = true" class="cartoon-btn secondary h-20 text-2xl font-black w-full">
                     기본 퀴즈 선택
                   </button>
                 </template>
               </template>
 
-              <div v-else class="flex flex-col gap-4">
-                <div class="w-full h-32 rounded-3xl border-4 border-leaf-green bg-green-50 flex flex-col items-center justify-center shadow-inner">
-                   <div class="w-12 h-12 rounded-full bg-leaf-green flex items-center justify-center mb-2 shadow-md">
-                     <span class="material-symbols-outlined text-white text-3xl font-black">check</span>
+              <div v-else class="flex flex-col gap-4 w-full">
+                <div class="w-full h-40 rounded-3xl border-4 border-leaf-green bg-green-50 flex flex-col items-center justify-center shadow-inner">
+                   <div class="w-16 h-16 rounded-full bg-leaf-green flex items-center justify-center mb-3 shadow-md">
+                     <span class="material-symbols-outlined text-white text-4xl font-black">check</span>
                    </div>
-                   <p class="text-xl font-black text-leaf-dark">준비 완료!</p>
-                   <p class="text-sm text-leaf-dark/70 font-bold">{{ generatedQuizzes.length }}개의 문제</p>
+                   <p class="text-2xl font-black text-leaf-dark">준비 완료!</p>
+                   <p class="text-base text-leaf-dark/70 font-bold">{{ generatedQuizzes.length }}개의 문제</p>
                 </div>
                 <button @click="resetAndUpload" class="cartoon-btn secondary h-16 text-xl">
                   <span class="material-symbols-outlined text-2xl">refresh</span>
@@ -384,30 +396,30 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div v-else class="flex flex-col gap-4">
-              <div v-if="generatedQuizzes.length > 0" class="w-full h-32 rounded-3xl border-4 border-leaf-green bg-green-50 flex flex-col items-center justify-center shadow-inner">
-                 <div class="w-12 h-12 rounded-full bg-leaf-green flex items-center justify-center mb-2">
-                   <span class="material-symbols-outlined text-white text-3xl font-black">check</span>
+            <div v-else class="flex flex-col gap-4 w-full">
+              <div v-if="generatedQuizzes.length > 0" class="w-full h-40 rounded-3xl border-4 border-leaf-green bg-green-50 flex flex-col items-center justify-center shadow-inner">
+                 <div class="w-16 h-16 rounded-full bg-leaf-green flex items-center justify-center mb-3">
+                   <span class="material-symbols-outlined text-white text-4xl font-black">check</span>
                  </div>
-                 <p class="text-xl font-black text-leaf-dark">준비 완료!</p>
-                 <p class="text-sm text-leaf-dark/70 font-bold">방장님의 시작 대기중</p>
+                 <p class="text-2xl font-black text-leaf-dark">준비 완료!</p>
+                 <p class="text-base text-leaf-dark/70 font-bold">방장님의 시작 대기중</p>
               </div>
-              <div v-else class="w-full h-32 rounded-3xl border-4 border-dashed border-wood-light bg-white/40 flex flex-col items-center justify-center text-center">
-                 <div class="w-12 h-12 rounded-full bg-white border-4 border-wood-border flex items-center justify-center mb-2 animate-bounce">
-                    <span class="material-symbols-outlined text-wood-dark text-3xl">pending</span>
+              <div v-else class="w-full h-40 rounded-3xl border-4 border-dashed border-wood-light bg-white/40 flex flex-col items-center justify-center text-center">
+                 <div class="w-16 h-16 rounded-full bg-white border-4 border-wood-border flex items-center justify-center mb-3 animate-bounce">
+                    <span class="material-symbols-outlined text-wood-dark text-4xl">pending</span>
                  </div>
-                 <p class="text-xl font-black text-wood-dark">퀴즈 생성중...</p>
-                 <p class="text-xs text-wood-dark/60 font-bold mt-1 px-4 leading-tight">{{ processingText }}</p>
+                 <p class="text-2xl font-black text-wood-dark">퀴즈 생성중...</p>
+                 <p class="text-sm text-wood-dark/60 font-bold mt-1 px-4 leading-tight">{{ processingText }}</p>
               </div>
             </div>
           </div>
 
-          <div class="flex flex-col gap-4 mt-auto">
+          <div class="flex flex-col gap-4 mt-8 mb-16 transform -translate-y-5">
             <template v-if="isHost">
               <div v-if="!isAllReady" class="text-red-500 text-sm font-black text-center py-3 px-4 bg-red-50 border-4 border-red-200 rounded-2xl animate-pulse">
                 플레이어가 더 필요하거나 모두 준비 완료여야 합니다!
               </div>
-              <button @click="handleStartGame" :disabled="isStartDisabled" class="cartoon-btn primary h-20 text-3xl font-black" :class="{ 'opacity-50 grayscale cursor-not-allowed': isStartDisabled }">
+              <button @click="handleStartGame" :disabled="isStartDisabled" class="cartoon-btn primary h-10 text-3xl font-black" :class="{ 'opacity-50 grayscale cursor-not-allowed': isStartDisabled }">
                 GAME START
               </button>
             </template>
@@ -423,12 +435,8 @@ onMounted(async () => {
           <h2 class="text-wood-text text-2xl font-black opacity-90 tracking-tighter">DOCQ</h2>
           <p class="text-wood-dark font-bold text-xs opacity-60 uppercase tracking-widest">Interactive PDF Quiz Game</p>
         </div>
-        <div class="flex gap-4">
-          <button @click="copyRoomCode" class="cartoon-btn secondary w-auto px-8 h-12 text-xl font-black">
-            <span class="material-symbols-outlined text-2xl">share</span>
-            INVITE CODE
-          </button>
-          <button @click="leaveRoom" class="cartoon-btn secondary w-auto px-8 h-12 text-xl font-black bg-orange-500 box-shadow-orange">
+        <div class="flex gap-4 relative -left-10 -top-3">
+          <button @click="leaveRoom" class="cartoon-btn secondary !w-[120px] flex-shrink-0 px-8 h-8 text-xl font-black bg-orange-500 box-shadow-orange">
             <span class="material-symbols-outlined text-2xl">logout</span>
             LEAVE
           </button>
