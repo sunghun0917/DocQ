@@ -128,10 +128,17 @@ export const useGameStore = defineStore('game', () => {
                 currentQuiz.value = null
                 currentRoundResult.value = null
             }
+            // 이동/룰렛 중에는 퀴즈 오버레이 데이터 비우기 → 이동 중 퀴즈 노출 방지
+            if (newState.state === 'MOVE' || newState.state === 'ROULETTE') {
+                currentQuiz.value = null
+                currentRoundResult.value = null
+            }
         }
     }
 
     const handleMove = (moveInfo: MoveInfo) => {
+        currentQuiz.value = null
+        currentRoundResult.value = null
         currentMove.value = moveInfo
         setMovementInProgress(true)
     }
@@ -236,6 +243,8 @@ export const useGameStore = defineStore('game', () => {
     }
 
     const handleRouletteComplete = () => {
+        currentQuiz.value = null
+        currentRoundResult.value = null
         rouletteTargetId.value = null
         rouletteResult.value = null
         roulettePending.value = false
