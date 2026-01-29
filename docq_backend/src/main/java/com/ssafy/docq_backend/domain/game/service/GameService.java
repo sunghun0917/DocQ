@@ -918,7 +918,8 @@ public class GameService {
                         GameDto.AnswerFeedbackMessage feedback = GameDto.AnswerFeedbackMessage.builder()
                                 .correct(false)
                                 .build();
-                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getUserId(), feedback);
+                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getUserId(),
+                                feedback);
                         room.setGhostOptionsRevealed(true);
                         long ghostEndAt = System.currentTimeMillis() + QUIZ_TIME_LIMIT_MS;
                         room.setGhostPhaseEndTimeMs(ghostEndAt);
@@ -1035,7 +1036,8 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                // int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                int[] turnPlayerRange = { 31, 32, 33, 34, 35, 36, 37, 38, 39, 40 };
                 moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()

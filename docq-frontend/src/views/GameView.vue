@@ -10,6 +10,7 @@ import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import CloudBackground from '@/components/ui/CloudBackground.vue';
 import CloudOverlay from '@/components/ui/CloudOverlay.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
+import AvatarViewer from '@/components/common/AvatarViewer.vue'; // Import AvatarViewer
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
@@ -62,6 +63,89 @@ const buffRouletteCode = computed(() => {
     if (!showBuffRoulette.value) return null
     return miniGame.value.result?.rewardBuff ?? null
 })
+
+const AVATAR_REVERSE_MAP: Record<string, string> = {
+    '🐔': '0',
+    '🐶': '1',
+    '🐷': '2',
+    '🐑': '3'
+}
+
+const rankingResults = computed(() => {
+    const gamePlayers = gameStore.gameState.players || []
+    // score 내림차순 정렬
+    const sorted = [...gamePlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    
+    return sorted.map((p, index) => {
+        const user = roomStore.users.find(u => u.id === p.userId)
+        let avatarVal = user?.avatar || '0'
+        const mapped = AVATAR_REVERSE_MAP[avatarVal]
+        if (mapped) {
+            avatarVal = mapped
+        }
+        return {
+            rank: index + 1,
+            nickname: user?.nickname || p.nickname || (gamePhase.value === 'FINISHED' ? p.nickname : 'Unknown'),
+            score: p.score ?? 0,
+            isMe: p.userId === myUserId.value,
+            avatar: avatarVal,
+            userId: p.userId
+        }
+    })
+})
+
+// Avatar Animation State
+const playerAnimations = ref<Record<string, 'idle' | 'win'>>({})
+
+watch(
+    () => cornerPlayers.value,
+    (newPlayers) => {
+        newPlayers.forEach(p => {
+            if (p?.userId && !playerAnimations.value[p.userId]) {
+                // Randomly assign 'idle' or 'win'
+                playerAnimations.value[p.userId] = Math.random() > 0.5 ? 'idle' : 'win'
+            }
+        })
+    },
+    { deep: true, immediate: true }
+)
+
+// Snapshot logic for results
+const finalRankingResults = ref<any[] | null>(null)
+
+watch(
+    () => isResultVisible.value,
+    (visible) => {
+        if (visible && !finalRankingResults.value) {
+            // Snapshot the results at the moment game ends
+            // Forcefully map current players to ensure we capture nicknames even if roomStore is updating
+            const currentPlayers = gameStore.gameState.players || []
+            const sorted = [...currentPlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            
+            finalRankingResults.value = sorted.map((p, index) => {
+                const user = roomStore.users.find(u => u.id === p.userId)
+                let avatarVal = user?.avatar || '0'
+                const mapped = AVATAR_REVERSE_MAP[avatarVal]
+                if (mapped) {
+                    avatarVal = mapped
+                }
+                return {
+                    rank: index + 1,
+                    // Prioritize gameStore nickname if roomStore user is missing (e.g. they left)
+                    nickname: user?.nickname || p.nickname || 'Unknown Player', 
+                    score: p.score ?? 0,
+                    isMe: p.userId === myUserId.value,
+                    avatar: avatarVal,
+                    userId: p.userId
+                }
+            })
+        } else if (!visible) {
+            // Reset if game restarts or we leave result screen
+            finalRankingResults.value = null
+        }
+    },
+    { immediate: true }
+)
 
 const isBoardMoving = ref(false)
 const showMiniGameStartNotice = ref(false)
@@ -513,26 +597,45 @@ onUnmounted(() => {
         <div
           v-for="(p, idx) in cornerPlayers"
           :key="p?.userId ?? `corner-empty-${idx}`"
-          class="corner-card"
+          class="corner-card flex flex-row items-center overflow-visible"
           :class="[
             `corner-${idx + 1}`,
             { 'corner-card-active': p?.userId === currentTurnPlayer?.userId }
           ]"
         >
           <template v-if="p">
-            <div class="corner-card-name">
-              {{ p.nickname }}
-              <span v-if="p.userId === myUserId" class="corner-card-me">MY</span>
-              <span v-if="p.userId === currentTurnPlayer?.userId" class="corner-card-turn">TURN</span>
+            <!-- Left: Avatar (3D) -->
+            <div class="relative w-[120px] h-[140px] -ml-4 pointer-events-none z-10">
+                <AvatarViewer
+                    v-if="AVATAR_REVERSE_MAP[roomStore.users.find(u => u.id === p.userId)?.avatar || '0']"
+                    :avatarIndex="Number(AVATAR_REVERSE_MAP[roomStore.users.find(u => u.id === p.userId)?.avatar || '0'])"
+                    :scale="2.2"
+                    :autoRotate="false"
+                    :cameraY="0.6"
+                    :cameraZ="3.5"
+                    :action="playerAnimations[p.userId] || 'idle'"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center text-4xl">
+                    {{ roomStore.users.find(u => u.id === p.userId)?.avatar || '👤' }}
+                </div>
             </div>
-            <div class="corner-card-meta">
-              <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
-              <span>맞춘 문제: {{ p.score ?? 0 }}</span>
-              <span>POS {{ p.position ?? 0 }}</span>
+
+            <!-- Right: Info -->
+            <div class="flex flex-col flex-1 pl-2 z-0">
+                <div class="corner-card-name text-lg">
+                {{ p.nickname }}
+                <span v-if="p.userId === myUserId" class="corner-card-me">MY</span>
+                <span v-if="p.userId === currentTurnPlayer?.userId" class="corner-card-turn">TURN</span>
+                </div>
+                <div class="corner-card-meta">
+                <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
+                <span class="text-sm">맞춘 문제: {{ p.score ?? 0 }}</span>
+                <span class="text-xs text-slate-500">POS {{ p.position ?? 0 }}</span>
+                </div>
             </div>
           </template>
           <template v-else>
-            <div class="corner-card-empty">Empty Slot</div>
+            <div class="corner-card-empty w-full text-center">Empty Slot</div>
           </template>
         </div>
       </div>
@@ -563,8 +666,7 @@ onUnmounted(() => {
          </div>
       </header>
 
-      <!-- 결과 모달 -->
-      <ResultModal v-if="canShowResultModal && !isGameEndNoticeActive" class="pointer-events-auto" />
+      <!-- ResultModal was moved to bottom -->
     </div>
 
     <div class="global-controls pointer-events-auto">
@@ -598,6 +700,17 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+    
+    <!-- 결과 모달 (Global Scope) -->
+    <ResultModal 
+      v-if="canShowResultModal && !isGameEndNoticeActive" 
+      :is-open="true"
+      :ranking-results="finalRankingResults ?? rankingResults"
+      :is-host="isHost"
+      @close="openConfirm('leave')"
+      @restart="openConfirm('restart')"
+    />
+
     <ConfirmModal
       :isOpen="!!confirmAction"
       :title="confirmConfig.title"
@@ -683,14 +796,15 @@ onUnmounted(() => {
 
 .corner-card {
   position: absolute;
-  width: 220px;
-  min-height: 90px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  width: 280px;
+  height: 110px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 3px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 12px 16px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
   pointer-events: auto;
+  transition: all 0.3s ease;
 }
 
 .corner-card-active {
