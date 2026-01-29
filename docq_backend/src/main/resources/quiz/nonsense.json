@@ -22,15 +22,15 @@
         "answerText": "우하하"
     },
     {
-        "question": "왕이 넘어지면?",
+        "question": "세상에서 가장 먼저 자는 가수는?",
         "options": [
-            "왕 넘어짐",
-            "킹콩",
-            "다이",
-            "전하"
+            "심수봉",
+            "토끼소녀",
+            "조용필",
+            "이미자"
         ],
-        "answerIndex": 1,
-        "answerText": "킹콩"
+        "answerIndex": 3,
+        "answerText": "이미자"
     },
     {
         "question": "도둑이 가장 싫어하는 아이스크림은?",
@@ -132,15 +132,15 @@
         "answerText": "콩비지"
     },
     {
-        "question": "바람이 귀엽게 불면?",
+        "question": "옷에 걸고 다니는 빵은?",
         "options": [
-            "산들",
-            "휙",
-            "쌩",
-            "폭풍"
+            "생일빵",
+            "도너츠",
+            "식빵",
+            "멜빵"
         ],
-        "answerIndex": 0,
-        "answerText": "산들"
+        "answerIndex": 3,
+        "answerText": "멜빵"
     },
     {
         "question": "고기 먹고 남은 것은?",

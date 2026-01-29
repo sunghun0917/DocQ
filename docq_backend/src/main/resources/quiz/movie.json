@@ -69,13 +69,13 @@
     "question": "내가 너 좋아할 수도 있잔아?! 이런 x발 세상 x같은 것들이 왜 나한테 x랄들이야. 이 개.. 그래 안그래!!?!?!??!!!!!!",
     "options": ["복수는 나의 것", "올드보이", "친절한 금자씨", "악마를 보았다"],
     "answerIndex": 3,
-    "answerText": "악마를 보았다."
+    "answerText": "악마를 보았다"
   },
   {
     "question": "우리가 돈이 없지 가오가 없냐",
     "options": ["타짜", "범죄와의 전쟁", "베테랑", "신세계"],
-    "answerIndex": 0,
-    "answerText": "타짜"
+    "answerIndex": 2,
+    "answerText": "베테랑"
   },
   {
     "question": "아직 한 발 남았다",

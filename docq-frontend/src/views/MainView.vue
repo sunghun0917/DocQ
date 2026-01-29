@@ -9,6 +9,7 @@ import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
 import AlertModal from '@/components/common/AlertModal.vue';
 import CreateRoomModal from '@/components/lobby/CreateRoomModal.vue';
 import JoinRoomModal from '@/components/lobby/JoinRoomModal.vue';
+import GameGuideModal from '@/components/common/GameGuideModal.vue';
 
 gsap.registerPlugin(Observer);
 
@@ -31,6 +32,7 @@ const isNicknameSet = ref(false);
 const showCreateModal = ref(false);
 const showJoinModal = ref(false);
 const showEditNicknameModal = ref(false);
+const showGuideModal = ref(false); // [ADD]
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
@@ -231,6 +233,7 @@ const confirmNickname = async () => {
     return;
   }
   isNicknameSet.value = true;
+  showGuideModal.value = true; // [ADD] 닉네임 설정 후 가이드 모달 자동 오픈
 };
 
 const triggerShake = () => {
@@ -252,6 +255,7 @@ const handleAction = (action: string) => {
       editNickname.value = nickname.value;
       showEditNicknameModal.value = true;
   }
+  if (action === 'guide') showGuideModal.value = true; // [ADD]
 };
 
 const closeEditNickname = () => {
@@ -411,6 +415,11 @@ onUnmounted(() => { stopRoulette(); });
                                             <span class="material-symbols-outlined text-3xl">login</span>참여하기
                                         </button>
                                     </div>
+                                    <div v-else-if="item.id === 'guide'">
+                                        <button @click.stop="handleAction('guide')" class="cartoon-btn primary large-btn">
+                                            <span class="material-symbols-outlined text-3xl">menu_book</span>가이드 보기
+                                        </button>
+                                    </div>
                                     <div v-else class="info-msg"><span class="material-symbols-outlined text-4xl text-leaf-green mb-2">touch_app</span><p>Comming Soon !</p></div>
                                 </div>
                             </div>
@@ -451,6 +460,7 @@ onUnmounted(() => { stopRoulette(); });
     <AlertModal :isOpen="isErrorModalOpen" type="error" :message="errorMessage" @close="isErrorModalOpen = false" />
     <CreateRoomModal v-if="showCreateModal" @close="showCreateModal = false" />
     <JoinRoomModal v-if="showJoinModal" @close="showJoinModal = false" />
+    <GameGuideModal v-if="showGuideModal" @close="showGuideModal = false" />
     <transition name="intro-fade">
       <div v-if="showEditNicknameModal" class="edit-nickname-backdrop" @click.self="closeEditNickname">
         <div class="edit-nickname-modal">
