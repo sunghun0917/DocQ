@@ -152,17 +152,21 @@ watch(
         const winnerId = result.winnerUserId ?? null
         const currentTurnId = gameStore.gameState.currentTurnUserId ?? null
         let noticeText = '맞춘 사람이 없습니다.'
-
         if (winnerId) {
             const winnerName = roomStore.users.find(u => u.id === winnerId)?.nickname || '알 수 없음'
-            const roleLabel = winnerId === currentTurnId ? '플레이어' : '고스트'
-            noticeText = `${roleLabel} ${winnerName}가 문제를 맞추었습니다.`
+            if (winnerId === currentTurnId) {
+                noticeText = `플레이어 ${winnerName}가 정답을 맞추었습니다.`
+            } else {
+                noticeText = `승자는 고스트 ${winnerName}입니다.`
+            }
         }
-
         await showSystemNotice(noticeText, 2000)
         if (token !== resultNoticeToken) return
         gameStore.unlockMove()
         wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
+        if (winnerId && result.rouletteValue != null) {
+            gameStore.rouletteTargetId = winnerId
+        }
     }
 )
 
@@ -457,7 +461,7 @@ onUnmounted(() => {
     />
 
     <QuizOverlay
-      v-if="currentQuiz && gamePhase === 'QUIZ_TIME' && !isBoardMoving && !isMiniGameActive && !showMiniGameStartNotice && !systemNotice"
+      v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isMiniGameActive && !showMiniGameStartNotice"
       @submit="submitAnswer"
     />
 
@@ -891,8 +895,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: 2300;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 .system-notice-card {
