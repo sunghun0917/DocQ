@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi import UploadFile, File
 import tempfile
 from app.pdf_pipeline import extract_text_with_fallback
-from app.fast_quiz_generator import generate_20_quizzes_fast
+from app.fast_quiz_generator import generate_dynamic_quizzes
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 import logging
@@ -52,18 +52,26 @@ async def upload_pdf(
         logger.info("Final Text preview (first 500 chars): %s", text[:500])
 
         text_len = len(text.strip())
-        if text_len < 3000:
+        if text_len < 2000:
             return JSONResponse(
                 status_code=400,
                 content={
                     "detail": "PDF내용이 너무 짧습니다. 더 많은 내용을 포함한 PDF를 업로드해주세요.",
                     "text_preview": text[:2000],
                     "text_length": text_len,
-                    "min_length": 3000,
+                    "min_length": 2000,
                 }
             )
 
-        quiz_pool = await generate_20_quizzes_fast(text)
+        # Determine target quiz count based on text length
+        if text_len <= 5000:
+            target_count = 20
+        elif text_len <= 10000:
+            target_count = 25
+        else:
+            target_count = 30
+
+        quiz_pool = await generate_dynamic_quizzes(text, target=target_count)
 
         return {
             "text_preview": text[:2000], 
