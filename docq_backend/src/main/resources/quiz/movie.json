@@ -74,8 +74,8 @@
   {
     "question": "우리가 돈이 없지 가오가 없냐",
     "options": ["타짜", "범죄와의 전쟁", "베테랑", "신세계"],
-    "answerIndex": 0,
-    "answerText": "타짜"
+    "answerIndex": 2,
+    "answerText": "베테랑"
   },
   {
     "question": "아직 한 발 남았다",
