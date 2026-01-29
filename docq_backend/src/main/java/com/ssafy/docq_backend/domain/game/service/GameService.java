@@ -61,6 +61,7 @@ public class GameService {
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
     private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
+    private static final long ROULETTE_FALLBACK_MS = 7000;
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
@@ -295,6 +296,7 @@ public class GameService {
 
             if (removed) {
                 handlePlayerExitAcks(room, userId);
+                scheduleRouletteFallbackIfNeeded(room);
             }
 
             roomRepository.save(room);
@@ -659,6 +661,22 @@ public class GameService {
             return connected;
         }
         return room.getPlayers().size();
+    }
+
+    private void scheduleRouletteFallbackIfNeeded(Room room) {
+        if (room == null || room.getCurrentQuizId() == null) {
+            return;
+        }
+        if (room.getStatus() != RoomStatus.JUDGMENT) {
+            return;
+        }
+        String keyId = String.valueOf(room.getCurrentQuizId());
+        ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE, keyId,
+                ApplyMovePayload.class);
+        if (payload == null) {
+            return;
+        }
+        gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, ROULETTE_FALLBACK_MS);
     }
 
     private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
