@@ -1,6 +1,6 @@
 from app.chunking import chunk_text_by_count
 from app.upstage_client import acall_llm as call_llm
-from app.prompt import FAST_MULTI_QUIZ_PROMPT, QUIZ_REFINE_PROMPT
+from app.prompt import FAST_MULTI_QUIZ_PROMPT
 from app.utils import extract_json
 
 import asyncio
@@ -8,10 +8,8 @@ import json
 import re
 import random
 
-TARGET = 22
+
 MAX_SINGLE_CALL_CHARS = 15000  # 약 5k 토큰 (Ensure stability)
-REFINE_MIN_COUNT = 20
-MAX_FINAL_ATTEMPTS = 2
 MIN_RETURN = 20
 _QUESTION_NORMALIZE_RE = re.compile(r"\s+")
 _ANSWER_NORMALIZE_RE = re.compile(r"\s+")
@@ -123,10 +121,7 @@ def _dedupe_quizzes(quizzes: list) -> list:
     return unique
 
 
-def _limit_text(text: str, max_chars: int = 8000) -> str:
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars]
+
 
 
 async def generate_chunk_quiz(chunk: str, per_chunk: int) -> list:
@@ -172,53 +167,13 @@ async def generate_chunk_quiz(chunk: str, per_chunk: int) -> list:
     return cleaned
 
 
-async def _refine_quizzes(text: str, quizzes: list, target: int) -> list:
-    if not quizzes:
-        return quizzes
-
-    draft_json = json.dumps(quizzes, ensure_ascii=False)
-    prompt = QUIZ_REFINE_PROMPT.format(
-        count=target,
-        study_text=_limit_text(text),
-        draft_json=draft_json,
-    )
-    raw = await call_llm(prompt)
-
-    try:
-        parsed = extract_json(raw)
-    except Exception:
-        return quizzes
-
-    cleaned = []
-    for q in parsed:
-        if not isinstance(q, dict):
-            continue
-        if "options" in q and isinstance(q["options"], list):
-            q["options"] = [_sanitize_text(str(opt)) for opt in q["options"]]
-        if "question" in q:
-            q["question"] = _sanitize_text(str(q["question"]))
-        if "explanation" in q:
-            q["explanation"] = _sanitize_text(str(q["explanation"]))
-        if "answerText" in q:
-            q["answerText"] = _sanitize_text(str(q["answerText"]))
-        if not _is_valid_quiz(q):
-            continue
-        answer_index = _resolve_answer_index(q["options"], str(q["answerText"]))
-        if answer_index is None:
-            continue
-        q["answerIndex"] = answer_index
-        cleaned.append(q)
-
-    cleaned = _dedupe_quizzes(cleaned)
-    if len(cleaned) >= target:
-        return cleaned[:target]
-    return quizzes
 
 
-async def generate_20_quizzes_fast(text: str) -> list:
+
+async def generate_dynamic_quizzes(text: str, target: int = 20) -> list:
     max_chunks = min(6, max(3, len(text) // 6000 + 1))
     chunks = chunk_text_by_count(text, max_chunks=max_chunks)
-    per_chunk = max(1, (TARGET + len(chunks) - 1) // len(chunks)) + 1
+    per_chunk = max(1, (target + len(chunks) - 1) // len(chunks)) + 1
 
     tasks = [generate_chunk_quiz(chunk, per_chunk) for chunk in chunks]
     results = await asyncio.gather(*tasks)
@@ -228,4 +183,4 @@ async def generate_20_quizzes_fast(text: str) -> list:
         quizzes.extend(res)
 
     quizzes = _dedupe_quizzes(quizzes)
-    return quizzes[:TARGET]
+    return quizzes
