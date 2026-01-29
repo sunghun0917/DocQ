@@ -99,6 +99,62 @@ public class AckStore {
         }
     }
 
+    public Set<AckKeyInfo> removeUserFromRoomAcks(String roomId, String userId) {
+        Set<AckKeyInfo> results = new HashSet<>();
+        try {
+            Set<String> keys = scanKeys("ack:" + roomId + ":*");
+            for (String key : keys) {
+                redisTemplate.opsForSet().remove(key, userId);
+                Long count = redisTemplate.opsForSet().size(key);
+                AckKeyInfo info = parseAckKey(key, count == null ? 0L : count);
+                if (info != null) {
+                    results.add(info);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to remove user {} from acks in room {}", userId, roomId, e);
+        }
+        return results;
+    }
+
+    private AckKeyInfo parseAckKey(String key, long count) {
+        String[] parts = key.split(":", 4);
+        if (parts.length < 4) {
+            return null;
+        }
+        try {
+            GameDto.AckType ackType = GameDto.AckType.valueOf(parts[2]);
+            String keyId = parts[3];
+            return new AckKeyInfo(ackType, keyId, count);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static class AckKeyInfo {
+        private final GameDto.AckType ackType;
+        private final String keyId;
+        private final long count;
+
+        public AckKeyInfo(GameDto.AckType ackType, String keyId, long count) {
+            this.ackType = ackType;
+            this.keyId = keyId;
+            this.count = count;
+        }
+
+        public GameDto.AckType getAckType() {
+            return ackType;
+        }
+
+        public String getKeyId() {
+            return keyId;
+        }
+
+        public long getCount() {
+            return count;
+        }
+    }
+
     private Set<String> scanKeys(String pattern) {
         Set<String> keys = new HashSet<>();
         try (Cursor<byte[]> cursor = redisTemplate.executeWithStickyConnection(

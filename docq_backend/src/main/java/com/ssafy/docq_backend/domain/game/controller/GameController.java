@@ -3,9 +3,11 @@ package com.ssafy.docq_backend.domain.game.controller;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.game.dto.QuizDto;
 import com.ssafy.docq_backend.domain.game.service.GameService;
+import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
 import org.springframework.http.ResponseEntity;
 
@@ -20,15 +22,20 @@ import java.util.Map;
 public class GameController {
 
     private final GameService gameService;
+    private final SessionRegistry sessionRegistry;
 
     @MessageMapping("/game/join")
-    public void joinGame(GameDto.JoinRequest request) {
+    public void joinGame(GameDto.JoinRequest request, SimpMessageHeaderAccessor headerAccessor) {
         gameService.joinGame(request);
+        if (headerAccessor != null) {
+            sessionRegistry.register(headerAccessor.getSessionId(), request.getRoomId(), request.getUserId());
+        }
     }
 
     @MessageMapping("/game/leave")
     public void leaveGame(GameDto.LeaveRequest request) {
         gameService.leaveGame(request);
+        sessionRegistry.removeByUserId(request.getUserId());
     }
 
     @MessageMapping("/game/ready")

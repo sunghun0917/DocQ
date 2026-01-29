@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, watchEffect } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, watchEffect } from 'vue';
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/game/ResultModal.vue';
 import GameBoard from '@/components/game/board3D/GameBoard.vue';
@@ -13,12 +13,14 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { useUserStore } from '@/stores/userStore'
+import { useUiStore } from '@/stores/uiStore'
 
 const router = useRouter()
 const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const wsStore = useWebSocketStore()
 const userStore = useUserStore()
+const uiStore = useUiStore()
 
 const myUserId = computed(() => userStore.userId)
 const currentQuiz = computed(() => gameStore.currentQuiz)
@@ -72,6 +74,14 @@ const hasShownGameStartNotice = ref(false)
 const hasShownGameEndNotice = ref(false)
 let systemNoticeTimer: number | null = null
 let systemNoticeResolver: (() => void) | null = null
+
+const handleBeforeUnload = () => {
+    if (!userStore.userId || !roomId.value) return
+    wsStore.leaveGame(roomId.value, userStore.userId)
+    wsStore.cleanup()
+    roomStore.leaveRoom()
+    gameStore.reset()
+}
 
 const showSystemNotice = (text: string, duration = 2000) => {
     if (systemNoticeTimer !== null) {
@@ -394,9 +404,27 @@ watch(
 )
 
 onMounted(() => {
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    if (nav?.type === 'reload') {
+        uiStore.openConfirm({
+            title: '연결 끊김',
+            message: '연결이 끊겼습니다. 메인으로 이동합니다.',
+            confirmLabel: '확인',
+            icon: 'warning',
+            variant: 'danger',
+            showCancel: false,
+            onConfirm: () => router.replace('/')
+        })
+        return
+    }
     if (roomId.value) {
         wsStore.subscribeMiniGame(roomId.value)
     }
+})
+
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
