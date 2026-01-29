@@ -244,10 +244,12 @@ public class GameService {
 
             String userId = request.getUserId();
             boolean wasHost = userId.equals(room.getHostId());
+            boolean removed = false;
 
             if (room.getPlayers().contains(userId)) {
                 int removedIndex = room.getTurnOrder().indexOf(userId);
                 room.removePlayer(userId);
+                removed = true;
                 room.getPlayerAvatars().remove(userId);
                 room.getPlayerStates().remove(userId);
                 room.getCardDrawResult().remove(userId);
@@ -264,9 +266,27 @@ public class GameService {
                 }
             }
 
+            if (room.getPlayers().size() == 1
+                    && room.getStatus() != RoomStatus.WAITING
+                    && room.getStatus() != RoomStatus.FINISHED) {
+                gameEventStore.clearRoomEvents(room.getId());
+                ackStore.clearRoomData(room.getId());
+                room.setStatus(RoomStatus.FINISHED);
+                roomRepository.save(room);
+                broadcastGameState(room);
+                messagingTemplate.convertAndSend(
+                        "/topic/game/" + room.getId() + "/finish",
+                        buildFinishResponse(room));
+                return;
+            }
+
             if (wasHost || room.getPlayers().isEmpty()) {
                 closeRoom(room.getId(), wasHost ? "HOST_LEFT" : "EMPTY");
                 return;
+            }
+
+            if (removed) {
+                handlePlayerExitAcks(room, userId);
             }
 
             roomRepository.save(room);
@@ -580,77 +600,108 @@ public class GameService {
                 return;
             }
 
-            GameDto.AckType effectiveAckType = request.getAckType();
-            String keyId;
-
-            if (request.getAckType() == GameDto.AckType.MINIGAME_COMPLETE
-                    || request.getAckType() == GameDto.AckType.BUFF_ROULETTE_COMPLETE) {
-                if (room.getStatus() != RoomStatus.MINIGAME) {
-                    return;
-                }
-                effectiveAckType = GameDto.AckType.MINIGAME_COMPLETE;
-                keyId = String.valueOf(request.getRound() != null ? request.getRound() : room.getRound());
-            } else {
-                keyId = resolveAckKeyId(room, request);
-            }
-            if (keyId == null) {
+            AckResolution resolution = resolveAck(room, request.getAckType(), resolveAckKeyId(room, request),
+                    request.getRound());
+            if (resolution == null || resolution.keyId == null) {
                 return;
             }
 
-            long count = ackStore.addAckAndCount(room.getId(), effectiveAckType, keyId, request.getUserId());
+            long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId, request.getUserId());
             if (count < room.getPlayers().size()) {
                 return;
             }
-
-            if (!ackStore.tryMarkAckComplete(room.getId(), effectiveAckType, keyId)) {
-                return;
-            }
-
-            switch (effectiveAckType) {
-                // 카메라 end case 추가
-                case CAMERA_END -> {
-                    gameEventStore.schedule(room.getId(), GameEventType.START_QUIZ, null, 0);
-                }
-                case RESULT_DISPLAYED -> {
-                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED,
-                            keyId,
-                            ApplyMovePayload.class);
-                    if (payload != null) {
-                        gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
-                    }
-                }
-                case MOVE_COMPLETE -> {
-                    NextTurnPayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.MOVE_COMPLETE, keyId,
-                            NextTurnPayload.class);
-                    if (payload != null) {
-                        gameEventStore.schedule(room.getId(), GameEventType.NEXT_TURN, payload, 0);
-                    }
-                }
-                case MINIGAME_COMPLETE -> {
-                    ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
-                            .round(request.getRound() != null ? request.getRound() : room.getRound())
-                            .build();
-                    gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, 0);
-                }
-                case BUFF_ROULETTE_COMPLETE -> {
-                    // handled via MINIGAME_COMPLETE normalization
-                }
-                case ROULETTE_COMPLETE -> {
-                    ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE,
-                            keyId,
-                            ApplyMovePayload.class);
-                    if (payload != null) {
-                        gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
-                    }
-                }
-            }
-
-            ackStore.clearAck(room.getId(), effectiveAckType, keyId);
-            if (request.getAckType() == GameDto.AckType.BUFF_ROULETTE_COMPLETE) {
-                ackStore.clearAck(room.getId(), GameDto.AckType.BUFF_ROULETTE_COMPLETE, keyId);
-            }
+            advanceAfterAck(room, resolution, request.getRound());
         } catch (Exception e) {
             log.error("Error handling ack", e);
+        }
+    }
+
+    private void handlePlayerExitAcks(Room room, String userId) {
+        int expected = room.getPlayers().size();
+        for (AckStore.AckKeyInfo info : ackStore.removeUserFromRoomAcks(room.getId(), userId)) {
+            if (info.getCount() < expected) {
+                continue;
+            }
+            AckResolution resolution = resolveAck(room, info.getAckType(), info.getKeyId(), room.getRound());
+            if (resolution == null || resolution.keyId == null) {
+                continue;
+            }
+            advanceAfterAck(room, resolution, room.getRound());
+        }
+    }
+
+    private AckResolution resolveAck(Room room, GameDto.AckType ackType, String keyId, Integer roundOverride) {
+        if (ackType == GameDto.AckType.MINIGAME_COMPLETE || ackType == GameDto.AckType.BUFF_ROULETTE_COMPLETE) {
+            if (room.getStatus() != RoomStatus.MINIGAME) {
+                return null;
+            }
+            String resolvedKey = keyId != null
+                    ? keyId
+                    : String.valueOf(roundOverride != null ? roundOverride : room.getRound());
+            return new AckResolution(GameDto.AckType.MINIGAME_COMPLETE, ackType, resolvedKey);
+        }
+        String resolvedKey = keyId != null ? keyId : String.valueOf(room.getRound());
+        return new AckResolution(ackType, ackType, resolvedKey);
+    }
+
+    private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
+        if (!ackStore.tryMarkAckComplete(room.getId(), resolution.ackType, resolution.keyId)) {
+            return;
+        }
+
+        switch (resolution.ackType) {
+            case CAMERA_END -> {
+                gameEventStore.schedule(room.getId(), GameEventType.START_QUIZ, null, 0);
+            }
+            case RESULT_DISPLAYED -> {
+                ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.RESULT_DISPLAYED,
+                        resolution.keyId,
+                        ApplyMovePayload.class);
+                if (payload != null) {
+                    gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
+                }
+            }
+            case MOVE_COMPLETE -> {
+                NextTurnPayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.MOVE_COMPLETE, resolution.keyId,
+                        NextTurnPayload.class);
+                if (payload != null) {
+                    gameEventStore.schedule(room.getId(), GameEventType.NEXT_TURN, payload, 0);
+                }
+            }
+            case MINIGAME_COMPLETE -> {
+                ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
+                        .round(roundOverride != null ? roundOverride : room.getRound())
+                        .build();
+                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, 0);
+            }
+            case BUFF_ROULETTE_COMPLETE -> {
+                // handled via MINIGAME_COMPLETE normalization
+            }
+            case ROULETTE_COMPLETE -> {
+                ApplyMovePayload payload = ackStore.loadPayload(room.getId(), GameDto.AckType.ROULETTE_COMPLETE,
+                        resolution.keyId,
+                        ApplyMovePayload.class);
+                if (payload != null) {
+                    gameEventStore.schedule(room.getId(), GameEventType.APPLY_MOVE, payload, 0);
+                }
+            }
+        }
+
+        ackStore.clearAck(room.getId(), resolution.ackType, resolution.keyId);
+        if (resolution.originalAckType == GameDto.AckType.BUFF_ROULETTE_COMPLETE) {
+            ackStore.clearAck(room.getId(), GameDto.AckType.BUFF_ROULETTE_COMPLETE, resolution.keyId);
+        }
+    }
+
+    private static class AckResolution {
+        private final GameDto.AckType ackType;
+        private final GameDto.AckType originalAckType;
+        private final String keyId;
+
+        private AckResolution(GameDto.AckType ackType, GameDto.AckType originalAckType, String keyId) {
+            this.ackType = ackType;
+            this.originalAckType = originalAckType;
+            this.keyId = keyId;
         }
     }
 
