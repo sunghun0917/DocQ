@@ -45,6 +45,8 @@ const processingText = ref('방장님이 문서를 고르고 있어요')
 const basicQuizTypes = [
   { type: 'nonsense', label: '넌센스 퀴즈', icon: 'sentiment_very_satisfied', color: 'bg-yellow-100 text-yellow-600 border-yellow-200' },
   { type: 'common', label: '상식 퀴즈', icon: 'school', color: 'bg-blue-100 text-blue-600 border-blue-200' },
+  { type: 'movie', label: '영화 명대사 퀴즈', icon: 'movie', color: 'bg-indigo-100 text-indigo-600 border-indigo-200' },
+  { type: 'sports', label: '스포츠 퀴즈', icon: 'sports_soccer', color: 'bg-green-100 text-green-600 border-green-200' },
   { type: 'mixed', label: '랜덤 퀴즈', icon: 'shuffle', color: 'bg-purple-100 text-purple-600 border-purple-200' },
 ]
 

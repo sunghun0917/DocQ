@@ -1,0 +1,182 @@
+[
+  {
+    "question": "묻고 더블로 가!",
+    "options": ["타짜", "신세계", "범죄와의 전쟁", "베테랑"],
+    "answerIndex": 0,
+    "answerText": "타짜"
+  },
+  {
+    "question": "니가 가라, 하와이",
+    "options": ["친구", "범죄와의 전쟁", "아저씨", "타짜"],
+    "answerIndex": 0,
+    "answerText": "친구"
+  },
+  {
+    "question": "느그 아부지 뭐하시노",
+    "options": ["신세계", "친구", "범죄도시", "타짜"],
+    "answerIndex": 1,
+    "answerText": "친구"
+  },
+  {
+    "question": "내가 왕이 될 상인가?",
+    "options": ["광해", "관상", "명량", "왕의 남자"],
+    "answerIndex": 1,
+    "answerText": "관상"
+  },
+  {
+    "question": "어이가 없네",
+    "options": ["베테랑", "내부자들", "신세계", "아수라"],
+    "answerIndex": 0,
+    "answerText": "베테랑"
+  },
+  {
+    "question": "누구냐 너?",
+    "options": ["추격자", "올드보이", "악마를 보았다", "아저씨"],
+    "answerIndex": 1,
+    "answerText": "올드보이"
+  },
+  {
+    "question": "거, 죽기 딱 좋은 날씨네",
+    "options": ["신세계", "범죄도시", "베테랑", "내부자들"],
+    "answerIndex": 0,
+    "answerText": "신세계"
+  },
+  {
+    "question": "너 납치된 거야",
+    "options": ["범죄도시", "아저씨", "베테랑", "악인전"],
+    "answerIndex": 0,
+    "answerText": "범죄도시"
+  },
+  {
+    "question": "너나 잘하세요",
+    "options": ["친절한 금자씨", "올드보이", "괴물", "마더"],
+    "answerIndex": 0,
+    "answerText": "친절한 금자씨"
+  },
+  {
+    "question": "너는 계획이 다 있구나",
+    "options": ["암살", "기생충", "내부자들", "설국열차"],
+    "answerIndex": 1,
+    "answerText": "기생충"
+  },
+  {
+    "question": "사람이 사람 죽이는데 이유가 있냐? 그냥 죽이는 거야",
+    "options": ["범죄도시", "베테랑", "아저씨", "공공의 적"],
+    "answerIndex": 3,
+    "answerText": "공공의 적"
+  },
+  {
+    "question": "내가 너 좋아할 수도 있잔아?! 이런 x발 세상 x같은 것들이 왜 나한테 x랄들이야. 이 개.. 그래 안그래!!?!?!??!!!!!!",
+    "options": ["복수는 나의 것", "올드보이", "친절한 금자씨", "악마를 보았다"],
+    "answerIndex": 3,
+    "answerText": "악마를 보았다."
+  },
+  {
+    "question": "우리가 돈이 없지 가오가 없냐",
+    "options": ["타짜", "범죄와의 전쟁", "베테랑", "신세계"],
+    "answerIndex": 0,
+    "answerText": "타짜"
+  },
+  {
+    "question": "아직 한 발 남았다",
+    "options": ["아저씨", "신세계", "추격자", "악마를 보았다"],
+    "answerIndex": 0,
+    "answerText": "아저씨"
+  },
+  {
+    "question": "5대 5로 나눌까, 누가 5야",
+    "options": ["범죄도시", "아수라", "베테랑", "내부자들"],
+    "answerIndex": 0,
+    "answerText": "범죄도시"
+  },
+  {
+    "question": "국가는 국민이다. 그런데 증인이야 말로 그 국가를 아무 법적 근거 없이 국가 보안법 문제라고 단정하고 있다",
+    "options": ["변호인", "광해", "내부자들", "1987"],
+    "answerIndex": 0,
+    "answerText": "변호인"
+  },
+  {
+    "question": "야 4885, 너지?",
+    "options": ["악마를 보았다", "추격자", "올드보이", "아저씨"],
+    "answerIndex": 1,
+    "answerText": "추격자"
+  },
+  {
+    "question": "광주로 가주쇼, 10만 원 드립니다",
+    "options": ["1987", "변호인", "택시운전사", "광해"],
+    "answerIndex": 2,
+    "answerText": "택시운전사"
+  },
+  {
+    "question": "왕이 되고 싶소이다",
+    "options": ["국제시장", "변호인", "택시운전사", "광해"],
+    "answerIndex": 3,
+    "answerText": "광해"
+  },
+  {
+    "question": "내일만 사는 놈은 오늘만 사는 놈한테 죽는다",
+    "options": ["아저씨", "신세계", "범죄도시", "악인전"],
+    "answerIndex": 0,
+    "answerText": "아저씨"
+  },
+  {
+    "question": "나쁜 놈은 끝까지 나쁜 놈이다",
+    "options": ["악인전", "범죄도시", "아수라", "신세계"],
+    "answerIndex": 0,
+    "answerText": "악인전"
+  },
+  {
+    "question": "너 옛날에 약속 했었잖아.. 나 집 지어준다고.. 기억 안 나?",
+    "options": ["건축학개론", "엽기적인 그녀", "늑대의 유혹", "클래식"],
+    "answerIndex": 0,
+    "answerText": "건축학개론"
+  },
+  {
+    "question": "우연이란 노력한 사람에게 운명이 놓아주는 다리랍니다",
+    "options": ["엽기적인 그녀", "클래식", "늑대의 유혹", "건축학개론"],
+    "answerIndex": 0,
+    "answerText": "엽기적인 그녀"
+  },
+  {
+    "question": "날 쏘고 가라",
+    "options": ["실미도", "태극기 휘날리며", "국제시장", "암살"],
+    "answerIndex": 0,
+    "answerText": "실미도"
+  },
+  {
+    "question": "드루와, 드루와!",
+    "options": ["신세계", "아수라", "베테랑", "범죄와의 전쟁"],
+    "answerIndex": 0,
+    "answerText": "신세계"
+  },
+  {
+    "question": "마포대교는 무너졌냐, 이 x끼야?",
+    "options": ["기생충", "타짜", "베테랑", "신세계"],
+    "answerIndex": 1,
+    "answerText": "타짜"
+  },
+  {
+    "question": "돌아와서 구두 완성한다고 했잖아요. 이러고 있으면 어떡해요? 내가 얼마나 기다렸는데... 돌아온다고 약속했잖아요",
+    "options": ["국제시장", "태극기 휘날리며", "클래식", "건축학개론"],
+    "answerIndex": 1,
+    "answerText": "태극기 휘날리며"
+  },
+  {
+    "question": "나라의 백성이 가장 소중하오",
+    "options": ["변호인", "1987", "광해", "내부자들"],
+    "answerIndex": 2,
+    "answerText": "광해"
+  },
+  {
+    "question": "내가 으이? 마! 느그 서장이랑! 다 했어 임마!",
+    "options": ["타짜", "신세계", "범죄와의 전쟁", "베테랑"],
+    "answerIndex": 2,
+    "answerText": "범죄와의 전쟁"
+  },
+  {
+    "question": "아버지, 내 약속 잘 지켰지예. 이만하면 나 잘 살았지예. 근데 내 진짜 힘들었거든예",
+    "options": ["국제시장", "타짜", "베테랑", "신세계"],
+    "answerIndex": 0,
+    "answerText": "국제시장"
+  }
+]

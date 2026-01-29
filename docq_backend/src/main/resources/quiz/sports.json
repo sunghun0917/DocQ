@@ -1,0 +1,332 @@
+[
+  {
+    "question": "축구 경기에서 한 팀의 선수는 몇 명일까요?",
+    "options": [
+      "9명",
+      "10명",
+      "11명",
+      "12명"
+    ],
+    "answerIndex": 2,
+    "answerText": "11명"
+  },
+  {
+    "question": "야구에서 투수가 한 타자를 아웃시키기 위해 필요한 스트라이크 개수는?",
+    "options": [
+      "2개",
+      "3개",
+      "4개",
+      "5개"
+    ],
+    "answerIndex": 1,
+    "answerText": "3개"
+  },
+  {
+    "question": "농구 경기에서 3점슛은 어느 위치에서 성공해야 인정될까요?",
+    "options": [
+      "골대 바로 밑",
+      "자유투 라인",
+      "3점 라인 밖",
+      "센터라인"
+    ],
+    "answerIndex": 2,
+    "answerText": "3점 라인 밖"
+  },
+  {
+    "question": "올림픽은 몇 년마다 열릴까요?",
+    "options": [
+      "2년",
+      "3년",
+      "4년",
+      "5년"
+    ],
+    "answerIndex": 2,
+    "answerText": "4년"
+  },
+  {
+    "question": "배구 경기에서 한 팀이 코트에 서는 선수 수는?",
+    "options": [
+      "5명",
+      "6명",
+      "7명",
+      "8명"
+    ],
+    "answerIndex": 1,
+    "answerText": "6명"
+  },
+  {
+    "question": "축구에서 페널티킥은 골문에서 약 몇 미터 지점에서 찰까요?",
+    "options": [
+      "9m",
+      "11m",
+      "13m",
+      "15m"
+    ],
+    "answerIndex": 1,
+    "answerText": "11m"
+  },
+  {
+    "question": "야구 경기에서 홈런을 치면 타자는 최대 몇 개의 베이스를 밟을까요?",
+    "options": [
+      "2개",
+      "3개",
+      "4개",
+      "5개"
+    ],
+    "answerIndex": 2,
+    "answerText": "4개"
+  },
+  {
+    "question": "농구 자유투는 한 번 성공 시 몇 점일까요?",
+    "options": [
+      "1점",
+      "2점",
+      "3점",
+      "4점"
+    ],
+    "answerIndex": 0,
+    "answerText": "1점"
+  },
+  {
+    "question": "테니스 경기에서 한 세트를 이기기 위해 필요한 최소 게임 수는?",
+    "options": [
+      "4게임",
+      "5게임",
+      "6게임",
+      "7게임"
+    ],
+    "answerIndex": 2,
+    "answerText": "6게임"
+  },
+  {
+    "question": "탁구 경기에서 한 게임은 보통 몇 점을 먼저 내면 이길까요?",
+    "options": [
+      "9점",
+      "10점",
+      "11점",
+      "15점"
+    ],
+    "answerIndex": 2,
+    "answerText": "11점"
+  },
+  {
+    "question": "축구에서 오프사이드 판정은 어떤 상황에서 적용될까요?",
+    "options": [
+      "골키퍼가 공을 잡을 때",
+      "공이 터치라인을 넘을 때",
+      "공보다 앞에 공격수가 있을 때",
+      "파울을 범했을 때"
+    ],
+    "answerIndex": 2,
+    "answerText": "공보다 앞에 공격수가 있을 때"
+  },
+  {
+    "question": "야구에서 한 이닝은 공격과 수비가 각각 몇 번씩 진행될까요?",
+    "options": [
+      "1번",
+      "2번",
+      "3번",
+      "4번"
+    ],
+    "answerIndex": 0,
+    "answerText": "1번"
+  },
+  {
+    "question": "농구 코트에서 센터 서클은 어떤 용도로 사용될까요?",
+    "options": [
+      "자유투",
+      "점프볼",
+      "타임아웃",
+      "파울 선언"
+    ],
+    "answerIndex": 1,
+    "answerText": "점프볼"
+  },
+  {
+    "question": "배드민턴 단식 경기에서 한 게임은 몇 점제로 진행될까요?",
+    "options": [
+      "15점",
+      "18점",
+      "21점",
+      "25점"
+    ],
+    "answerIndex": 2,
+    "answerText": "21점"
+  },
+  {
+    "question": "축구 경기에서 전반전과 후반전은 각각 몇 분일까요?",
+    "options": [
+      "30분",
+      "35분",
+      "40분",
+      "45분"
+    ],
+    "answerIndex": 3,
+    "answerText": "45분"
+  },
+  {
+    "question": "야구에서 스트라이크존은 누구를 기준으로 설정될까요?",
+    "options": [
+      "심판",
+      "포수",
+      "타자",
+      "투수"
+    ],
+    "answerIndex": 2,
+    "answerText": "타자"
+  },
+  {
+    "question": "야구 경기에서 연장전은 보통 몇 회부터 시작할까요?",
+    "options": [
+      "9회",
+      "10회",
+      "11회",
+      "12회"
+    ],
+    "answerIndex": 1,
+    "answerText": "10회"
+  },
+  {
+    "question": "배드민턴에서 네트 바로 앞에서 빠르게 공을 떨어뜨리는 기술은?",
+    "options": [
+      "드롭샷",
+      "스매시",
+      "클리어",
+      "드라이브"
+    ],
+    "answerIndex": 0,
+    "answerText": "드롭샷"
+  },
+  {
+    "question": "올림픽 오륜기의 다섯 색이 의미하는 것은?",
+    "options": [
+      "대륙",
+      "국기",
+      "종목",
+      "계절"
+    ],
+    "answerIndex": 0,
+    "answerText": "대륙"
+  },
+  {
+    "question": "야구 경기에서 볼넷은 몇 개의 볼로 이루어질까요?",
+    "options": [
+      "3개",
+      "4개",
+      "5개",
+      "6개"
+    ],
+    "answerIndex": 1,
+    "answerText": "4개"
+  },
+  {
+    "question": "축구 경기에서 VAR은 무엇의 약자일까요?",
+    "options": [
+      "Video Assistant Referee",
+      "Virtual Auto Replay",
+      "Video Analysis Review",
+      "Visual Assistant Rule"
+    ],
+    "answerIndex": 0,
+    "answerText": "Video Assistant Referee"
+  },
+  {
+    "question": "배구에서 블로킹으로 득점하면 몇 점이 추가될까요?",
+    "options": [
+      "0점",
+      "1점",
+      "2점",
+      "3점"
+    ],
+    "answerIndex": 1,
+    "answerText": "1점"
+  },
+  {
+    "question": "테니스에서 듀스 상황은 몇 대 몇일까요?",
+    "options": [
+      "30-30",
+      "40-30",
+      "40-40",
+      "50-50"
+    ],
+    "answerIndex": 2,
+    "answerText": "40-40"
+  },
+  {
+    "question": "축구 경기에서 코너킥은 언제 주어질까요?",
+    "options": [
+      "공이 골대를 맞췄을 때",
+      "수비팀이 골라인 밖으로 냈을 때",
+      "파울이 발생했을 때",
+      "오프사이드일 때"
+    ],
+    "answerIndex": 1,
+    "answerText": "수비팀이 골라인 밖으로 냈을 때"
+  },
+  {
+    "question": "농구에서 공격 제한 시간은 몇 초일까요?",
+    "options": [
+      "14초",
+      "20초",
+      "24초",
+      "30초"
+    ],
+    "answerIndex": 2,
+    "answerText": "24초"
+  },
+  {
+    "question": "농구 경기의 공식 시간은 몇 쿼터로 이루어질까요?",
+    "options": [
+      "2쿼터",
+      "3쿼터",
+      "4쿼터",
+      "5쿼터"
+    ],
+    "answerIndex": 2,
+    "answerText": "4쿼터"
+  },
+  {
+    "question": "배드민턴 경기에서 셔틀콕은 보통 무엇으로 만들어질까요?",
+    "options": [
+      "플라스틱",
+      "고무",
+      "깃털",
+      "천"
+    ],
+    "answerIndex": 2,
+    "answerText": "깃털"
+  },
+  {
+    "question": "배구 경기에서 리베로 선수의 주된 역할은?",
+    "options": [
+      "공격",
+      "블로킹",
+      "수비",
+      "서브"
+    ],
+    "answerIndex": 2,
+    "answerText": "수비"
+  },
+  {
+    "question": "테니스에서 러브(love)는 몇 점을 의미할까요?",
+    "options": [
+      "0점",
+      "10점",
+      "15점",
+      "30점"
+    ],
+    "answerIndex": 0,
+    "answerText": "0점"
+  },
+  {
+    "question": "야구에서 타율은 무엇을 기준으로 계산할까요?",
+    "options": [
+      "홈런 수",
+      "안타 수",
+      "출루 횟수",
+      "타점 수"
+    ],
+    "answerIndex": 1,
+    "answerText": "안타 수"
+  }
+]
