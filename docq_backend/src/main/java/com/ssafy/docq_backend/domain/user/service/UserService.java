@@ -39,4 +39,22 @@ public class UserService {
                 .nickname(user.getNickname())
                 .build();
     }
+
+    public UserDto.UserNicknameUpdateResponse updateNickname(String userId, UserDto.UserNicknameUpdateRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new DocqException(ErrorCode.USER_NOT_FOUND));
+
+        String nextNickname = request.getNickname();
+        if (!user.getNickname().equals(nextNickname) && userRepository.existsByNickname(nextNickname)) {
+            throw new DocqException(ErrorCode.DUPLICATE_NICKNAME);
+        }
+
+        user.setNickname(nextNickname);
+        userRepository.save(user);
+
+        return UserDto.UserNicknameUpdateResponse.builder()
+                .userId(user.getId())
+                .nickname(user.getNickname())
+                .build();
+    }
 }

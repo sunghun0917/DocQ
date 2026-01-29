@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
-import { getErrorMessage } from '@/services/api';
+import { getErrorMessage, updateNickname } from '@/services/api';
 
 // 컴포넌트 임포트 (경로 확인 필요)
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
@@ -30,9 +30,11 @@ const nickname = ref('');
 const isNicknameSet = ref(false);
 const showCreateModal = ref(false);
 const showJoinModal = ref(false);
+const showEditNicknameModal = ref(false);
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
+const editNickname = ref('');
 
 // --- 2. 룰렛 변수 ---
 const wheelRef = ref<HTMLElement | null>(null);
@@ -247,9 +249,39 @@ const handleAction = (action: string) => {
   if (action === 'create') showCreateModal.value = true;
   if (action === 'join') showJoinModal.value = true;
   if (action === 'profile') {
-      userStore.logout();
-      nickname.value = '';
-      isNicknameSet.value = false;
+      editNickname.value = nickname.value;
+      showEditNicknameModal.value = true;
+  }
+};
+
+const closeEditNickname = () => {
+  showEditNicknameModal.value = false;
+};
+
+const saveNickname = async () => {
+  const nextNickname = editNickname.value.trim();
+  if (nextNickname.length < 2) {
+    triggerShake();
+    errorMessage.value = "닉네임은 두 글자 이상이어야 해요!";
+    isErrorModalOpen.value = true;
+    return;
+  }
+  if (!userStore.userId) {
+    triggerShake();
+    errorMessage.value = "유저 정보를 찾을 수 없어요. 다시 로그인해주세요.";
+    isErrorModalOpen.value = true;
+    return;
+  }
+  try {
+    await updateNickname(userStore.userId, nextNickname);
+    userStore.updateUsername(nextNickname);
+    nickname.value = nextNickname;
+    isNicknameSet.value = true;
+    showEditNicknameModal.value = false;
+  } catch (error) {
+    triggerShake();
+    errorMessage.value = getErrorMessage(error);
+    isErrorModalOpen.value = true;
   }
 };
 
@@ -414,6 +446,27 @@ onUnmounted(() => { stopRoulette(); });
     <AlertModal :isOpen="isErrorModalOpen" type="error" :message="errorMessage" @close="isErrorModalOpen = false" />
     <CreateRoomModal v-if="showCreateModal" @close="showCreateModal = false" />
     <JoinRoomModal v-if="showJoinModal" @close="showJoinModal = false" />
+    <transition name="intro-fade">
+      <div v-if="showEditNicknameModal" class="edit-nickname-backdrop" @click.self="closeEditNickname">
+        <div class="edit-nickname-modal">
+          <h2 class="edit-nickname-title">닉네임 수정</h2>
+          <p class="edit-nickname-desc">새 닉네임을 입력해주세요.</p>
+          <div class="edit-nickname-input">
+            <input
+              v-model="editNickname"
+              type="text"
+              placeholder="닉네임을 입력하세요"
+              @keyup.enter="saveNickname"
+              autofocus
+            />
+          </div>
+          <div class="edit-nickname-actions">
+            <button class="cartoon-btn secondary" @click="closeEditNickname">취소</button>
+            <button class="cartoon-btn primary" @click="saveNickname">저장</button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -555,4 +608,55 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .menu-fade-enter-from { opacity: 0; transform: scale(0.95); }
 .menu-fade-leave-to { opacity: 0; transform: scale(1.05); }
 @media (max-width: 768px) { .pos-left, .pos-right { opacity: 0; pointer-events: none; } .carousel-item { width: 90vw; } }
+
+.edit-nickname-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  backdrop-filter: blur(2px);
+}
+.edit-nickname-modal {
+  width: min(90%, 360px);
+  background: #fff8e1;
+  border: 5px solid var(--wood-border);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  text-align: center;
+}
+.edit-nickname-title {
+  margin: 0 0 6px 0;
+  font-size: 1.8rem;
+  color: var(--text-brown);
+}
+.edit-nickname-desc {
+  margin: 0 0 16px 0;
+  color: var(--wood-dark);
+}
+.edit-nickname-input {
+  border-bottom: 3px solid #d7ccc8;
+  margin-bottom: 18px;
+}
+.edit-nickname-input input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 10px;
+  font-size: 1.2rem;
+  text-align: center;
+  color: var(--text-brown);
+  font-family: var(--font-family);
+  outline: none;
+}
+.edit-nickname-actions {
+  display: flex;
+  gap: 10px;
+}
+.edit-nickname-actions .cartoon-btn {
+  flex: 1;
+}
 </style>
