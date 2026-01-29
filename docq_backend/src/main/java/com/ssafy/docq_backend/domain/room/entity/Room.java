@@ -76,6 +76,9 @@ public class Room {
     @Builder.Default
     private List<Quiz> quizList = new ArrayList<>();
 
+    @Builder.Default
+    private int quizCursor = 0;
+
     // MiniGame State: UserId -> Score
     @Builder.Default
     private Map<String, Integer> miniGameScores = new ConcurrentHashMap<>();

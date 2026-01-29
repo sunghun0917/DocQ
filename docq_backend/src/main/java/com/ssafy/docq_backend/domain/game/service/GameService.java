@@ -586,6 +586,7 @@ public class GameService {
                     .build();
             room.getPlayerStates().put(pid, ps);
         }
+        room.setQuizCursor(0);
     }
 
     private void sendError(String userId, ErrorCode errorCode) {
@@ -616,7 +617,8 @@ public class GameService {
                 return;
             }
 
-            long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId, request.getUserId());
+            long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId,
+                    request.getUserId());
             int expected = resolveExpectedAckCount(room);
             if (count < expected) {
                 return;
@@ -794,14 +796,12 @@ public class GameService {
                 return;
             }
 
-            // 2. Select Quiz (Rotate per turn to avoid repeating per round)
-            int turnIndex = 0;
-            if (room.getTurnOrder() != null && !room.getTurnOrder().isEmpty() && room.getCurrentTurnUserId() != null) {
-                turnIndex = Math.max(0, room.getTurnOrder().indexOf(room.getCurrentTurnUserId()));
-            }
-            int totalTurnIndex = (room.getRound() - 1) * Math.max(1, room.getTurnOrder().size()) + turnIndex;
-            int quizIndex = totalTurnIndex % room.getQuizList().size();
+            // 2. Select Quiz (Use persistent cursor)
+            int quizIndex = room.getQuizCursor() % room.getQuizList().size();
             Quiz quizEntity = room.getQuizList().get(quizIndex);
+
+            // Advance cursor
+            room.setQuizCursor(room.getQuizCursor() + 1);
 
             Long quizId = quizEntity.getQuizId();
 
