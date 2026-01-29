@@ -265,6 +265,10 @@ const copyRoomCode = async () => {
 
 const handleStartGame = () => {
   if (!myUser.value) return;
+  if (getAvatarIndex(myUser.value.avatar) === -1) {
+    toastMessage.value = '캐릭터를 먼저 선택해주세요!'; toastType.value = 'error'; isToastOpen.value = true;
+    return;
+  }
   if (generatedQuizzes.value.length === 0) { 
       toastMessage.value = '퀴즈를 먼저 선택해주세요!'; toastType.value = 'error'; isToastOpen.value = true; return; 
   }

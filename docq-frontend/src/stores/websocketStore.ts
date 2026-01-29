@@ -139,7 +139,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
                     avatarCache.value[player.userId] = avatar
                 } else {
                     if (isMe) {
-                        avatar = userStore.avatar
+                        // 서버에 avatarId 없음(재입장 등) → 클라이언트도 ❓로 맞춰서 이전 캐릭터 안 보이게
+                        avatar = '❓'
+                        userStore.updateAvatar('❓')
                         avatarCache.value[player.userId] = avatar
                     } else {
                         avatar = '❓'
