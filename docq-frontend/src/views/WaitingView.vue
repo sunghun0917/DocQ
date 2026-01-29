@@ -41,6 +41,8 @@ const isQuizModalOpen = ref(false)
 const isBasicQuizModalOpen = ref(false)
 // [Frontend] 대기 상태 메시지
 const processingText = ref('방장님이 문서를 고르고 있어요')
+// 1차 테스트 배포: PDF 업로드 비활성화 (false로 되돌리면 복구됨)
+const isPdfUploadDisabled = ref(true)
 
 const basicQuizTypes = [
   { type: 'nonsense', label: '넌센스 퀴즈', icon: 'sentiment_very_satisfied', color: 'bg-yellow-100 text-yellow-600 border-yellow-200' },
@@ -78,6 +80,11 @@ const openErrorModal = (message: string, title = '오류') => {
     variant: 'danger',
     showCancel: false
   })
+}
+
+const showPdfMaintenance = () => {
+  isDragging.value = false
+  openInfoModal('점검중입니다.')
 }
 
 // [Frontend] PDF 업로드 및 퀴즈 생성
@@ -343,6 +350,11 @@ const handleStartGame = () => {
     return
   }
 
+  if (generatedQuizzes.value.length === 0) {
+    openInfoModal('퀴즈를 선택해야 시작할 수 있습니다.');
+    return;
+  }
+
   if (!isAllReady.value) {
     openInfoModal('모든 플레이어가 준비해야 합니다!');
     return;
@@ -521,80 +533,108 @@ onMounted(async () => {
 
               <div v-if="isHost" class="flex flex-col gap-4">
                   
-                  <!-- [CASE 1] 퀴즈가 없을 때: 업로드 UI -->
+                  <!-- [CASE 1] 퀴즈가 없을 때: 업로드 점검중 -->
                   <template v-if="generatedQuizzes.length === 0">
-                    <div 
-                      @dragover="onDragOver"
-                      @dragleave="onDragLeave"
-                      @drop="onDrop"
-                      @click="triggerFileInput"
-                      class="relative w-full h-32 rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
-                      :class="[
-                        isDragging 
-                          ? 'border-[#e11d48] bg-[#fff1f2] scale-[1.02]' 
-                          : selectedFile
-                            ? 'border-[#00b894] bg-[#f0fff4]'
-                            : 'border-[#fecdd3] bg-white hover:border-[#e11d48] hover:bg-[#fff1f2]'
-                      ]"
-                    >
-                      <input 
-                        ref="fileInputRef"
-                        type="file" 
-                        accept="application/pdf"
-                        @change="handleFileChange"
-                        class="hidden"
-                      />
-
-                      <div v-if="!selectedFile" class="flex flex-col items-center text-center p-4 pointer-events-none">
-                        <div class="w-10 h-10 rounded-full bg-[#fff1f2] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                          <span class="material-symbols-outlined text-[#e11d48] text-2xl">cloud_upload</span>
+                    <template v-if="isPdfUploadDisabled">
+                      <div 
+                        @dragover.prevent
+                        @drop.prevent="showPdfMaintenance"
+                        @click="showPdfMaintenance"
+                        class="relative w-full h-32 rounded-2xl border-2 border-dashed border-[#fecdd3] bg-white/70
+                               flex flex-col items-center justify-center text-center cursor-not-allowed select-none"
+                      >
+                        <div class="flex flex-col items-center text-center p-4 pointer-events-none">
+                          <div class="w-10 h-10 rounded-full bg-[#fff1f2] flex items-center justify-center mb-2">
+                            <span class="material-symbols-outlined text-[#e11d48] text-2xl">cloud_upload</span>
+                          </div>
+                          <p class="text-sm font-bold text-[#881337]">PDF 드래그 또는 클릭</p>
+                          <p class="text-xs text-[#fda4af] mt-1 font-medium">점검중입니다</p>
                         </div>
-                        <p class="text-sm font-bold text-[#881337]">PDF 드래그 또는 클릭</p>
-                        <p class="text-xs text-[#fda4af] mt-1 font-medium">퀴즈로 만들 문서를 올려주세요</p>
                       </div>
-
-                      <div v-else class="flex flex-col items-center text-center p-4 w-full animate-bounce-short">
-                        <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
-                          <span class="material-symbols-outlined text-[#00b894] text-2xl">description</span>
-                        </div>
-                        <p class="text-sm font-black text-[#00b894] truncate max-w-[90%]">{{ selectedFile.name }}</p>
-                        <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">변경하려면 클릭하세요</p>
-                        
+                      <div class="flex gap-3 mt-4">
                         <button 
-                          @click.stop="selectedFile = null" 
-                          class="absolute top-2 right-2 text-[#00b894] hover:text-red-500 transition-colors p-1"
+                          @click="isBasicQuizModalOpen = true"
+                          class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
                         >
-                          <span class="material-symbols-outlined text-lg">close</span>
+                          <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">menu_book</span>
+                          기본 퀴즈 선택
                         </button>
                       </div>
-                    </div>
-                    <div class="flex gap-3 mt-4">
-                      <button 
-                        @click="handleUploadPdf"
-                        :disabled="!selectedFile || isGenerating"
-                        class="flex-1 h-14 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm border-b-4 active:border-b-0 active:translate-y-1"
-                        :class="(!selectedFile || isGenerating) 
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                          : 'bg-[#e11d48] text-white border-[#9f1239] hover:bg-[#be123c]'"
+                    </template>
+                    <template v-else>
+                      <div 
+                        @dragover="onDragOver"
+                        @dragleave="onDragLeave"
+                        @drop="onDrop"
+                        @click="triggerFileInput"
+                        class="relative w-full h-32 rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
+                        :class="[
+                          isDragging 
+                            ? 'border-[#e11d48] bg-[#fff1f2] scale-[1.02]' 
+                            : selectedFile
+                              ? 'border-[#00b894] bg-[#f0fff4]'
+                              : 'border-[#fecdd3] bg-white hover:border-[#e11d48] hover:bg-[#fff1f2]'
+                        ]"
                       >
-                        <span v-if="isGenerating" class="flex items-center gap-2">
-                          <span class="material-symbols-outlined text-xl animate-spin">progress_activity</span>
-                          생성 중...
-                        </span>
-                        <span v-else class="flex items-center gap-2">
-                          <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">auto_fix</span>
-                          퀴즈 생성
-                        </span>
-                      </button>
-                      
-                      <button 
-                        @click="isBasicQuizModalOpen = true"
-                        class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
-                      >
-                        <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">menu_book</span>
-                        기본 퀴즈
-                      </button>
-                    </div>
+                        <input 
+                          ref="fileInputRef"
+                          type="file" 
+                          accept="application/pdf"
+                          @change="handleFileChange"
+                          class="hidden"
+                        />
+
+                        <div v-if="!selectedFile" class="flex flex-col items-center text-center p-4 pointer-events-none">
+                          <div class="w-10 h-10 rounded-full bg-[#fff1f2] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                            <span class="material-symbols-outlined text-[#e11d48] text-2xl">cloud_upload</span>
+                          </div>
+                          <p class="text-sm font-bold text-[#881337]">PDF 드래그 또는 클릭</p>
+                          <p class="text-xs text-[#fda4af] mt-1 font-medium">퀴즈로 만들 문서를 올려주세요</p>
+                        </div>
+
+                        <div v-else class="flex flex-col items-center text-center p-4 w-full animate-bounce-short">
+                          <div class="w-10 h-10 rounded-full bg-[#00b894]/10 flex items-center justify-center mb-2">
+                            <span class="material-symbols-outlined text-[#00b894] text-2xl">description</span>
+                          </div>
+                          <p class="text-sm font-black text-[#00b894] truncate max-w-[90%]">{{ selectedFile.name }}</p>
+                          <p class="text-[10px] text-[#00b894]/70 mt-1 font-bold">변경하려면 클릭하세요</p>
+                          
+                          <button 
+                            @click.stop="selectedFile = null" 
+                            class="absolute top-2 right-2 text-[#00b894] hover:text-red-500 transition-colors p-1"
+                          >
+                            <span class="material-symbols-outlined text-lg">close</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="flex gap-3 mt-4">
+                        <button 
+                          @click="handleUploadPdf"
+                          :disabled="!selectedFile || isGenerating"
+                          class="flex-1 h-14 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm border-b-4 active:border-b-0 active:translate-y-1"
+                          :class="(!selectedFile || isGenerating) 
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                            : 'bg-[#e11d48] text-white border-[#9f1239] hover:bg-[#be123c]'"
+                        >
+                          <span v-if="isGenerating" class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-xl animate-spin">progress_activity</span>
+                            생성 중...
+                          </span>
+                          <span v-else class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">auto_fix</span>
+                            퀴즈 생성
+                          </span>
+                        </button>
+                        
+                        <button 
+                          @click="isBasicQuizModalOpen = true"
+                          class="flex-1 h-14 rounded-2xl bg-white text-[#e11d48] border-2 border-[#fecdd3] border-b-[5px] font-black text-base hover:bg-[#fff1f2] hover:border-[#e11d48] flex items-center justify-center gap-2 active:border-b-2 active:translate-y-[3px] transition-all shadow-sm group"
+                        >
+                          <span class="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">menu_book</span>
+                          기본 퀴즈
+                        </button>
+                      </div>
+                    </template>
                   </template>
 
                   <!-- [CASE 2] 퀴즈가 있을 때: 완료 UI & 다시하기 -->

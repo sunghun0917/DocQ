@@ -56,7 +56,7 @@
       </TresGroup>
     </TresCanvas>
 
-    <CloudOverlay />
+
 
     <div v-if="actionNotice" class="action-notice">
       <div class="action-notice-card">
@@ -74,7 +74,7 @@ import * as THREE from 'three'
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
-import CloudOverlay from '@/components/ui/CloudOverlay.vue'
+
 import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import type { PlayerInfo } from '@/types/docq-api'

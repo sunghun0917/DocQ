@@ -8,6 +8,7 @@ import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
 import MiniGameModal from '@/components/minigame/MiniGameModal.vue';
 import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
 import CloudBackground from '@/components/ui/CloudBackground.vue';
+import CloudOverlay from '@/components/ui/CloudOverlay.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
 import { useRoomStore } from '@/stores/roomStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -77,6 +78,7 @@ let systemNoticeResolver: (() => void) | null = null
 
 const handleBeforeUnload = () => {
     if (!userStore.userId || !roomId.value) return
+    sessionStorage.setItem('docq:lastPage', 'game')
     wsStore.leaveGame(roomId.value, userStore.userId)
     wsStore.cleanup()
     roomStore.leaveRoom()
@@ -406,7 +408,9 @@ watch(
 onMounted(() => {
     window.addEventListener('beforeunload', handleBeforeUnload)
     const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    if (nav?.type === 'reload') {
+    const lastPage = sessionStorage.getItem('docq:lastPage')
+    if (nav?.type === 'reload' && lastPage === 'game') {
+        sessionStorage.removeItem('docq:lastPage')
         uiStore.openConfirm({
             title: '연결 끊김',
             message: '연결이 끊겼습니다. 메인으로 이동합니다.',
@@ -418,6 +422,7 @@ onMounted(() => {
         })
         return
     }
+    sessionStorage.removeItem('docq:lastPage')
     if (roomId.value) {
         wsStore.subscribeMiniGame(roomId.value)
     }
@@ -431,6 +436,7 @@ onUnmounted(() => {
 <template>
   <div class="game-page">
     <CloudBackground class="game-background" />
+    <CloudOverlay class="game-clouds" />
     <div class="map-focus-blur" aria-hidden="true" />
 
     <!-- 3D 보드게임 컴포넌트 (배경) -->
@@ -598,6 +604,12 @@ onUnmounted(() => {
   z-index: 0;
 }
 
+.game-clouds {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
 .game-board-layer {
   position: relative;
   z-index: 2;
@@ -608,11 +620,9 @@ onUnmounted(() => {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  backdrop-filter: blur(14px) saturate(1.05);
-  -webkit-backdrop-filter: blur(14px) saturate(1.05);
-  background: rgba(0, 0, 0, 0.04);
-  mask-image: radial-gradient(ellipse 60% 55% at 50% 55%, transparent 0%, transparent 45%, rgba(0,0,0,1) 65%, rgba(0,0,0,1) 100%);
-  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 55%, transparent 0%, transparent 45%, rgba(0,0,0,1) 65%, rgba(0,0,0,1) 100%);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* UI 오버레이 스타일 */
