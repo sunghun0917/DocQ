@@ -1,6 +1,7 @@
 package com.ssafy.docq_backend.global.websocket;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.Getter;
 import org.springframework.stereotype.Component;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class SessionRegistry {
     private final Map<String, SessionInfo> sessions = new ConcurrentHashMap<>();
     private final Map<String, String> userToSession = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> roomUsers = new ConcurrentHashMap<>();
 
     public void register(String sessionId, String roomId, String userId) {
         if (sessionId == null || roomId == null || userId == null) {
@@ -16,6 +18,7 @@ public class SessionRegistry {
         }
         sessions.put(sessionId, new SessionInfo(roomId, userId));
         userToSession.put(userId, sessionId);
+        roomUsers.computeIfAbsent(roomId, key -> ConcurrentHashMap.newKeySet()).add(userId);
     }
 
     public SessionInfo removeBySessionId(String sessionId) {
@@ -24,7 +27,13 @@ public class SessionRegistry {
         }
         SessionInfo info = sessions.remove(sessionId);
         if (info != null) {
-            userToSession.remove(info.userId);
+            String currentSession = userToSession.get(info.userId);
+            if (sessionId.equals(currentSession)) {
+                userToSession.remove(info.userId);
+                removeFromRoom(info.roomId, info.userId);
+                return info;
+            }
+            return null;
         }
         return info;
     }
@@ -35,7 +44,32 @@ public class SessionRegistry {
         }
         String sessionId = userToSession.remove(userId);
         if (sessionId != null) {
-            sessions.remove(sessionId);
+            SessionInfo info = sessions.remove(sessionId);
+            if (info != null) {
+                removeFromRoom(info.roomId, info.userId);
+            }
+        }
+    }
+
+    public int getConnectedCount(String roomId) {
+        if (roomId == null) {
+            return 0;
+        }
+        Set<String> users = roomUsers.get(roomId);
+        return users == null ? 0 : users.size();
+    }
+
+    private void removeFromRoom(String roomId, String userId) {
+        if (roomId == null || userId == null) {
+            return;
+        }
+        Set<String> users = roomUsers.get(roomId);
+        if (users == null) {
+            return;
+        }
+        users.remove(userId);
+        if (users.isEmpty()) {
+            roomUsers.remove(roomId);
         }
     }
 
