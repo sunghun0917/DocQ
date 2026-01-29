@@ -12,53 +12,77 @@ defineProps<{
 
 <template>
   <div 
-    class="relative rounded-[32px] p-8 flex flex-col items-center justify-center transition-all duration-300 w-full h-full"
+    class="relative rounded-[32px] p-6 flex flex-col items-center justify-center transition-all duration-300 w-full h-full border-4"
     :class="[
       user.nickname 
-        ? 'bg-white shadow-xl border-2 border-indigo-50 scale-100 opacity-100' 
-        : 'bg-slate-100/50 border-2 border-dashed border-slate-300 scale-95 opacity-70',
-      user.isHost ? 'ring-4 ring-amber-100 border-amber-200' : '' /* 방장은 테두리 한 번 더 강조 */
+        ? 'bg-white border-wood-border shadow-[0_6px_0_0_rgba(93,64,55,1)] animate-fade-in' 
+        : 'bg-white/10 border-dashed border-wood-light/50 opacity-40 shadow-none'
     ]"
   >
     
+    <!-- 방장 크라운 -->
     <span 
       v-if="user.isHost" 
-      class="material-symbols-outlined text-[#f59e0b] text-[44px] absolute top-4 right-4 drop-shadow-md rotate-12 z-20" 
-      title="방장"
+      class="material-symbols-outlined text-amber-500 text-4xl absolute -top-2 -right-2 drop-shadow-[0_3px_0_rgba(217,119,6,1)] rotate-12 z-30 font-black" 
     >
       crown
     </span>
 
+    <!-- 아바타 원형 -->
     <div 
-      class="w-36 h-36 rounded-full flex items-center justify-center text-7xl mb-6 shadow-inner relative overflow-hidden transition-transform hover:scale-105"
-      :class="user.nickname ? 'bg-indigo-50' : 'bg-slate-200'"
+      class="w-24 h-24 rounded-full flex items-center justify-center text-6xl mb-4 shadow-inner relative transition-transform hover:scale-105 border-4"
+      :class="user.nickname ? 'bg-[#fff8e1] border-wood-border' : 'bg-transparent border-wood-light/20'"
     >
-      <span v-if="user.avatar" class="z-10 drop-shadow-lg select-none">{{ user.avatar }}</span>
-      
-      <div v-if="!user.isHost && user.isReady" class="absolute inset-0 bg-green-400/20 animate-pulse"></div>
+      <span v-if="user.avatar" class="z-10 drop-shadow-md select-none transform transition-all group-hover:scale-110">{{ user.avatar }}</span>
+      <span v-else-if="user.nickname" class="z-10 drop-shadow-md select-none opacity-20">❓</span>
+
+      <div v-if="!user.isHost && user.isReady" class="absolute inset-0 bg-leaf-green/20 animate-pulse"></div>
     </div>
 
-    <div v-if="user.nickname" class="text-2xl font-black text-slate-800 mb-4 truncate w-full text-center tracking-tight">
+    <!-- 닉네임 영역 -->
+    <div v-if="user.nickname" class="text-2xl font-black text-wood-dark mb-3 truncate w-full text-center tracking-tight leading-none">
       {{ user.nickname }}
-      <span v-if="user.isMe" class="text-xs font-bold text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full align-middle ml-1">ME</span>
+      <span v-if="user.isMe" class="text-[10px] font-black bg-leaf-green text-white px-2 py-0.5 rounded-full align-middle ml-1 shadow-sm">ME</span>
     </div>
-    <div v-else class="text-xl font-bold text-slate-400 mb-4">
-      Empty Slot
+    <div v-else class="text-xl font-black text-wood-dark opacity-10 mb-2 uppercase tracking-widest">
+      Empty
     </div>
     
-    <div v-if="user.nickname" class="mt-auto">
-      <span 
-        class="px-6 py-2.5 rounded-full text-sm font-extrabold shadow-sm transition-colors block min-w-[100px] text-center"
+    <!-- 상태 배지 -->
+    <div v-if="user.nickname" class="mt-auto w-full px-2">
+      <div 
+        class="py-1.5 rounded-xl text-base font-black shadow-[0_3px_0_0_rgba(0,0,0,0.1)] transition-all block text-center uppercase tracking-wider border-2"
         :class="{
-          'bg-[#fffbeb] text-[#b45309] shadow-amber-100 ring-1 ring-amber-200': user.isHost,
-          'bg-[#20c997] text-white shadow-green-200': !user.isHost && user.isReady,
-          'bg-slate-100 text-slate-400 ring-1 ring-slate-200': !user.isHost && !user.isReady
+          'bg-amber-50 text-amber-700 border-amber-200 shadow-amber-100': user.isHost,
+          'bg-leaf-green text-white border-leaf-dark shadow-leaf-dark/20': !user.isHost && user.isReady,
+          'bg-gray-50 text-gray-400 border-gray-100 shadow-none opacity-60': !user.isHost && !user.isReady
         }"
       >
-        <template v-if="user.isHost">HOST</template>
-        <template v-else-if="user.isReady">READY</template>
-        <template v-else>WAITING</template>
-      </span>
+        <template v-if="user.isHost">Host</template>
+        <template v-else-if="user.isReady">Ready</template>
+        <template v-else>Waiting</template>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.shadow-inner {
+  box-shadow: inset 0 4px 8px rgba(0,0,0,0.05);
+}
+
+* {
+  font-family: 'Jua', sans-serif;
+}
+</style>
