@@ -76,13 +76,18 @@ export const useGameStore = defineStore('game', () => {
     const totalQuizCount = computed(() => quizzes.value.length)
 
     const rankings = computed(() => {
-        const roomStore = useRoomStore()
-        const userScores = Object.entries(scores.value).map(([userId, score]) => ({
-            userId,
-            score: score as number,
-            nickname: roomStore.users.find((u: any) => u.id === userId)?.nickname || 'Unknown'
-        }));
-        return userScores.sort((a, b) => b.score - a.score);
+        return [...gameState.value.players].sort((a, b) => {
+            // 1순위: 위치(position)가 높은 사람 순서
+            const posA = a.position ?? 0;
+            const posB = b.position ?? 0;
+            if (posA !== posB) {
+                return posB - posA;
+            }
+            // 2순위: 위치가 같다면 점수(score)가 높은 사람 순서
+            const scoreA = a.score ?? 0;
+            const scoreB = b.score ?? 0;
+            return scoreB - scoreA;
+        });
     })
 
     const isGameFinished = computed(() => gameStatus.value === 'finished')

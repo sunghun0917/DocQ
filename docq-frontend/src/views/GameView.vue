@@ -72,8 +72,13 @@ const AVATAR_REVERSE_MAP: Record<string, string> = {
 
 const rankingResults = computed(() => {
     const gamePlayers = gameStore.gameState.players || []
-    // score 내림차순 정렬
-    const sorted = [...gamePlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    // 1순위: 위치(position) 내림차순, 2순위: 점수(score) 내림차순 정렬
+    const sorted = [...gamePlayers].sort((a, b) => {
+        const posA = a.position ?? 0;
+        const posB = b.position ?? 0;
+        if (posA !== posB) return posB - posA;
+        return (b.score ?? 0) - (a.score ?? 0);
+    })
     
     return sorted.map((p, index) => {
         const user = roomStore.users.find(u => u.id === p.userId)
@@ -103,7 +108,13 @@ watch(
             // Snapshot the results at the moment game ends
             // Forcefully map current players to ensure we capture nicknames even if roomStore is updating
             const currentPlayers = gameStore.gameState.players || []
-            const sorted = [...currentPlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            // 1순위: 위치(position) 내림차순, 2순위: 점수(score) 내림차순 정렬
+            const sorted = [...currentPlayers].sort((a, b) => {
+                const posA = a.position ?? 0;
+                const posB = b.position ?? 0;
+                if (posA !== posB) return posB - posA;
+                return (b.score ?? 0) - (a.score ?? 0);
+            })
             
             finalRankingResults.value = sorted.map((p, index) => {
                 const user = roomStore.users.find(u => u.id === p.userId)
