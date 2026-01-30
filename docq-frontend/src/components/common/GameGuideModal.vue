@@ -43,7 +43,7 @@ const prevSlide = () => {
   currentSlide.value = (currentSlide.value - 1 + slides.length) % slides.length;
 };
 
-const activeSlide = computed(() => slides[currentSlide.value]);
+const activeSlide = computed(() => slides[currentSlide.value]!);
 </script>
 
 <template>
