@@ -480,7 +480,7 @@ onUnmounted(() => { stopRoulette(); });
                                         <button @click.stop="handleAction('profile')" class="cartoon-btn secondary mb-2">
                                             <span class="material-symbols-outlined">Edit</span>수정하기
                                         </button>
-                                        <button v-if="!userStore.isGuest" @click.stop="handleLogout" class="cartoon-btn gray">
+                                        <button @click.stop="handleLogout" class="cartoon-btn gray">
                                             <span class="material-symbols-outlined">logout</span>로그아웃
                                         </button>
                                     </div>
