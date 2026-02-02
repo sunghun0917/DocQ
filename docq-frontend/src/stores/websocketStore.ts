@@ -150,7 +150,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 }
 
                 return {
-                    id: player.playerId,
+                    playerId: player.playerId,
                     nickname: player.nickname,
                     avatar: avatar,
                     isReady: !!isReady,
@@ -159,25 +159,25 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 }
             })
 
-            const userById = new Map(nextUsers.map((user: any) => [user.id, user]))
-            const hostUserId = nextUsers.find((user: any) => user.isHost)?.id
+            const userByPlayerId = new Map(nextUsers.map((user: any) => [user.playerId, user]))
+            const hostPlayerId = nextUsers.find((user: any) => user.isHost)?.playerId
             const orderedIds: string[] = []
 
-            if (hostUserId) {
-                orderedIds.push(hostUserId)
+            if (hostPlayerId) {
+                orderedIds.push(hostPlayerId)
             }
 
             const turnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : []
             turnOrder.forEach((id: string) => {
-                if (id && id !== hostUserId) orderedIds.push(id)
+                if (id && id !== hostPlayerId) orderedIds.push(id)
             })
 
             nextUsers.forEach((user: any) => {
-                if (!orderedIds.includes(user.id)) orderedIds.push(user.id)
+                if (!orderedIds.includes(user.playerId)) orderedIds.push(user.playerId)
             })
 
             const orderedUsers = orderedIds
-                .map(id => userById.get(id))
+                .map(id => userByPlayerId.get(id))
                 .filter((user): user is typeof nextUsers[number] => !!user)
 
             roomStore.setUsers(orderedUsers)
@@ -316,12 +316,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 정답 제출
      */
-    const submitAnswer = (roomId: string, userId: string, quizId: number, answer: string) => {
+    const submitAnswer = (roomId: string, playerId: string, quizId: number, answer: string) => {
         if (!wsService.value) return
 
         wsService.value.publish('/app/game/submit', {
             roomId,
-            playerId: userId,
+            playerId,
             quizId,
             answer
         })
@@ -331,13 +331,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
      * 에러 메시지 구독
      * @param userId - 사용자 ID
      */
-    const subscribeErrors = (userId: string) => {
+    const subscribeErrors = (playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
         }
 
-        wsService.value.subscribe(`/queue/errors/${userId}`, (data: ErrorResponse) => {
+        wsService.value.subscribe(`/queue/errors/${playerId}`, (data: ErrorResponse) => {
             console.error('❌ Server Error:', data)
             lastError.value = `[${data.code}] ${data.message}`
 
@@ -357,7 +357,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 게임 참가
      */
-    const joinGame = (roomId: string, userId: string, nickname: string) => {
+    const joinGame = (roomId: string, playerId: string, nickname: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -365,7 +365,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/join', {
             roomId,
-            playerId: userId,
+            playerId,
             nickname
         })
     }
@@ -373,7 +373,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 게임 나가기
      */
-    const leaveGame = (roomId: string, userId: string) => {
+    const leaveGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -381,14 +381,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/leave', {
             roomId,
-            playerId: userId
+            playerId
         })
     }
 
     /**
      * 준비 상태 변경
      */
-    const setReady = (roomId: string, userId: string, isReady: boolean) => {
+    const setReady = (roomId: string, playerId: string, isReady: boolean) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -397,7 +397,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         // 서버의 Jackson 매핑 이슈를 고려하여 둘 다 전송
         wsService.value.publish('/app/game/ready', {
             roomId,
-            playerId: userId,
+            playerId,
             isReady: isReady, // Java 필드명
             ready: isReady   // Jackson 기본 매핑용 키
         })
@@ -406,7 +406,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 아바타 설정
      */
-    const setAvatar = (roomId: string, userId: string, avatarId: number) => {
+    const setAvatar = (roomId: string, playerId: string, avatarId: number) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -414,7 +414,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/avatar', {
             roomId,
-            playerId: userId,
+            playerId,
             avatarId
         })
     }
@@ -422,7 +422,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 게임 시작 (Host Only)
      */
-    const startGame = (roomId: string, userId: string) => {
+    const startGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -430,14 +430,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/start', {
             roomId,
-            playerId: userId
+            playerId
         })
     }
 
     /**
      * 게임 종료 (Host Only)
      */
-    const endGame = (roomId: string, userId: string) => {
+    const endGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -445,14 +445,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/end', {
             roomId,
-            playerId: userId
+            playerId
         })
     }
 
     /**
      * 게임 재시작 (Host Only)
      */
-    const restartGame = (roomId: string, userId: string) => {
+    const restartGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -460,14 +460,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/restart', {
             roomId,
-            playerId: userId
+            playerId
         })
     }
 
     /**
      * 미니게임 결과 제출
      */
-    const submitMiniGameResult = (roomId: string, userId: string, gameType: string, resultValue: number) => {
+    const submitMiniGameResult = (roomId: string, playerId: string, gameType: string, resultValue: number) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -475,7 +475,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/minigame/submit', {
             roomId,
-            playerId: userId,
+            playerId,
             gameType,
             resultValue
         })

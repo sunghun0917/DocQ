@@ -70,7 +70,7 @@ const displayUsers = computed(() => {
       });
     } else {
       slots.push({
-        id: `empty-${i}`,
+        playerId: `empty-${i}`,
         nickname: 'WAITING',
         isEmpty: true,
         isReady: false,
@@ -330,12 +330,12 @@ onMounted(async () => {
 const userMessages = ref<Record<string, string>>({});
 
 // 메시지를 띄우고 3초 뒤에 지우는 함수
-const showQuickMessage = (userId: string, message: string) => {
-  userMessages.value[userId] = message;
+const showQuickMessage = (playerId: string, message: string) => {
+  userMessages.value[playerId] = message;
 
   // 3초 후에 해당 메시지 삭제
   setTimeout(() => {
-    delete userMessages.value[userId];
+    delete userMessages.value[playerId];
   }, 3000);
 };
 
@@ -400,7 +400,7 @@ const quickMessages = [
         <main
           class="flex-[2] bg-white/40 rounded-[32px] border-4 border-wood-border !p-2 shadow-inner relative flex flex-col">
           <div class="grid grid-cols-2 gap-4 w-full h-full">
-            <div v-for="user in displayUsers" :key="user.id"
+            <div v-for="user in displayUsers" :key="user.playerId"
               class="user-slot relative w-full h-full rounded-2xl border-4 transition-all duration-300 min-h-0 box-border"
               :class="[
                 user.isEmpty ? 'border-dashed border-wood-light bg-white/20' : 'bg-white shadow-md',
@@ -409,9 +409,9 @@ const quickMessages = [
               ]">
 
               <transition name="pop">
-                <div v-if="userMessages[user.id]" class="absolute -top-12 -right-7 z-50">
+                <div v-if="userMessages[user.playerId]" class="absolute -top-12 -right-7 z-50">
                   <div class="speech-bubble">
-                    {{ userMessages[user.id] }}
+                    {{ userMessages[user.playerId] }}
                   </div>
                 </div>
               </transition>
