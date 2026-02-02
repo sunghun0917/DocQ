@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
-import { getErrorMessage, updateNickname } from '@/services/api';
+import { getErrorMessage } from '@/services/api';
 
 // 컴포넌트 임포트
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
@@ -40,6 +40,9 @@ const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
+const editCheckMsg = ref('');
+const editCheckStatus = ref<'success' | 'error' | ''>('');
+const isEditNicknameChecked = ref(false);
 
 // Auth State
 const isGuestInputVisible = ref(false);
@@ -226,6 +229,23 @@ const onAuthError = (msg: string) => {
     isErrorModalOpen.value = true;
 };
 
+const handleLogout = () => {
+  userStore.logout();
+  nickname.value = '';
+  isNicknameSet.value = false;
+  isLoginInputVisible.value = false;
+  isGuestInputVisible.value = false;
+  isSignUpInputVisible.value = false;
+  showGuideModal.value = false;
+  
+  // 룰렛 초기화
+  stopRoulette();
+  currentRotation = 0; 
+  targetRotation = 0; 
+  activeIndex.value = 0;
+  startRoulette();
+};
+
 const goBack = () => {
     if (isSignUpInputVisible.value) {
         isSignUpInputVisible.value = false;
@@ -254,6 +274,9 @@ const handleAction = (action: string) => {
   if (action === 'join') showJoinModal.value = true;
   if (action === 'profile') {
       editNickname.value = nickname.value;
+      editCheckMsg.value = '';
+      editCheckStatus.value = '';
+      isEditNicknameChecked.value = false;
       showEditNicknameModal.value = true;
   }
   if (action === 'guide') showGuideModal.value = true; // [ADD]
@@ -263,19 +286,50 @@ const closeEditNickname = () => {
   showEditNicknameModal.value = false;
 };
 
+const checkEditNicknameDuplicate = async () => {
+    if (!editNickname.value.trim()) {
+        editCheckMsg.value = "닉네임을 입력해주세요.";
+        editCheckStatus.value = 'error';
+        return;
+    }
+    // 본인 닉네임과 같으면 통과
+    if (editNickname.value.trim() === nickname.value) {
+        editCheckMsg.value = "현재 닉네임과 동일합니다.";
+        editCheckStatus.value = 'success';
+        isEditNicknameChecked.value = true;
+        return;
+    }
+
+    const { isAvailable, message } = await userStore.checkNickname(editNickname.value.trim());
+    
+    editCheckMsg.value = message;
+    editCheckStatus.value = isAvailable ? 'success' : 'error';
+    isEditNicknameChecked.value = isAvailable;
+};
+
 const saveNickname = async () => {
   const nextNickname = editNickname.value.trim();
+  
+  // 1. 길이 검사
   if (nextNickname.length < 2) {
     onAuthError("닉네임은 두 글자 이상이어야 해요!");
     return;
   }
+  
+  if (!isEditNicknameChecked.value) {
+      onAuthError("닉네임 중복 확인을 해주세요!");
+      return;
+  }
+  
   if (!userStore.userId) {
     onAuthError("유저 정보를 찾을 수 없어요. 다시 로그인해주세요.");
     return;
   }
+
   try {
-    await updateNickname(userStore.userId, nextNickname);
-    userStore.updateUsername(nextNickname);
+    await userStore.updateUsername(nextNickname); // 스토어 액션으로 통합됨(회원/게스트 분기)
+    
+    // UI 업데이트 (스토어 반응형이지만 여기서 로컬 변수도 동기화)
     nickname.value = nextNickname;
     isNicknameSet.value = true;
     showEditNicknameModal.value = false;
@@ -425,8 +479,11 @@ onUnmounted(() => { stopRoulette(); });
                                 <div class="action-area mt-6">
                                     <div v-if="item.id === 'profile'">
                                         <div class="welcome-msg mb-4"><span class="material-symbols-outlined check-icon">check_circle</span><span><span class="highlight">{{ nickname }}</span>님</span></div>
-                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary">
+                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary mb-2">
                                             <span class="material-symbols-outlined">Edit</span>수정하기
+                                        </button>
+                                        <button v-if="!userStore.isGuest" @click.stop="handleLogout" class="cartoon-btn gray">
+                                            <span class="material-symbols-outlined">logout</span>로그아웃
                                         </button>
                                     </div>
                                     <div v-else-if="item.id === 'create'">
@@ -490,14 +547,19 @@ onUnmounted(() => { stopRoulette(); });
         <div class="edit-nickname-modal">
           <h2 class="edit-nickname-title">닉네임 수정</h2>
           <p class="edit-nickname-desc">새 닉네임을 입력해주세요.</p>
-          <div class="edit-nickname-input">
-            <input
-              v-model="editNickname"
-              type="text"
-              placeholder="닉네임을 입력하세요"
-              @keyup.enter="saveNickname"
-              autofocus
-            />
+          <div class="edit-nickname-input-group mb-4">
+            <div class="input-row">
+                <div class="input-wrapper flex-grow">
+                    <input 
+                      v-model="editNickname" 
+                      type="text" 
+                      placeholder="닉네임을 입력하세요" 
+                      @keyup.enter="saveNickname"
+                    />
+                </div>
+                <button class="cartoon-btn secondary small-btn" @click="checkEditNicknameDuplicate">확인</button>
+            </div>
+            <p v-if="editCheckMsg" class="check-msg" :class="editCheckStatus">{{ editCheckMsg }}</p>
           </div>
           <div class="edit-nickname-actions">
             <button class="cartoon-btn secondary" @click="closeEditNickname">취소</button>
@@ -571,10 +633,11 @@ onUnmounted(() => { stopRoulette(); });
 .game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
-.input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; }
+.input-row { display: flex; gap: 8px; align-items: stretch; }
+.input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; display: flex; align-items: center; }
 .input-wrapper:focus-within { border-color: var(--leaf-green); transform: scale(1.02); }
-.input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
-.input-area input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
+.input-wrapper input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
+.input-wrapper input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
 
 /* 버튼 스타일 (공통) */
 .cartoon-btn {
@@ -745,4 +808,11 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
   font-size: 1rem;
   white-space: nowrap;
 }
+
+.edit-nickname-input-group {
+    display: flex; flex-direction: column; gap: 4px; text-align: left;
+}
+.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.check-msg.success { color: var(--leaf-dark); }
+.check-msg.error { color: #d32f2f; }
 </style>

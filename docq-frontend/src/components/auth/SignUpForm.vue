@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useUserStore } from '@/stores/userStore';
+import { getErrorMessage } from '@/services/api';
 
 const emit = defineEmits(['success', 'close', 'error']); // close acts as back to login here? No, requested "back btn" goes to login. 
 // "회원가입 창에서 해당 표시(close btn)를 누르면 로그인 창이 나와야 해" -> close emits 'close', parent handles navigation.
@@ -60,10 +61,11 @@ const checkNicknameDuplicate = async () => {
         nicknameCheckStatus.value = 'error';
         return;
     }
-    // TODO: API 연결
-    nicknameCheckMsg.value = "사용 가능한 닉네임입니다.";
-    nicknameCheckStatus.value = 'success';
-    isNicknameChecked.value = true;
+    
+    const { isAvailable, message } = await userStore.checkNickname(signUpNickname.value.trim());
+    nicknameCheckMsg.value = message;
+    nicknameCheckStatus.value = isAvailable ? 'success' : 'error';
+    isNicknameChecked.value = isAvailable;
 };
 
 const confirmSignUp = async () => {
@@ -84,13 +86,20 @@ const confirmSignUp = async () => {
         return;
     }
 
-    // 회원가입 로직 (Mock) -> 성공 시 자동 로그인
+    // 1. 회원가입 요청
+    const signUpResult = await userStore.signUp(signUpId.value, signUpPw.value, signUpNickname.value);
+    
+    if (!signUpResult.success) {
+        emit('error', getErrorMessage((signUpResult as any).error) || "회원가입 실패");
+        return;
+    }
+
+    // 2. 가입 성공 시 자동 로그인
     const loginResult = await userStore.login(signUpId.value, signUpPw.value); 
-    if (loginResult) {
-        userStore.updateUsername(signUpNickname.value);
+    if (loginResult.success) {
         emit('success');
     } else {
-        emit('error', "회원가입 후 로그인 실패");
+        emit('error', "회원가입은 성공했으나 로그인에 실패했습니다.");
     }
 };
 </script>

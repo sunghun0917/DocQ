@@ -24,7 +24,12 @@ export type RoomStatus =
  * ----------------------------------------------------------------------------
  */
 
-// 사용자 로그인
+// ---// 1. 사용자(User) 관련
+
+/**
+ * 사용자 로그인
+ * POST /users/login
+ */
 export interface UserLoginRequest {
     nickname: string
 }
@@ -33,12 +38,41 @@ export interface UserLoginResponse {
     nickname: string
 }
 
+/**
+ * 회원가입
+ * POST /auth/signup
+ */
+export interface SignUpRequest {
+    loginId: string
+    password: string
+    nickname: string
+}
+export interface SignUpResponse {
+    id: number
+    loginId: string
+    nickname: string
+    createdAt: string
+}
+
+/**
+ * 사용자 닉네임 변경
+ * PUT /users/{userId}/nickname
+ */
 export interface UserNicknameUpdateRequest {
     nickname: string
 }
 export interface UserNicknameUpdateResponse {
     userId: string
     nickname: string
+}
+
+/**
+ * 닉네임 중복 확인
+ * GET /users/nickname/exists
+ */
+export interface CheckNicknameResponse {
+    nickname: string
+    available: boolean
 }
 
 // 방 생성
