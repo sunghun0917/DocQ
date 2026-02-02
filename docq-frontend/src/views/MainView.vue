@@ -536,7 +536,7 @@ onUnmounted(() => { stopRoulette(); });
                         </div>
                         <button @click="confirmSignUp" class="cartoon-btn primary large-btn">
                             <span>회원가입</span>
-                            <span class="material-symbols-outlined">check</span>
+                            <span class="material-symbols-outlined">person_add</span>
                         </button>
                     </div>
                 </div>
@@ -703,8 +703,8 @@ onUnmounted(() => { stopRoulette(); });
 .game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
-.input-wrapper { position: relative; border-bottom: 3px solid #d7ccc8; transition: all 0.3s; }
-.input-wrapper:focus-within { border-bottom-color: var(--leaf-green); }
+.input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; }
+.input-wrapper:focus-within { border-color: var(--leaf-green); transform: scale(1.02); }
 .input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
 .input-area input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
 
