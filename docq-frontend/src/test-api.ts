@@ -2,7 +2,7 @@
 // 브라우저 콘솔에서 실행하거나, 별도 페이지에서 테스트할 수 있습니다.
 
 import {
-    userLogin,
+    guestLogin,
     createRoom,
     getRoomByInviteCode,
     verifyJoinRoom,
@@ -20,12 +20,12 @@ const generateRandomNickname = () => {
 
 // 전역에서 사용할 수 있도록 export
 export const testAPI = {
-    // 1. 사용자 로그인 테스트
+    // 1. 사용자(게스트) 로그인 테스트
     async testUserLogin() {
-        console.log('🧪 [TEST] 사용자 로그인 테스트')
+        console.log('🧪 [TEST] 게스트 로그인 테스트')
         try {
             const nickname = generateRandomNickname()
-            const result = await userLogin(nickname)
+            const result = await guestLogin(nickname)
             console.log('✅ 성공:', result)
             return result
         } catch (error) {
@@ -35,11 +35,11 @@ export const testAPI = {
     },
 
     // 2. 방 생성 테스트
-    async testCreateRoom(userId: string) {
+    async testCreateRoom(playerId: string) {
         console.log('🧪 [TEST] 방 생성 테스트')
         try {
             const result = await createRoom({
-                userId: userId,
+                playerId: playerId,
                 capacity: 4,
                 title: '테스트 방',
                 isPrivate: false
@@ -53,11 +53,11 @@ export const testAPI = {
     },
 
     // 3. 비밀방 생성 테스트
-    async testCreatePrivateRoom(userId: string) {
+    async testCreatePrivateRoom(playerId: string) {
         console.log('🧪 [TEST] 비밀방 생성 테스트')
         try {
             const result = await createRoom({
-                userId: userId,
+                playerId: playerId,
                 capacity: 4,
                 title: '비밀 테스트 방',
                 isPrivate: true,
@@ -179,11 +179,11 @@ export const testAPI = {
             // 1. 사용자 로그인
             console.log('1️⃣ 사용자 로그인...')
             const user = await this.testUserLogin()
-            console.log(`   userId: ${user.userId}\n`)
+            console.log(`   userId: ${user.playerId}\n`)
 
             // 2. 방 생성
             console.log('2️⃣ 방 생성...')
-            const room = await this.testCreateRoom(user.userId)
+            const room = await this.testCreateRoom(user.playerId)
             console.log(`   roomId: ${room.roomId}`)
             console.log(`   inviteCode: ${room.inviteCode}\n`)
 
@@ -194,19 +194,19 @@ export const testAPI = {
 
             // 4. 게임 참가
             console.log('4️⃣ 게임 참가...')
-            await this.testGameJoin(room.roomId, user.userId, user.nickname)
+            await this.testGameJoin(room.roomId, user.playerId, user.nickname)
             console.log('   참가 메시지 전송 완료\n')
 
             // 5. 준비 상태 변경
             console.log('5️⃣ 준비 상태 변경...')
             await new Promise(resolve => setTimeout(resolve, 1000)) // 1초 대기
-            await this.testSetReady(room.roomId, user.userId, true)
+            await this.testSetReady(room.roomId, user.playerId, true)
             console.log('   준비 완료\n')
 
             // 6. 게임 시작 (준비 완료 상태에서만 가능하므로 잠시 대기 후 실행)
             console.log('6️⃣ 게임 시작...')
             await new Promise(resolve => setTimeout(resolve, 2000)) // 2초 대기
-            await this.testStartGame(room.roomId, user.userId)
+            await this.testStartGame(room.roomId, user.playerId)
             console.log('   게임 시작 요청 완료\n')
 
             console.log('✅ 전체 플로우 테스트 성공!')
@@ -228,11 +228,11 @@ export const testAPI = {
             // 1. 사용자 로그인
             console.log('1️⃣ 사용자 로그인...')
             const user = await this.testUserLogin()
-            console.log(`   userId: ${user.userId}\n`)
+            console.log(`   userId: ${user.playerId}\n`)
 
             // 2. 방 생성
             console.log('2️⃣ 방 생성...')
-            const room = await this.testCreateRoom(user.userId)
+            const room = await this.testCreateRoom(user.playerId)
             console.log(`   roomId: ${room.roomId}`)
             console.log(`   inviteCode: ${room.inviteCode}\n`)
 
