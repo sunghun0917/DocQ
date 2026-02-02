@@ -40,6 +40,9 @@ const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
+const editCheckMsg = ref('');
+const editCheckStatus = ref<'success' | 'error' | ''>('');
+const isEditNicknameChecked = ref(false);
 
 // Auth State
 const isGuestInputVisible = ref(false);
@@ -271,6 +274,9 @@ const handleAction = (action: string) => {
   if (action === 'join') showJoinModal.value = true;
   if (action === 'profile') {
       editNickname.value = nickname.value;
+      editCheckMsg.value = '';
+      editCheckStatus.value = '';
+      isEditNicknameChecked.value = false;
       showEditNicknameModal.value = true;
   }
   if (action === 'guide') showGuideModal.value = true; // [ADD]
@@ -280,16 +286,45 @@ const closeEditNickname = () => {
   showEditNicknameModal.value = false;
 };
 
+const checkEditNicknameDuplicate = async () => {
+    if (!editNickname.value.trim()) {
+        editCheckMsg.value = "닉네임을 입력해주세요.";
+        editCheckStatus.value = 'error';
+        return;
+    }
+    // 본인 닉네임과 같으면 통과
+    if (editNickname.value.trim() === nickname.value) {
+        editCheckMsg.value = "현재 닉네임과 동일합니다.";
+        editCheckStatus.value = 'success';
+        isEditNicknameChecked.value = true;
+        return;
+    }
+
+    // TODO: API 연결
+    editCheckMsg.value = "사용 가능한 닉네임입니다.";
+    editCheckStatus.value = 'success';
+    isEditNicknameChecked.value = true;
+};
+
 const saveNickname = async () => {
   const nextNickname = editNickname.value.trim();
+  
+  // 1. 길이 검사
   if (nextNickname.length < 2) {
     onAuthError("닉네임은 두 글자 이상이어야 해요!");
     return;
   }
+  
+  if (!isEditNicknameChecked.value) {
+      onAuthError("닉네임 중복 확인을 해주세요!");
+      return;
+  }
+  
   if (!userStore.userId) {
     onAuthError("유저 정보를 찾을 수 없어요. 다시 로그인해주세요.");
     return;
   }
+
   try {
     await updateNickname(userStore.userId, nextNickname);
     userStore.updateUsername(nextNickname);
@@ -510,14 +545,19 @@ onUnmounted(() => { stopRoulette(); });
         <div class="edit-nickname-modal">
           <h2 class="edit-nickname-title">닉네임 수정</h2>
           <p class="edit-nickname-desc">새 닉네임을 입력해주세요.</p>
-          <div class="edit-nickname-input">
-            <input
-              v-model="editNickname"
-              type="text"
-              placeholder="닉네임을 입력하세요"
-              @keyup.enter="saveNickname"
-              autofocus
-            />
+          <div class="edit-nickname-input-group mb-4">
+            <div class="input-row">
+                <div class="input-wrapper flex-grow">
+                    <input 
+                      v-model="editNickname" 
+                      type="text" 
+                      placeholder="닉네임을 입력하세요" 
+                      @keyup.enter="saveNickname"
+                    />
+                </div>
+                <button class="cartoon-btn secondary small-btn" @click="checkEditNicknameDuplicate">확인</button>
+            </div>
+            <p v-if="editCheckMsg" class="check-msg" :class="editCheckStatus">{{ editCheckMsg }}</p>
           </div>
           <div class="edit-nickname-actions">
             <button class="cartoon-btn secondary" @click="closeEditNickname">취소</button>
@@ -591,10 +631,11 @@ onUnmounted(() => { stopRoulette(); });
 .game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
-.input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; }
+.input-row { display: flex; gap: 8px; align-items: stretch; }
+.input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; display: flex; align-items: center; }
 .input-wrapper:focus-within { border-color: var(--leaf-green); transform: scale(1.02); }
-.input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
-.input-area input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
+.input-wrapper input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
+.input-wrapper input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
 
 /* 버튼 스타일 (공통) */
 .cartoon-btn {
@@ -765,4 +806,11 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
   font-size: 1rem;
   white-space: nowrap;
 }
+
+.edit-nickname-input-group {
+    display: flex; flex-direction: column; gap: 4px; text-align: left;
+}
+.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.check-msg.success { color: var(--leaf-dark); }
+.check-msg.error { color: #d32f2f; }
 </style>
