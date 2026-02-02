@@ -11,30 +11,58 @@ const signUpPw = ref('');
 const signUpPwConfirm = ref('');
 const signUpNickname = ref('');
 const isIdChecked = ref(false);
+
 const isNicknameChecked = ref(false);
+const idCheckMsg = ref('');
+const idCheckStatus = ref<'success' | 'error' | ''>('');
+const nicknameCheckMsg = ref('');
+const nicknameCheckStatus = ref<'success' | 'error' | ''>('');
+
+const pwCheckMsg = ref('');
+const pwCheckStatus = ref<'success' | 'error' | ''>('');
+
+const checkPasswordMatch = () => {
+    if (!signUpPwConfirm.value) {
+        pwCheckMsg.value = "";
+        pwCheckStatus.value = "";
+        return;
+    }
+    if (signUpPw.value === signUpPwConfirm.value) {
+        pwCheckMsg.value = "비밀번호가 일치합니다.";
+        pwCheckStatus.value = "success";
+    } else {
+        pwCheckMsg.value = "비밀번호가 일치하지 않습니다.";
+        pwCheckStatus.value = "error";
+    }
+};
 
 const checkIdDuplicate = async () => {
     if (!signUpId.value.trim()) {
-        emit('error', "아이디를 입력해주세요.");
+        idCheckMsg.value = "아이디를 입력해주세요.";
+        idCheckStatus.value = 'error';
         return;
     }
     // TODO: API 연결
     if (signUpId.value.toLowerCase().includes('admin')) {
-        emit('error', "사용할 수 없는 아이디입니다.");
+        idCheckMsg.value = "사용할 수 없는 아이디입니다.";
+        idCheckStatus.value = 'error';
         isIdChecked.value = false;
     } else {
-        alert("사용 가능한 아이디입니다.");
+        idCheckMsg.value = "사용 가능한 아이디입니다.";
+        idCheckStatus.value = 'success';
         isIdChecked.value = true;
     }
 };
 
 const checkNicknameDuplicate = async () => {
     if (!signUpNickname.value.trim()) {
-        emit('error', "닉네임을 입력해주세요.");
+        nicknameCheckMsg.value = "닉네임을 입력해주세요.";
+        nicknameCheckStatus.value = 'error';
         return;
     }
     // TODO: API 연결
-    alert("사용 가능한 닉네임입니다.");
+    nicknameCheckMsg.value = "사용 가능한 닉네임입니다.";
+    nicknameCheckStatus.value = 'success';
     isNicknameChecked.value = true;
 };
 
@@ -75,24 +103,37 @@ const confirmSignUp = async () => {
         </button>
 
         <div class="input-area">
-            <div class="input-row mb-2">
-                <div class="input-wrapper flex-grow">
-                    <input type="text" v-model="signUpId" placeholder="아이디" />
+            <div class="input-group mb-2">
+                <div class="input-row">
+                    <div class="input-wrapper flex-grow">
+                        <input type="text" v-model="signUpId" placeholder="아이디" />
+                    </div>
+                    <button class="cartoon-btn secondary small-btn" @click="checkIdDuplicate">확인</button>
                 </div>
-                <button class="cartoon-btn secondary small-btn" @click="checkIdDuplicate">확인</button>
+                <p v-if="idCheckMsg" class="check-msg" :class="idCheckStatus">{{ idCheckMsg }}</p>
             </div>
+
             <div class="input-wrapper mb-2">
-                <input type="password" v-model="signUpPw" placeholder="비밀번호" />
+                <input type="password" v-model="signUpPw" @input="checkPasswordMatch" placeholder="비밀번호" />
             </div>
-            <div class="input-wrapper mb-2">
-                <input type="password" v-model="signUpPwConfirm" placeholder="비밀번호 확인" />
-            </div>
-            <div class="input-row mb-4">
-                <div class="input-wrapper flex-grow">
-                    <input type="text" v-model="signUpNickname" placeholder="닉네임" />
+            
+            <div class="input-group mb-2">
+                <div class="input-wrapper">
+                    <input type="password" v-model="signUpPwConfirm" @input="checkPasswordMatch" placeholder="비밀번호 확인" />
                 </div>
-                <button class="cartoon-btn secondary small-btn" @click="checkNicknameDuplicate">확인</button>
+                <p v-if="pwCheckMsg" class="check-msg" :class="pwCheckStatus">{{ pwCheckMsg }}</p>
             </div>
+
+            <div class="input-group mb-4">
+                <div class="input-row">
+                    <div class="input-wrapper flex-grow">
+                        <input type="text" v-model="signUpNickname" placeholder="닉네임" />
+                    </div>
+                    <button class="cartoon-btn secondary small-btn" @click="checkNicknameDuplicate">확인</button>
+                </div>
+                <p v-if="nicknameCheckMsg" class="check-msg" :class="nicknameCheckStatus">{{ nicknameCheckMsg }}</p>
+            </div>
+
             <button @click="confirmSignUp" class="cartoon-btn primary large-btn">
                 <span>회원가입</span>
                 <span class="material-symbols-outlined">person_add</span>
@@ -128,6 +169,8 @@ const confirmSignUp = async () => {
 }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
+.input-group { display: flex; flex-direction: column; gap: 4px; }
+
 .input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; }
 .input-wrapper:focus-within { border-color: var(--leaf-green); transform: scale(1.02); }
 .input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: 'Jua', sans-serif; outline: none; }
@@ -135,6 +178,10 @@ const confirmSignUp = async () => {
 
 .input-row { display: flex; gap: 8px; align-items: center; }
 .flex-grow { flex-grow: 1; }
+
+.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.check-msg.success { color: var(--leaf-dark); }
+.check-msg.error { color: #d32f2f; }
 
 .close-btn {
     position: absolute; top: 10px; right: 10px;
