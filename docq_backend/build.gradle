@@ -43,6 +43,9 @@ dependencies {
 
     // MySQL Driver
     runtimeOnly 'com.mysql:mysql-connector-j'
+
+    // Spring Security
+    implementation 'org.springframework.boot:spring-boot-starter-security'
 }
 
 tasks.named('test') {

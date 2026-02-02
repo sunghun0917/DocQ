@@ -36,7 +36,12 @@ public enum ErrorCode {
     /* D001 ~ D003 : 문서/AI (Document) */
     FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "D001", "파일 업로드 실패"),
     AI_PROCESSING_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "D002", "AI 처리 실패"),
-    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "D003", "파일 형식 오류");
+    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "D003", "파일 형식 오류"),
+
+    /* A001 ~ A003 : 인증 (Auth) */
+    DUPLICATE_LOGIN_ID(HttpStatus.CONFLICT, "A001", "이미 사용중인 로그인 ID입니다."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "A002", "로그인 ID 또는 비밀번호가 올바르지 않습니다."),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "A003", "로그인이 필요합니다.");
 
     private final HttpStatus status;
     private final String code;
