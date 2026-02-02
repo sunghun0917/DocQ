@@ -18,13 +18,16 @@ import type {
     SignUpRequest,
     SignUpResponse,
     LoginRequest,
-    LoginResponse
+    LoginResponse,
+    MemberMeResponse,
+    GuestMeResponse
 } from '@/types/docq-api'
 
 // Axios 인스턴스 생성
 const apiClient: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
     timeout: 120000,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json'
     }
@@ -34,7 +37,12 @@ const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        console.error('API Error:', error.response?.data || error.message)
+        if (error.response) {
+            console.error('API Error Data:', error.response.data)
+            console.error('API Error Status:', error.response.status)
+        } else {
+            console.error('API Error Message:', error.message)
+        }
         return Promise.reject(error)
     }
 )
@@ -179,6 +187,15 @@ export const checkUserIdAvailability = async (userId: string): Promise<CheckIdRe
     return response.data
 }
 
+/**
+ * 내 정보 조회 (새로고침 시 세션 복구용)
+ * GET /users/me
+ */
+export const getMyInfo = async (): Promise<MemberMeResponse | GuestMeResponse> => {
+    const response = await apiClient.get<MemberMeResponse | GuestMeResponse>('/users/me')
+    return response.data
+}
+
 // ==================== 에러 처리 헬퍼 ====================
 
 /**
@@ -219,6 +236,7 @@ export default {
     checkUserIdAvailability,
     signUp,
     login,
+    getMyInfo,
     getErrorMessage,
     getErrorCode
 }

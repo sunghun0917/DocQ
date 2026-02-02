@@ -14,8 +14,7 @@ interface RankingResult {
   score?: number;
   isMe: boolean;
   avatar?: string | number;
-  userId?: string;   // 하위 호환
-  playerId?: string; // 게임 참여자 ID (GameView에서 전달)
+  playerId: string; // 게임 참여자 ID (GameView에서 전달)
 }
 
 const props = defineProps<{

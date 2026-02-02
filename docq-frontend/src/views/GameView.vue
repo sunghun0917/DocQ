@@ -81,7 +81,7 @@ const rankingResults = computed(() => {
     })
     
     return sorted.map((p, index) => {
-        const user = roomStore.users.find(u => u.id === p.playerId)
+        const user = roomStore.users.find(u => u.playerId === p.playerId)
         let avatarVal = user?.avatar || '0'
         const mapped = AVATAR_REVERSE_MAP[avatarVal]
         if (mapped) {
@@ -117,7 +117,7 @@ watch(
             })
             
             finalRankingResults.value = sorted.map((p, index) => {
-                const user = roomStore.users.find(u => u.id === p.playerId)
+                const user = roomStore.users.find(u => u.playerId === p.playerId)
                 let avatarVal = user?.avatar || '0'
                 const mapped = AVATAR_REVERSE_MAP[avatarVal]
                 if (mapped) {
@@ -199,12 +199,12 @@ const showSystemNotice = (text: string, duration = 2000) => {
 const winnerName = computed(() => {
     const winnerId = miniGame.value.result?.winnerPlayerId
     if (!winnerId) return ''
-    return roomStore.users.find(u => u.id === winnerId)?.nickname || ''
+    return roomStore.users.find(u => u.playerId === winnerId)?.nickname || ''
 })
 
 const miniGamePlayers = computed(() =>
     roomStore.users.map(user => ({
-        id: user.id,
+        playerId: user.playerId,
         nickname: user.nickname,
         avatar: user.avatar || '🎮',
         isMe: user.isMe
@@ -245,7 +245,7 @@ watch(
         const currentTurnId = gameStore.gameState.currentTurnPlayerId ?? null
         let noticeText = '맞춘 사람이 없습니다.'
         if (winnerId) {
-            const winnerName = roomStore.users.find(u => u.id === winnerId)?.nickname || '알 수 없음'
+            const winnerName = roomStore.users.find(u => u.playerId === winnerId)?.nickname || '알 수 없음'
             if (winnerId === currentTurnId) {
                 noticeText = `플레이어 ${winnerName}가 정답을 맞추었습니다.`
             } else {
@@ -596,7 +596,7 @@ onUnmounted(() => {
           <template v-if="p">
             <!-- Left: Avatar (Static Emoji) -->
             <div class="w-[80px] h-[80px] flex items-center justify-center text-6xl pointer-events-none z-10 -ml-2">
-                {{ roomStore.users.find(u => u.id === p.playerId)?.avatar || '👤' }}
+                {{ roomStore.users.find(u => u.playerId === p.playerId)?.avatar || '👤' }}
             </div>
 
             <!-- Right: Info -->

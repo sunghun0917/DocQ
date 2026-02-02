@@ -239,8 +239,8 @@ const START_SPREAD_RADIUS = 0.35
 
 const playerOrderIds = computed(() => players.value.map(p => p.playerId).slice().sort())
 
-const getPlayerSlotIndex = (userId: string) => {
-  const idx = playerOrderIds.value.indexOf(userId)
+const getPlayerSlotIndex = (playerId: string) => {
+  const idx = playerOrderIds.value.indexOf(playerId)
   return idx >= 0 ? idx : 0
 }
 
@@ -249,18 +249,18 @@ const getPlayerSlotIndex = (userId: string) => {
 //   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
 // }
 
-const getPlayerModelUrl = (userId: string): string => {
-  const p = players.value.find(player => player.playerId === userId)
+const getPlayerModelUrl = (playerId: string): string => {
+  const p = players.value.find(player => player.playerId === playerId)
   // [MOD] 아바타 선택 ID를 우선 사용 (없으면 슬롯 순서)
-  const idx = (p && typeof p.avatarId === 'number') ? p.avatarId : getPlayerSlotIndex(userId)
+  const idx = (p && typeof p.avatarId === 'number') ? p.avatarId : getPlayerSlotIndex(playerId)
   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
 }
 
-  const applyStartSpread = (base: Vec3, userId: string): Vec3 => {
+  const applyStartSpread = (base: Vec3, playerId: string): Vec3 => {
   const count = Math.min(playerOrderIds.value.length, CHARACTER_MODELS.length)
   if (count <= 1) return base
 
-  const slot = getPlayerSlotIndex(userId) % count
+  const slot = getPlayerSlotIndex(playerId) % count
   const angle = (2 * Math.PI * slot) / count
 
   return {
@@ -271,10 +271,10 @@ const getPlayerModelUrl = (userId: string): string => {
 }
 
 const getDisplayPosition = (p: PlayerInfo): number => {
-  const userId = p.playerId
+  const playerId = p.playerId
   return (
-    animatingPlayers.value[userId]
-    ?? lastStablePositions.value[userId]
+    animatingPlayers.value[playerId]
+    ?? lastStablePositions.value[playerId]
     ?? p.position
     ?? MAP_START_POSITION
   )

@@ -69,8 +69,8 @@ export interface GuestNicknameUpdateResponse {
  * GET /users/nickname/exists
  */
 export interface CheckNicknameResponse {
-    nickname: string
-    available: boolean
+    exists: boolean
+    message: string
 }
 
 export interface CheckIdResponse {
@@ -252,4 +252,24 @@ export interface FinishResponse {
     type: 'FINISH'
     winnerPlayerId: string
     rankings: FinishRank[]
+}
+
+/**
+ * 내 정보 조회 응답 (Member)
+ */
+export interface MemberMeResponse {
+    id: number
+    playerId: string
+    loginId: string
+    nickname: string
+    isGuest: boolean
+}
+
+/**
+ * 내 정보 조회 응답 (Guest)
+ */
+export interface GuestMeResponse {
+    playerId: string
+    nickname: string
+    isGuest: boolean
 }

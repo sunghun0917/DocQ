@@ -6,7 +6,7 @@ import StopwatchGame from './StopWatchGame.vue';
 
 const props = defineProps<{
   gameType: 'mash' | 'sequence' | 'stopwatch';
-  players: Array<{ id: string; nickname: string; avatar: string; isMe: boolean }>;
+  players: Array<{ playerId: string; nickname: string; avatar: string; isMe: boolean }>;
   timeLimitMs?: number;
   description?: string;
   result?: {
@@ -119,7 +119,7 @@ onUnmounted(() => {
 
       <div 
         v-for="(player, index) in players" 
-        :key="player.id"
+        :key="player.playerId"
         class="absolute flex items-center gap-3 bg-white/10 p-4 rounded-2xl border-2 border-white/20 backdrop-blur-md min-w-[200px]"
         :class="getPlayerStyle(index)"
       >
@@ -128,7 +128,7 @@ onUnmounted(() => {
           <div class="text-white font-bold">{{ player.nickname }}</div>
           
           <div v-if="isResultShown" class="text-xl font-black text-yellow-400">
-            {{ resultScores[player.id] ? resultScores[player.id] + '점' : '' }}
+            {{ resultScores[player.playerId] ? resultScores[player.playerId] + '점' : '' }}
           </div>
           <div v-else class="text-white/50 text-sm">
             {{ isSubmitted && player.isMe ? '결과 집계 중...' : '플레이 중...' }}
@@ -136,7 +136,7 @@ onUnmounted(() => {
         </div>
         
         <div v-if="isResultShown" class="animate-pop" :class="index % 2 !== 0 ? 'mr-auto' : 'ml-auto'">
-          <span v-if="winnerId === player.id" class="bg-yellow-400 text-black px-3 py-1 rounded-lg font-black shadow-lg">👑</span>
+          <span v-if="winnerId === player.playerId" class="bg-yellow-400 text-black px-3 py-1 rounded-lg font-black shadow-lg">👑</span>
         </div>
       </div>
 
