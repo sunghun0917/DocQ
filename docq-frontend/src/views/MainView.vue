@@ -346,6 +346,17 @@ const confirmSignUp = async () => {
     }
 };
 
+const goBack = () => {
+    if (isSignUpInputVisible.value) {
+        isSignUpInputVisible.value = false;
+        isLoginInputVisible.value = true;
+    } else if (isLoginInputVisible.value) {
+        isLoginInputVisible.value = false;
+    } else if (isGuestInputVisible.value) {
+        isGuestInputVisible.value = false;
+    }
+};
+
 const triggerShake = () => {
   isShaking.value = true;
   setTimeout(() => isShaking.value = false, 500);
@@ -469,6 +480,13 @@ onUnmounted(() => { stopRoulette(); });
     <transition name="intro-fade">
         <div v-if="!isNicknameSet" class="intro-container">
             <div class="intro-panel wood-panel">
+                <button 
+                    v-if="isGuestInputVisible || isLoginInputVisible || isSignUpInputVisible" 
+                    class="close-btn" 
+                    @click="goBack"
+                >
+                    <span class="material-symbols-outlined">close</span>
+                </button>
                 <div class="logo-area">
                     <h1 class="game-title">DocQ</h1>
                     <p class="game-subtitle">PDF 퀴즈 배틀</p>
@@ -691,8 +709,20 @@ onUnmounted(() => { stopRoulette(); });
     padding: 25px; 
     box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15); 
     text-align: center; display: flex; flex-direction: column; gap: 15px;
+    position: relative; /* close-btn positioning */
     animation: floating 3s ease-in-out infinite;
 }
+
+.close-btn {
+    position: absolute; top: 10px; right: 10px;
+    width: 32px; height: 32px;
+    background: var(--leaf-green); border: none; border-radius: 50%;
+    color: white; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: all 0.2s; z-index: 10;
+}
+.close-btn:hover { transform: scale(1.1); background: var(--leaf-dark); }
+
 @keyframes floating {
     0%, 100% { transform: translateY(0px); box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15); }
     50% { transform: translateY(-12px); box-shadow: 0 25px 0 rgba(93, 64, 55, 0.1), 0 40px 60px rgba(0,0,0,0.1); }
