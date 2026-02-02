@@ -40,6 +40,15 @@ export interface GuestNicknameUpdateResponse {
     nickname: string
 }
 
+/**
+ * 닉네임 중복 확인
+ * GET /users/nickname/exists
+ */
+export interface CheckNicknameResponse {
+    nickname: string
+    available: boolean
+}
+
 // 방 생성
 export interface CreateRoomRequest {
     playerId: string
