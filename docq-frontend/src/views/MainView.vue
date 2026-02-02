@@ -37,6 +37,7 @@ const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
+const isGuestInputVisible = ref(false); // [ADD] 게스트 모드에서 닉네임 입력창 표시 여부
 
 // --- 2. 룰렛 변수 ---
 const wheelRef = ref<HTMLElement | null>(null);
@@ -236,6 +237,14 @@ const confirmNickname = async () => {
   showGuideModal.value = true; // [ADD] 닉네임 설정 후 가이드 모달 자동 오픈
 };
 
+const handleGuestLogin = () => {
+  isGuestInputVisible.value = true;
+};
+
+const handleLogin = () => {
+  alert("로그인 서비스 준비 중입니다."); 
+};
+
 const triggerShake = () => {
   isShaking.value = true;
   setTimeout(() => isShaking.value = false, 500);
@@ -364,13 +373,25 @@ onUnmounted(() => { stopRoulette(); });
                     <p class="game-subtitle">PDF 퀴즈 배틀</p>
                 </div>
                 <div class="input-area">
-                    <div class="input-wrapper">
-                        <input type="text" v-model="nickname" placeholder="닉네임을 입력하세요" @keyup.enter="confirmNickname" autofocus />
+                    <div v-if="!isGuestInputVisible">
+                        <button @click="handleLogin" class="cartoon-btn primary large-btn mb-4">
+                            <span>로그인</span>
+                            <span class="material-symbols-outlined">login</span>
+                        </button>
+                        <button @click="handleGuestLogin" class="cartoon-btn gray large-btn">
+                            <span>게스트 로그인</span>
+                            <span class="material-symbols-outlined">person_off</span>
+                        </button>
                     </div>
-                    <button @click="confirmNickname" class="cartoon-btn primary large-btn">
-                        <span>START</span>
-                        <span class="material-symbols-outlined">play_arrow</span>
-                    </button>
+                    <div v-else>
+                        <div class="input-wrapper mb-4">
+                            <input type="text" v-model="nickname" placeholder="닉네임을 입력하세요" @keyup.enter="confirmNickname" autofocus />
+                        </div>
+                        <button @click="confirmNickname" class="cartoon-btn primary large-btn">
+                            <span>START</span>
+                            <span class="material-symbols-outlined">play_arrow</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -554,6 +575,10 @@ onUnmounted(() => { stopRoulette(); });
 .cartoon-btn.secondary { background: #ff7043; box-shadow: 0 5px 0 #d84315; }
 .cartoon-btn.secondary:hover { background: #ff8a65; }
 .cartoon-btn.secondary:active { top: 5px; box-shadow: 0 0 0 #d84315; }
+
+.cartoon-btn.gray { background: #90a4ae; box-shadow: 0 5px 0 #546e7a; }
+.cartoon-btn.gray:hover { background: #b0bec5; }
+.cartoon-btn.gray:active { top: 5px; box-shadow: 0 0 0 #546e7a; }
 
 /* 메인 컨텐츠 */
 .main-container { position: absolute; inset: 0; z-index: 10; }
