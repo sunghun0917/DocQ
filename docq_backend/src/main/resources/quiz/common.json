@@ -1,0 +1,310 @@
+[
+    {
+        "question": "대한민국 최초의 우주 비행사는?",
+        "options": [
+            "지소연",
+            "김소연",
+            "이소연",
+            "최소연"
+        ],
+        "answerIndex": 2,
+        "answerText": "이소연"
+    },
+    {
+        "question": "태양계에서 가장 큰 행성은?",
+        "options": [
+            "지구",
+            "화성",
+            "목성",
+            "토성"
+        ],
+        "answerIndex": 2,
+        "answerText": "목성"
+    },
+    {
+        "question": "물의 화학식은?",
+        "options": [
+            "CO₂",
+            "H₂O",
+            "O₂",
+            "NaCl"
+        ],
+        "answerIndex": 1,
+        "answerText": "H₂O"
+    },
+    {
+        "question": "'물티슈'의 영어표기로 알맞는 것은?'",
+        "options": [
+            "water tissue",
+            "hand tissue",
+            "wet tissue",
+            "wash tissue"
+        ],
+        "answerIndex": 2,
+        "answerText": "wet tissue"
+    },
+    {
+        "question": "우리나라의 '초대대통령'은 누구일까요?",
+        "options": [
+            "박정희",
+            "전두환",
+            "이승만",
+            "김대중"
+        ],
+        "answerIndex": 2,
+        "answerText": "이승만"
+    },
+    {
+        "question": "피라미드는 어느 나라에 있을까?",
+        "options": [
+            "그리스",
+            "이탈리아",
+            "이집트",
+            "인도"
+        ],
+        "answerIndex": 2,
+        "answerText": "이집트"
+    },
+    {
+        "question": "컴퓨터에서 CPU의 역할은?",
+        "options": [
+            "저장",
+            "연산",
+            "출력",
+            "입력"
+        ],
+        "answerIndex": 1,
+        "answerText": "연산"
+    },
+    {
+        "question": "사람의 심장은 몸의 어느 쪽에 가까운가?",
+        "options": [
+            "오른쪽",
+            "가운데",
+            "왼쪽",
+            "아래"
+        ],
+        "answerIndex": 2,
+        "answerText": "왼쪽"
+    },
+    {
+        "question": "국가의 3요소가 아닌 것은?",
+        "options": [
+            "영토",
+            "군주",
+            "주권",
+            "국민"
+        ],
+        "answerIndex": 1,
+        "answerText": "군주"
+    },
+    {
+        "question": "우리나라의 국화는?",
+        "options": [
+            "장미",
+            "국화",
+            "무궁화",
+            "백합"
+        ],
+        "answerIndex": 2,
+        "answerText": "무궁화"
+    },
+    {
+        "question": "세계에서 가장 넓은 바다는?",
+        "options": [
+            "대서양",
+            "인도양",
+            "태평양",
+            "북극해"
+        ],
+        "answerIndex": 2,
+        "answerText": "태평양"
+    },
+    {
+        "question": "지구에서 가장 높은 산은?",
+        "options": [
+            "알프스",
+            "히말라야",
+            "에베레스트",
+            "백두산"
+        ],
+        "answerIndex": 2,
+        "answerText": "에베레스트"
+    },
+    {
+        "question": "울릉도는 행정구역상 어디에 속할까요?",
+        "options": [
+            "강원도",
+            "경상북도",
+            "제주도",
+            "전라남도"
+        ],
+        "answerIndex": 1,
+        "answerText": "경상북도"
+    },
+    {
+        "question": "10원 짜리 동전 앞 면에 새겨진 탑의 이름은?",
+        "options": [
+            "석가탑",
+            "다보탑",
+            "길성탑",
+            "삼층석탑"
+        ],
+        "answerIndex": 1,
+        "answerText": "다보탑"
+    },
+    {
+        "question": "세계에서 가장 넓은 사막은 어디일까요?",
+        "options": [
+            "고비 사막",
+            "남극 사막",
+            "사하라 사막",
+            "아라비아 사막"
+        ],
+        "answerIndex": 1,
+        "answerText": "남극 사막"
+    },
+    {
+        "question": "산소의 원소기호는?",
+        "options": [
+            "S",
+            "O",
+            "H",
+            "C"
+        ],
+        "answerIndex": 1,
+        "answerText": "O"
+    },
+    {
+        "question": "경상도 사투리인 '삐갱이'는 무슨 뜻일까요?",
+        "options": [
+            "송아지",
+            "병아리",
+            "꾀꼬리",
+            "올챙이"
+        ],
+        "answerIndex": 1,
+        "answerText": "병아리"
+    },
+    {
+        "question": "전화기의 발명가는?",
+        "options": [
+            "에디슨",
+            "벨",
+            "뉴턴",
+            "아인슈타인"
+        ],
+        "answerIndex": 1,
+        "answerText": "벨"
+    },
+    {
+        "question": "공휴일이 아닌 날은?",
+        "options": [
+            "개천절",
+            "제헌절",
+            "한글날",
+            "현충일"
+        ],
+        "answerIndex": 1,
+        "answerText": "제헌절"
+    },
+    {
+        "question": "컴퓨터 키보드에서 가장 긴 키는?",
+        "options": [
+            "Shift",
+            "Enter",
+            "Space",
+            "Ctrl"
+        ],
+        "answerIndex": 2,
+        "answerText": "Space"
+    },
+    {
+        "question": "세계에서 가장 작은 나라의 이름은?",
+        "options": [
+            "몰디브",
+            "마셀제도",
+            "바티칸",
+            "괌"
+        ],
+        "answerIndex": 2,
+        "answerText": "바티칸"
+    },
+    {
+        "question": "달은 지구를 무엇을 하며 움직일까?",
+        "options": [
+            "자전",
+            "공전",
+            "정지",
+            "충돌"
+        ],
+        "answerIndex": 1,
+        "answerText": "공전"
+    },
+    {
+        "question": "물고기는 무엇으로 숨을 쉴까?",
+        "options": [
+            "폐",
+            "아가미",
+            "피부",
+            "입"
+        ],
+        "answerIndex": 1,
+        "answerText": "아가미"
+    },
+    {
+        "question": "밤하늘에서 가장 밝은 별은?",
+        "options": [
+            "북극성",
+            "시리우스",
+            "베가",
+            "태양"
+        ],
+        "answerIndex": 1,
+        "answerText": "시리우스"
+    },
+    {
+        "question": "대한민국의 전화 국가번호는?",
+        "options": [
+            "+1",
+            "+44",
+            "+81",
+            "+82"
+        ],
+        "answerIndex": 3,
+        "answerText": "+82"
+    },
+    {
+        "question": "나침반은 무엇을 가리킬까?",
+        "options": [
+            "동쪽",
+            "서쪽",
+            "남쪽",
+            "북쪽"
+        ],
+        "answerIndex": 3,
+        "answerText": "북쪽"
+    },
+    {
+        "question": "비가 얼어서 내리는 것은?",
+        "options": [
+            "안개",
+            "이슬",
+            "눈",
+            "구름"
+        ],
+        "answerIndex": 2,
+        "answerText": "눈"
+    },
+    {
+        "question": "다음 중 '동계올림픽'의 종목이 아닌것은?",
+        "options": [
+            "스키점프",
+            "트라이애슬론",
+            "스켈레톤",
+            "노르딕 복합"
+        ],
+        "answerIndex": 1,
+        "answerText": "트라이애슬론"
+    }
+]
