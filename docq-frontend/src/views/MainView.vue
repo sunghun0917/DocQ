@@ -4,12 +4,15 @@ import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage, updateNickname } from '@/services/api';
 
-// 컴포넌트 임포트 (경로 확인 필요)
+// 컴포넌트 임포트
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
 import AlertModal from '@/components/common/AlertModal.vue';
 import CreateRoomModal from '@/components/lobby/CreateRoomModal.vue';
 import JoinRoomModal from '@/components/lobby/JoinRoomModal.vue';
 import GameGuideModal from '@/components/common/GameGuideModal.vue';
+import GuestLoginForm from '@/components/auth/GuestLoginForm.vue';
+import LoginForm from '@/components/auth/LoginForm.vue';
+import SignUpForm from '@/components/auth/SignUpForm.vue';
 
 gsap.registerPlugin(Observer);
 
@@ -23,7 +26,7 @@ const menuItems = [
   { id: 'team', label: '만든 사람들', description: '우리를 소개합니다!', icon: 'groups' },
 ];
 
-const totalItems = menuItems.length; // [중요] 변수 선언 위치 확인
+const totalItems = menuItems.length;
 const anglePerItem = 360 / totalItems;
 
 const userStore = useUserStore();
@@ -32,22 +35,16 @@ const isNicknameSet = ref(false);
 const showCreateModal = ref(false);
 const showJoinModal = ref(false);
 const showEditNicknameModal = ref(false);
-const showGuideModal = ref(false); // [ADD]
+const showGuideModal = ref(false);
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
-const isGuestInputVisible = ref(false); 
+
+// Auth State
+const isGuestInputVisible = ref(false);
 const isLoginInputVisible = ref(false);
-const isSignUpInputVisible = ref(false); // [ADD] 회원가입 입력창 표시 여부
-const loginId = ref('');
-const loginPw = ref('');
-const signUpId = ref('');
-const signUpPw = ref('');
-const signUpPwConfirm = ref('');
-const signUpNickname = ref('');
-const isIdChecked = ref(false);
-const isNicknameChecked = ref(false);
+const isSignUpInputVisible = ref(false);
 
 // --- 2. 룰렛 변수 ---
 const wheelRef = ref<HTMLElement | null>(null);
@@ -71,21 +68,17 @@ const nextItemData = computed(() => itemAt(activeIndex.value + 1));
 
 // 안전하게 아이템 가져오는 헬퍼 함수
 const itemAt = (index: number) => {
-    // 음수 인덱스 처리 및 범위 보정
     const adjustedIndex = ((index % totalItems) + totalItems) % totalItems;
     return menuItems[adjustedIndex] || menuItems[0];
 };
 
 // --- 4. 핵심 로직 ---
-
-// [수정] 아이템 위치 계산 함수 (안전장치 추가)
 const getItemPosition = (index: number) => {
     if (!menuItems || menuItems.length === 0) return 'pos-hidden';
     
     const active = activeIndex.value;
     const total = totalItems;
     
-    // 현재 activeIndex를 기준으로 상대적 거리 계산
     let diff = (index - active + total) % total;
     
     if (diff === 0) return 'pos-center';       
@@ -94,24 +87,15 @@ const getItemPosition = (index: number) => {
     return 'pos-hidden';
 };
 
-// [회전 로직] 최단 경로 이동 (인덱스 기반)
 const goToIndex = (targetIndex: number) => {
     isInteracting = true;
-
-    // 현재 각도에서 가장 가까운 '현재 인덱스' 역산
     const currentRawIndex = -targetRotation / anglePerItem;
     const currentRoundIndex = Math.round(currentRawIndex);
     const currentVisibleIndex = ((currentRoundIndex % totalItems) + totalItems) % totalItems;
-
     let diff = targetIndex - currentVisibleIndex;
-
-    // 지름길 보정
     if (diff > totalItems / 2) diff -= totalItems;
     if (diff < -totalItems / 2) diff += totalItems;
-
-    // 목표 각도 설정 (누적 인덱스 + 차이)
     targetRotation = -(currentRoundIndex + diff) * anglePerItem;
-
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => isInteracting = false, 1000);
 };
@@ -133,10 +117,7 @@ const nextItem = () => {
 
 // 사이드 카드 클릭 핸들러
 const clickItem = (index: number) => {
-    // 중앙 클릭 시 무시 (이미 활성화됨)
     if (index === activeIndex.value) return; 
-    
-    // 바로 옆이면 물리 이동, 아니면 최단거리 이동
     goToIndex(index);
 };
 
@@ -153,7 +134,6 @@ const playTickAnimation = (direction: number) => {
 
 // 메인 루프 (항상 실행)
 const updateLoop = () => {
-  // 로그인 여부와 상관없이 배경 룰렛은 돕니다.
   if (!isInteracting) {
       targetRotation -= 0.05; // 자동 회전
   }
@@ -228,122 +208,22 @@ const stopRoulette = () => {
     currentRotation = 0; targetRotation = 0; activeIndex.value = 0;
 };
 
-// 기타 핸들러
-const confirmNickname = async () => {
-  if (nickname.value.trim().length < 2) {
+// --- Auth Handlers ---
+const handleGuestLogin = () => { isGuestInputVisible.value = true; };
+const handleLogin = () => { isLoginInputVisible.value = true; };
+const handleSignUp = () => { isLoginInputVisible.value = false; isSignUpInputVisible.value = true; };
+
+const onLoginSuccess = () => {
+    // 모든 로그인 성공(게스트, 일반, 회원가입 후) 시 호출
+    if (userStore.username) nickname.value = userStore.username;
+    isNicknameSet.value = true;
+    showGuideModal.value = true;
+};
+
+const onAuthError = (msg: string) => {
     triggerShake();
-    errorMessage.value = "닉네임은 두 글자 이상이어야 해요!";
+    errorMessage.value = msg;
     isErrorModalOpen.value = true;
-    return;
-  }
-  const result = await userStore.loginWithApi(nickname.value.trim());
-  if (!result.success) {
-    triggerShake();
-    errorMessage.value = getErrorMessage((result as any).error);
-    isErrorModalOpen.value = true;
-    return;
-  }
-  isNicknameSet.value = true;
-  showGuideModal.value = true; // [ADD] 닉네임 설정 후 가이드 모달 자동 오픈
-};
-
-const handleGuestLogin = () => {
-  isGuestInputVisible.value = true;
-};
-
-
-
-const handleLogin = () => {
-  isLoginInputVisible.value = true;
-};
-
-const confirmLogin = async () => {
-  if (!loginId.value || !loginPw.value) {
-    triggerShake();
-    errorMessage.value = "아이디와 비밀번호를 입력해주세요!";
-    isErrorModalOpen.value = true;
-    return;
-  }
-  
-  const result = await userStore.login(loginId.value, loginPw.value);
-  if (!result.success) {
-    triggerShake();
-    errorMessage.value = getErrorMessage((result as any).error) || "로그인 실패";
-    isErrorModalOpen.value = true;
-    return;
-  }
-  isNicknameSet.value = true;
-  showGuideModal.value = true;
-};
-
-const handleSignUp = () => {
-    isLoginInputVisible.value = false;
-    isSignUpInputVisible.value = true;
-};
-
-const checkIdDuplicate = async () => {
-    if (!signUpId.value.trim()) {
-        errorMessage.value = "아이디를 입력해주세요.";
-        isErrorModalOpen.value = true;
-        return;
-    }
-    // TODO: API 연결 (임시: guest가 아니면 성공)
-    if (signUpId.value.toLowerCase().includes('admin')) {
-        errorMessage.value = "사용할 수 없는 아이디입니다.";
-        isErrorModalOpen.value = true;
-        isIdChecked.value = false;
-    } else {
-        alert("사용 가능한 아이디입니다.");
-        isIdChecked.value = true;
-    }
-};
-
-const checkNicknameDuplicate = async () => {
-    if (!signUpNickname.value.trim()) {
-        errorMessage.value = "닉네임을 입력해주세요.";
-        isErrorModalOpen.value = true;
-        return;
-    }
-    // TODO: API 연결
-    alert("사용 가능한 닉네임입니다.");
-    isNicknameChecked.value = true;
-};
-
-const confirmSignUp = async () => {
-    if (!signUpId.value || !signUpPw.value || !signUpPwConfirm.value || !signUpNickname.value) {
-        triggerShake();
-        errorMessage.value = "모든 정보를 입력해주세요!";
-        isErrorModalOpen.value = true;
-        return;
-    }
-    if (!isIdChecked.value) {
-        triggerShake();
-        errorMessage.value = "아이디 중복 확인을 해주세요!";
-        isErrorModalOpen.value = true;
-        return;
-    }
-    if (!isNicknameChecked.value) {
-        triggerShake();
-        errorMessage.value = "닉네임 중복 확인을 해주세요!";
-        isErrorModalOpen.value = true;
-        return;
-    }
-    if (signUpPw.value !== signUpPwConfirm.value) {
-        triggerShake();
-        errorMessage.value = "비밀번호가 일치하지 않습니다!";
-        isErrorModalOpen.value = true;
-        return;
-    }
-
-    // 회원가입 로직 (Mock)
-    // 실제로는 API 호출 후 성공 시 로그인 처리
-    const loginResult = await userStore.login(signUpId.value, signUpPw.value); // API 구현 전이라 임시
-    if (loginResult) {
-        // 닉네임 강제 설정 (Store가 Mock이라)
-        userStore.updateUsername(signUpNickname.value);
-        isNicknameSet.value = true;
-        showGuideModal.value = true;
-    }
 };
 
 const goBack = () => {
@@ -386,15 +266,11 @@ const closeEditNickname = () => {
 const saveNickname = async () => {
   const nextNickname = editNickname.value.trim();
   if (nextNickname.length < 2) {
-    triggerShake();
-    errorMessage.value = "닉네임은 두 글자 이상이어야 해요!";
-    isErrorModalOpen.value = true;
+    onAuthError("닉네임은 두 글자 이상이어야 해요!");
     return;
   }
   if (!userStore.userId) {
-    triggerShake();
-    errorMessage.value = "유저 정보를 찾을 수 없어요. 다시 로그인해주세요.";
-    isErrorModalOpen.value = true;
+    onAuthError("유저 정보를 찾을 수 없어요. 다시 로그인해주세요.");
     return;
   }
   try {
@@ -404,9 +280,7 @@ const saveNickname = async () => {
     isNicknameSet.value = true;
     showEditNicknameModal.value = false;
   } catch (error) {
-    triggerShake();
-    errorMessage.value = getErrorMessage(error);
-    isErrorModalOpen.value = true;
+    onAuthError(getErrorMessage(error));
   }
 };
 
@@ -480,18 +354,12 @@ onUnmounted(() => { stopRoulette(); });
     <transition name="intro-fade">
         <div v-if="!isNicknameSet" class="intro-container">
             <div class="intro-panel wood-panel">
-                <button 
-                    v-if="isGuestInputVisible || isLoginInputVisible || isSignUpInputVisible" 
-                    class="close-btn" 
-                    @click="goBack"
-                >
-                    <span class="material-symbols-outlined">close</span>
-                </button>
                 <div class="logo-area">
                     <h1 class="game-title">DocQ</h1>
                     <p class="game-subtitle">PDF 퀴즈 배틀</p>
                 </div>
                 <div class="input-area">
+                    <!-- 기본 모드: 로그인/게스트 버튼 -->
                     <div v-if="!isGuestInputVisible && !isLoginInputVisible && !isSignUpInputVisible">
                         <button @click="handleLogin" class="cartoon-btn primary large-btn mb-4">
                             <span>로그인</span>
@@ -503,60 +371,30 @@ onUnmounted(() => { stopRoulette(); });
                         </button>
                     </div>
                     
-                    <!-- 게스트 로그인 폼 -->
-                    <div v-else-if="isGuestInputVisible">
-                        <div class="input-wrapper mb-4">
-                            <input type="text" v-model="nickname" placeholder="닉네임을 입력하세요" @keyup.enter="confirmNickname" autofocus />
-                        </div>
-                        <button @click="confirmNickname" class="cartoon-btn primary large-btn">
-                            <span>START</span>
-                            <span class="material-symbols-outlined">play_arrow</span>
-                        </button>
-                    </div>
+                    <!-- 게스트 로그인 컴포넌트 -->
+                    <GuestLoginForm 
+                        v-else-if="isGuestInputVisible" 
+                        @success="onLoginSuccess" 
+                        @error="onAuthError" 
+                        @close="goBack" 
+                    />
 
-                    <!-- 일반 로그인 폼 -->
-                    <div v-else-if="isLoginInputVisible">
-                        <div class="input-wrapper mb-2">
-                            <input type="text" v-model="loginId" placeholder="아이디" autofocus />
-                        </div>
-                        <div class="input-wrapper mb-4">
-                            <input type="password" v-model="loginPw" placeholder="비밀번호" @keyup.enter="confirmLogin" />
-                        </div>
-                        <button @click="confirmLogin" class="cartoon-btn primary large-btn mb-2">
-                            <span>START</span>
-                            <span class="material-symbols-outlined">play_arrow</span>
-                        </button>
-                         <button @click="handleSignUp" class="cartoon-btn secondary large-btn">
-                            <span>Sign up</span>
-                            <span class="material-symbols-outlined">person_add</span>
-                        </button>
-                    </div>
+                    <!-- 일반 로그인 컴포넌트 -->
+                    <LoginForm 
+                        v-else-if="isLoginInputVisible" 
+                        @success="onLoginSuccess" 
+                        @to-signup="handleSignUp"
+                        @error="onAuthError"
+                        @close="goBack"
+                    />
 
-                    <!-- 회원가입 폼 -->
-                    <div v-else-if="isSignUpInputVisible">
-                        <div class="input-row mb-2">
-                            <div class="input-wrapper flex-grow">
-                                <input type="text" v-model="signUpId" placeholder="아이디" />
-                            </div>
-                            <button class="cartoon-btn secondary small-btn" @click="checkIdDuplicate">확인</button>
-                        </div>
-                        <div class="input-wrapper mb-2">
-                            <input type="password" v-model="signUpPw" placeholder="비밀번호" />
-                        </div>
-                        <div class="input-wrapper mb-2">
-                            <input type="password" v-model="signUpPwConfirm" placeholder="비밀번호 확인" />
-                        </div>
-                        <div class="input-row mb-4">
-                            <div class="input-wrapper flex-grow">
-                                <input type="text" v-model="signUpNickname" placeholder="닉네임" />
-                            </div>
-                            <button class="cartoon-btn secondary small-btn" @click="checkNicknameDuplicate">확인</button>
-                        </div>
-                        <button @click="confirmSignUp" class="cartoon-btn primary large-btn">
-                            <span>회원가입</span>
-                            <span class="material-symbols-outlined">person_add</span>
-                        </button>
-                    </div>
+                    <!-- 회원가입 컴포넌트 -->
+                    <SignUpForm 
+                        v-else-if="isSignUpInputVisible" 
+                        @success="onLoginSuccess" 
+                        @error="onAuthError"
+                        @close="goBack"
+                    />
                 </div>
             </div>
         </div>
