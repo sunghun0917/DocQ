@@ -37,7 +37,10 @@ const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
-const isGuestInputVisible = ref(false); // [ADD] 게스트 모드에서 닉네임 입력창 표시 여부
+const isGuestInputVisible = ref(false); 
+const isLoginInputVisible = ref(false); // [ADD] 로그인 모드 입력창 표시 여부
+const loginId = ref('');
+const loginPw = ref('');
 
 // --- 2. 룰렛 변수 ---
 const wheelRef = ref<HTMLElement | null>(null);
@@ -241,8 +244,33 @@ const handleGuestLogin = () => {
   isGuestInputVisible.value = true;
 };
 
+
+
 const handleLogin = () => {
-  alert("로그인 서비스 준비 중입니다."); 
+  isLoginInputVisible.value = true;
+};
+
+const confirmLogin = async () => {
+  if (!loginId.value || !loginPw.value) {
+    triggerShake();
+    errorMessage.value = "아이디와 비밀번호를 입력해주세요!";
+    isErrorModalOpen.value = true;
+    return;
+  }
+  
+  const result = await userStore.login(loginId.value, loginPw.value);
+  if (!result.success) {
+    triggerShake();
+    errorMessage.value = getErrorMessage((result as any).error) || "로그인 실패";
+    isErrorModalOpen.value = true;
+    return;
+  }
+  isNicknameSet.value = true;
+  showGuideModal.value = true;
+};
+
+const handleSignUp = () => {
+  alert("회원가입 서비스 준비 중입니다.");
 };
 
 const triggerShake = () => {
@@ -373,7 +401,7 @@ onUnmounted(() => { stopRoulette(); });
                     <p class="game-subtitle">PDF 퀴즈 배틀</p>
                 </div>
                 <div class="input-area">
-                    <div v-if="!isGuestInputVisible">
+                    <div v-if="!isGuestInputVisible && !isLoginInputVisible">
                         <button @click="handleLogin" class="cartoon-btn primary large-btn mb-4">
                             <span>로그인</span>
                             <span class="material-symbols-outlined">login</span>
@@ -383,13 +411,33 @@ onUnmounted(() => { stopRoulette(); });
                             <span class="material-symbols-outlined">person_off</span>
                         </button>
                     </div>
-                    <div v-else>
+                    
+                    <!-- 게스트 로그인 폼 -->
+                    <div v-else-if="isGuestInputVisible">
                         <div class="input-wrapper mb-4">
                             <input type="text" v-model="nickname" placeholder="닉네임을 입력하세요" @keyup.enter="confirmNickname" autofocus />
                         </div>
                         <button @click="confirmNickname" class="cartoon-btn primary large-btn">
                             <span>START</span>
                             <span class="material-symbols-outlined">play_arrow</span>
+                        </button>
+                    </div>
+
+                    <!-- 일반 로그인 폼 -->
+                    <div v-else-if="isLoginInputVisible">
+                        <div class="input-wrapper mb-2">
+                            <input type="text" v-model="loginId" placeholder="아이디" autofocus />
+                        </div>
+                        <div class="input-wrapper mb-4">
+                            <input type="password" v-model="loginPw" placeholder="비밀번호" @keyup.enter="confirmLogin" />
+                        </div>
+                        <button @click="confirmLogin" class="cartoon-btn primary large-btn mb-2">
+                            <span>START</span>
+                            <span class="material-symbols-outlined">play_arrow</span>
+                        </button>
+                         <button @click="handleSignUp" class="cartoon-btn secondary large-btn">
+                            <span>Sign up</span>
+                            <span class="material-symbols-outlined">person_add</span>
                         </button>
                     </div>
                 </div>
