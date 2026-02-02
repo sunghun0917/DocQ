@@ -4,12 +4,15 @@ import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage, updateNickname } from '@/services/api';
 
-// 컴포넌트 임포트 (경로 확인 필요)
+// 컴포넌트 임포트
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
 import AlertModal from '@/components/common/AlertModal.vue';
 import CreateRoomModal from '@/components/lobby/CreateRoomModal.vue';
 import JoinRoomModal from '@/components/lobby/JoinRoomModal.vue';
 import GameGuideModal from '@/components/common/GameGuideModal.vue';
+import GuestLoginForm from '@/components/auth/GuestLoginForm.vue';
+import LoginForm from '@/components/auth/LoginForm.vue';
+import SignUpForm from '@/components/auth/SignUpForm.vue';
 
 gsap.registerPlugin(Observer);
 
@@ -23,7 +26,7 @@ const menuItems = [
   { id: 'team', label: '만든 사람들', description: '우리를 소개합니다!', icon: 'groups' },
 ];
 
-const totalItems = menuItems.length; // [중요] 변수 선언 위치 확인
+const totalItems = menuItems.length;
 const anglePerItem = 360 / totalItems;
 
 const userStore = useUserStore();
@@ -32,11 +35,16 @@ const isNicknameSet = ref(false);
 const showCreateModal = ref(false);
 const showJoinModal = ref(false);
 const showEditNicknameModal = ref(false);
-const showGuideModal = ref(false); // [ADD]
+const showGuideModal = ref(false);
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
+
+// Auth State
+const isGuestInputVisible = ref(false);
+const isLoginInputVisible = ref(false);
+const isSignUpInputVisible = ref(false);
 
 // --- 2. 룰렛 변수 ---
 const wheelRef = ref<HTMLElement | null>(null);
@@ -60,21 +68,17 @@ const nextItemData = computed(() => itemAt(activeIndex.value + 1));
 
 // 안전하게 아이템 가져오는 헬퍼 함수
 const itemAt = (index: number) => {
-    // 음수 인덱스 처리 및 범위 보정
     const adjustedIndex = ((index % totalItems) + totalItems) % totalItems;
     return menuItems[adjustedIndex] || menuItems[0];
 };
 
 // --- 4. 핵심 로직 ---
-
-// [수정] 아이템 위치 계산 함수 (안전장치 추가)
 const getItemPosition = (index: number) => {
     if (!menuItems || menuItems.length === 0) return 'pos-hidden';
     
     const active = activeIndex.value;
     const total = totalItems;
     
-    // 현재 activeIndex를 기준으로 상대적 거리 계산
     let diff = (index - active + total) % total;
     
     if (diff === 0) return 'pos-center';       
@@ -83,24 +87,15 @@ const getItemPosition = (index: number) => {
     return 'pos-hidden';
 };
 
-// [회전 로직] 최단 경로 이동 (인덱스 기반)
 const goToIndex = (targetIndex: number) => {
     isInteracting = true;
-
-    // 현재 각도에서 가장 가까운 '현재 인덱스' 역산
     const currentRawIndex = -targetRotation / anglePerItem;
     const currentRoundIndex = Math.round(currentRawIndex);
     const currentVisibleIndex = ((currentRoundIndex % totalItems) + totalItems) % totalItems;
-
     let diff = targetIndex - currentVisibleIndex;
-
-    // 지름길 보정
     if (diff > totalItems / 2) diff -= totalItems;
     if (diff < -totalItems / 2) diff += totalItems;
-
-    // 목표 각도 설정 (누적 인덱스 + 차이)
     targetRotation = -(currentRoundIndex + diff) * anglePerItem;
-
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => isInteracting = false, 1000);
 };
@@ -122,10 +117,7 @@ const nextItem = () => {
 
 // 사이드 카드 클릭 핸들러
 const clickItem = (index: number) => {
-    // 중앙 클릭 시 무시 (이미 활성화됨)
     if (index === activeIndex.value) return; 
-    
-    // 바로 옆이면 물리 이동, 아니면 최단거리 이동
     goToIndex(index);
 };
 
@@ -142,7 +134,6 @@ const playTickAnimation = (direction: number) => {
 
 // 메인 루프 (항상 실행)
 const updateLoop = () => {
-  // 로그인 여부와 상관없이 배경 룰렛은 돕니다.
   if (!isInteracting) {
       targetRotation -= 0.05; // 자동 회전
   }
@@ -217,23 +208,33 @@ const stopRoulette = () => {
     currentRotation = 0; targetRotation = 0; activeIndex.value = 0;
 };
 
-// 기타 핸들러
-const confirmNickname = async () => {
-  if (nickname.value.trim().length < 2) {
+// --- Auth Handlers ---
+const handleGuestLogin = () => { isGuestInputVisible.value = true; };
+const handleLogin = () => { isLoginInputVisible.value = true; };
+const handleSignUp = () => { isLoginInputVisible.value = false; isSignUpInputVisible.value = true; };
+
+const onLoginSuccess = () => {
+    // 모든 로그인 성공(게스트, 일반, 회원가입 후) 시 호출
+    if (userStore.username) nickname.value = userStore.username;
+    isNicknameSet.value = true;
+    showGuideModal.value = true;
+};
+
+const onAuthError = (msg: string) => {
     triggerShake();
-    errorMessage.value = "닉네임은 두 글자 이상이어야 해요!";
+    errorMessage.value = msg;
     isErrorModalOpen.value = true;
-    return;
-  }
-  const result = await userStore.loginWithApi(nickname.value.trim());
-  if (!result.success) {
-    triggerShake();
-    errorMessage.value = getErrorMessage((result as any).error);
-    isErrorModalOpen.value = true;
-    return;
-  }
-  isNicknameSet.value = true;
-  showGuideModal.value = true; // [ADD] 닉네임 설정 후 가이드 모달 자동 오픈
+};
+
+const goBack = () => {
+    if (isSignUpInputVisible.value) {
+        isSignUpInputVisible.value = false;
+        isLoginInputVisible.value = true;
+    } else if (isLoginInputVisible.value) {
+        isLoginInputVisible.value = false;
+    } else if (isGuestInputVisible.value) {
+        isGuestInputVisible.value = false;
+    }
 };
 
 const triggerShake = () => {
@@ -265,15 +266,11 @@ const closeEditNickname = () => {
 const saveNickname = async () => {
   const nextNickname = editNickname.value.trim();
   if (nextNickname.length < 2) {
-    triggerShake();
-    errorMessage.value = "닉네임은 두 글자 이상이어야 해요!";
-    isErrorModalOpen.value = true;
+    onAuthError("닉네임은 두 글자 이상이어야 해요!");
     return;
   }
   if (!userStore.userId) {
-    triggerShake();
-    errorMessage.value = "유저 정보를 찾을 수 없어요. 다시 로그인해주세요.";
-    isErrorModalOpen.value = true;
+    onAuthError("유저 정보를 찾을 수 없어요. 다시 로그인해주세요.");
     return;
   }
   try {
@@ -283,9 +280,7 @@ const saveNickname = async () => {
     isNicknameSet.value = true;
     showEditNicknameModal.value = false;
   } catch (error) {
-    triggerShake();
-    errorMessage.value = getErrorMessage(error);
-    isErrorModalOpen.value = true;
+    onAuthError(getErrorMessage(error));
   }
 };
 
@@ -364,13 +359,42 @@ onUnmounted(() => { stopRoulette(); });
                     <p class="game-subtitle">PDF 퀴즈 배틀</p>
                 </div>
                 <div class="input-area">
-                    <div class="input-wrapper">
-                        <input type="text" v-model="nickname" placeholder="닉네임을 입력하세요" @keyup.enter="confirmNickname" autofocus />
+                    <!-- 기본 모드: 로그인/게스트 버튼 -->
+                    <div v-if="!isGuestInputVisible && !isLoginInputVisible && !isSignUpInputVisible">
+                        <button @click="handleLogin" class="cartoon-btn primary large-btn mb-4">
+                            <span>로그인</span>
+                            <span class="material-symbols-outlined">login</span>
+                        </button>
+                        <button @click="handleGuestLogin" class="cartoon-btn gray large-btn">
+                            <span>게스트 로그인</span>
+                            <span class="material-symbols-outlined">person_off</span>
+                        </button>
                     </div>
-                    <button @click="confirmNickname" class="cartoon-btn primary large-btn">
-                        <span>START</span>
-                        <span class="material-symbols-outlined">play_arrow</span>
-                    </button>
+                    
+                    <!-- 게스트 로그인 컴포넌트 -->
+                    <GuestLoginForm 
+                        v-else-if="isGuestInputVisible" 
+                        @success="onLoginSuccess" 
+                        @error="onAuthError" 
+                        @close="goBack" 
+                    />
+
+                    <!-- 일반 로그인 컴포넌트 -->
+                    <LoginForm 
+                        v-else-if="isLoginInputVisible" 
+                        @success="onLoginSuccess" 
+                        @to-signup="handleSignUp"
+                        @error="onAuthError"
+                        @close="goBack"
+                    />
+
+                    <!-- 회원가입 컴포넌트 -->
+                    <SignUpForm 
+                        v-else-if="isSignUpInputVisible" 
+                        @success="onLoginSuccess" 
+                        @error="onAuthError"
+                        @close="goBack"
+                    />
                 </div>
             </div>
         </div>
@@ -523,8 +547,20 @@ onUnmounted(() => { stopRoulette(); });
     padding: 25px; 
     box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15); 
     text-align: center; display: flex; flex-direction: column; gap: 15px;
+    position: relative; /* close-btn positioning */
     animation: floating 3s ease-in-out infinite;
 }
+
+.close-btn {
+    position: absolute; top: 10px; right: 10px;
+    width: 32px; height: 32px;
+    background: var(--leaf-green); border: none; border-radius: 50%;
+    color: white; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: all 0.2s; z-index: 10;
+}
+.close-btn:hover { transform: scale(1.1); background: var(--leaf-dark); }
+
 @keyframes floating {
     0%, 100% { transform: translateY(0px); box-shadow: 0 10px 0 rgba(93, 64, 55, 0.2), 0 20px 40px rgba(0,0,0,0.15); }
     50% { transform: translateY(-12px); box-shadow: 0 25px 0 rgba(93, 64, 55, 0.1), 0 40px 60px rgba(0,0,0,0.1); }
@@ -535,8 +571,8 @@ onUnmounted(() => { stopRoulette(); });
 .game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
-.input-wrapper { position: relative; border-bottom: 3px solid #d7ccc8; transition: all 0.3s; }
-.input-wrapper:focus-within { border-bottom-color: var(--leaf-green); }
+.input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; }
+.input-wrapper:focus-within { border-color: var(--leaf-green); transform: scale(1.02); }
 .input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
 .input-area input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
 
@@ -554,6 +590,10 @@ onUnmounted(() => { stopRoulette(); });
 .cartoon-btn.secondary { background: #ff7043; box-shadow: 0 5px 0 #d84315; }
 .cartoon-btn.secondary:hover { background: #ff8a65; }
 .cartoon-btn.secondary:active { top: 5px; box-shadow: 0 0 0 #d84315; }
+
+.cartoon-btn.gray { background: #90a4ae; box-shadow: 0 5px 0 #546e7a; }
+.cartoon-btn.gray:hover { background: #b0bec5; }
+.cartoon-btn.gray:active { top: 5px; box-shadow: 0 0 0 #546e7a; }
 
 /* 메인 컨텐츠 */
 .main-container { position: absolute; inset: 0; z-index: 10; }
@@ -689,5 +729,20 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 }
 .edit-nickname-actions .cartoon-btn {
   flex: 1;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.flex-grow {
+  flex-grow: 1;
+}
+.cartoon-btn.small-btn {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 1rem;
+  white-space: nowrap;
 }
 </style>
