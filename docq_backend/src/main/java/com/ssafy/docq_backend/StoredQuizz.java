@@ -7,6 +7,8 @@ import lombok.Setter;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.ssafy.docq_backend.domain.user.entity.User;
+
 @Getter
 @Setter
 @Entity
@@ -28,6 +30,5 @@ public class StoredQuizz {
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "quiz_id", nullable = false)
     private Quiz quiz;
-
 
 }

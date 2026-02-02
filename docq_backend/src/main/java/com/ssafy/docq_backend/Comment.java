@@ -8,6 +8,8 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.ssafy.docq_backend.domain.user.entity.User;
+
 import java.time.Instant;
 
 @Getter
@@ -41,6 +43,5 @@ public class Comment {
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
-
 
 }

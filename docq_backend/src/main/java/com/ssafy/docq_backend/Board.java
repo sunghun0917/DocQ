@@ -9,6 +9,8 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.ssafy.docq_backend.domain.user.entity.User;
+
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -54,6 +56,5 @@ public class Board {
 
     @OneToMany(mappedBy = "board")
     private Set<Like> likes = new LinkedHashSet<>();
-
 
 }

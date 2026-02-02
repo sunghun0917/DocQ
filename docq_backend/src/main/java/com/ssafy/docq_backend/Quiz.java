@@ -9,7 +9,11 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
 
+import com.ssafy.docq_backend.domain.user.entity.User;
+
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -31,5 +35,10 @@ public class Quiz {
     @Column(name = "quiz_list")
     private Map<String, Object> quizList;
 
+    @OneToMany(mappedBy = "quiz")
+    private Set<Board> boards = new LinkedHashSet<>();
+
+    @OneToMany(mappedBy = "quiz")
+    private Set<StoredQuizz> storedQuizzes = new LinkedHashSet<>();
 
 }
