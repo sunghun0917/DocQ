@@ -292,6 +292,13 @@ const checkEditNicknameDuplicate = async () => {
         editCheckStatus.value = 'error';
         return;
     }
+    
+    if (editNickname.value.trim().length < 2) {
+        editCheckMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+        editCheckStatus.value = 'error';
+        return;
+    }
+
     // 본인 닉네임과 같으면 통과
     if (editNickname.value.trim() === nickname.value) {
         editCheckMsg.value = "현재 닉네임과 동일합니다.";
@@ -311,12 +318,14 @@ const saveNickname = async () => {
   
   // 1. 길이 검사
   if (nextNickname.length < 2) {
-    onAuthError("닉네임은 두 글자 이상이어야 해요!");
+    editCheckMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+    editCheckStatus.value = 'error';
     return;
   }
   
   if (!isEditNicknameChecked.value) {
-      onAuthError("닉네임 중복 확인을 해주세요!");
+      editCheckMsg.value = "닉네임 중복 확인을 해주세요!";
+      editCheckStatus.value = 'error';
       return;
   }
   
@@ -332,7 +341,8 @@ const saveNickname = async () => {
     isNicknameSet.value = true;
     showEditNicknameModal.value = false;
   } catch (error) {
-    onAuthError(getErrorMessage(error));
+    editCheckMsg.value = getErrorMessage(error);
+    editCheckStatus.value = 'error';
   }
 };
 
@@ -553,6 +563,7 @@ onUnmounted(() => { stopRoulette(); });
                       type="text" 
                       placeholder="닉네임을 입력하세요" 
                       @keyup.enter="saveNickname"
+                      @input="isEditNicknameChecked = false; editCheckMsg = ''; editCheckStatus = '';"
                     />
                 </div>
                 <button class="cartoon-btn secondary small-btn" @click="checkEditNicknameDuplicate">확인</button>
