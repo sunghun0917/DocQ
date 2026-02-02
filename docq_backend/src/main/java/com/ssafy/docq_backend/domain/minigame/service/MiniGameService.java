@@ -6,8 +6,7 @@ import com.ssafy.docq_backend.domain.minigame.dto.MiniGameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.user.entity.User;
-import com.ssafy.docq_backend.domain.user.repository.UserRepository;
+import com.ssafy.docq_backend.domain.guest.repository.GuestRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,7 @@ import java.util.stream.Collectors;
 public class MiniGameService {
 
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
+    private final GuestRepository guestRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Lazy
@@ -79,14 +78,14 @@ public class MiniGameService {
 
     public void submitResult(MiniGameDto.SubmissionRequest request) {
         String roomId = request.getRoomId();
-        String userId = request.getUserId();
+        String playerId = request.getPlayerId();
         int score = request.getResultValue();
 
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
         if (room.getStatus() != RoomStatus.MINIGAME) {
-            log.warn("Ignored minigame result from {} in room {} (Status: {})", userId, roomId, room.getStatus());
+            log.warn("Ignored minigame result from {} in room {} (Status: {})", playerId, roomId, room.getStatus());
             return;
         }
 
@@ -94,10 +93,10 @@ public class MiniGameService {
         if (room.getMiniGameScores() == null) {
             room.setMiniGameScores(new HashMap<>());
         }
-        room.getMiniGameScores().put(userId, score);
+        room.getMiniGameScores().put(playerId, score);
         roomRepository.save(room);
 
-        log.info("Stored MiniGame Score: User {} = {}", userId, score);
+        log.info("Stored MiniGame Score: Player {} = {}", playerId, score);
 
         // 모든 플레이어 제출 여부 확인
         if (room.getMiniGameScores().size() >= room.getPlayers().size()) {
@@ -118,13 +117,13 @@ public class MiniGameService {
         // 1. 순위 계산
         List<MiniGameDto.RankInfo> rankings = calculateRankings(room);
 
-        String winnerUserId = null;
+        String winnerPlayerId = null;
         String rewardBuff = "NONE";
 
         // 2. 보상 적용
         if (!rankings.isEmpty()) {
             MiniGameDto.RankInfo winner = rankings.get(0);
-            winnerUserId = winner.getUserId();
+            winnerPlayerId = winner.getPlayerId();
 
             // 랜덤 버프 선택 (Enum 활용)
             BuffType[] augments = BuffType.values();
@@ -132,8 +131,8 @@ public class MiniGameService {
             rewardBuff = selectedBuff.getCode();
 
             // Apply to PlayerState
-            if (room.getPlayerStates().containsKey(winnerUserId)) {
-                room.getPlayerStates().get(winnerUserId).setHasBuff(rewardBuff);
+            if (room.getPlayerStates().containsKey(winnerPlayerId)) {
+                room.getPlayerStates().get(winnerPlayerId).setHasBuff(rewardBuff);
             }
         }
 
@@ -143,7 +142,7 @@ public class MiniGameService {
         MiniGameDto.ResultResponse response = MiniGameDto.ResultResponse.builder()
                 .type("RESULT")
                 .gameType("MINIGAME_END") // 종료 시에는 구체적인 타입보다는 종료되었음을 알림 (Room에 저장을 안하므로)
-                .winnerUserId(winnerUserId)
+                .winnerPlayerId(winnerPlayerId)
                 .rewardBuff(rewardBuff)
                 .rankings(rankings)
                 .build();
@@ -159,12 +158,12 @@ public class MiniGameService {
                 .map(entry -> {
                     String uid = entry.getKey();
                     String nickname = "Unknown";
-                    User user = userRepository.findById(uid).orElse(null);
-                    if (user != null)
-                        nickname = user.getNickname();
+                    var guest = guestRepository.findById(uid).orElse(null);
+                    if (guest != null)
+                        nickname = guest.getNickname();
 
                     return MiniGameDto.RankInfo.builder()
-                            .userId(uid)
+                            .playerId(uid)
                             .nickname(nickname)
                             .value(entry.getValue())
                             .build();
@@ -176,7 +175,7 @@ public class MiniGameService {
                         // 순위 정보 재생성
                         MiniGameDto.RankInfo original = list.get(i);
                         list.set(i, MiniGameDto.RankInfo.builder()
-                                .userId(original.getUserId())
+                                .playerId(original.getPlayerId())
                                 .nickname(original.getNickname())
                                 .value(original.getValue())
                                 .rank(i + 1)

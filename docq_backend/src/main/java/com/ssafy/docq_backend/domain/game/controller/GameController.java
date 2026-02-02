@@ -28,14 +28,14 @@ public class GameController {
     public void joinGame(GameDto.JoinRequest request, SimpMessageHeaderAccessor headerAccessor) {
         gameService.joinGame(request);
         if (headerAccessor != null) {
-            sessionRegistry.register(headerAccessor.getSessionId(), request.getRoomId(), request.getUserId());
+            sessionRegistry.register(headerAccessor.getSessionId(), request.getRoomId(), request.getPlayerId());
         }
     }
 
     @MessageMapping("/game/leave")
     public void leaveGame(GameDto.LeaveRequest request) {
         gameService.leaveGame(request);
-        sessionRegistry.removeByUserId(request.getUserId());
+        sessionRegistry.removeByPlayerId(request.getPlayerId());
     }
 
     @MessageMapping("/game/ready")
@@ -45,10 +45,10 @@ public class GameController {
 
     @MessageMapping("/game/start")
     public void startGame(Map<String, String> payload) {
-        // Payload: { "roomId": "...", "userId": "..." }
+        // Payload: { "roomId": "...", "playerId": "..." }
         String roomId = payload.get("roomId");
-        String userId = payload.get("userId");
-        gameService.startGame(roomId, userId);
+        String playerId = payload.get("playerId");
+        gameService.startGame(roomId, playerId);
     }
 
     @MessageMapping("/game/end")
@@ -65,7 +65,7 @@ public class GameController {
     @PostMapping("/game/{roomId}/quiz/generate")
     public ResponseEntity<?> generateQuiz(@PathVariable String roomId, @RequestParam("file") MultipartFile file) {
         try {
-            // TODO: userId 검증 (방장인지 등)
+            // TODO: playerId 검증 (방장인지 등)
             gameService.generateQuizFromPdf(roomId, file);
             return ResponseEntity.ok(Map.of(
                     "message", "Quiz generation started",
