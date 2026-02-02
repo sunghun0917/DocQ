@@ -38,9 +38,16 @@ const errorMessage = ref('');
 const isShaking = ref(false);
 const editNickname = ref('');
 const isGuestInputVisible = ref(false); 
-const isLoginInputVisible = ref(false); // [ADD] 로그인 모드 입력창 표시 여부
+const isLoginInputVisible = ref(false);
+const isSignUpInputVisible = ref(false); // [ADD] 회원가입 입력창 표시 여부
 const loginId = ref('');
 const loginPw = ref('');
+const signUpId = ref('');
+const signUpPw = ref('');
+const signUpPwConfirm = ref('');
+const signUpNickname = ref('');
+const isIdChecked = ref(false);
+const isNicknameChecked = ref(false);
 
 // --- 2. 룰렛 변수 ---
 const wheelRef = ref<HTMLElement | null>(null);
@@ -270,7 +277,73 @@ const confirmLogin = async () => {
 };
 
 const handleSignUp = () => {
-  alert("회원가입 서비스 준비 중입니다.");
+    isLoginInputVisible.value = false;
+    isSignUpInputVisible.value = true;
+};
+
+const checkIdDuplicate = async () => {
+    if (!signUpId.value.trim()) {
+        errorMessage.value = "아이디를 입력해주세요.";
+        isErrorModalOpen.value = true;
+        return;
+    }
+    // TODO: API 연결 (임시: guest가 아니면 성공)
+    if (signUpId.value.toLowerCase().includes('admin')) {
+        errorMessage.value = "사용할 수 없는 아이디입니다.";
+        isErrorModalOpen.value = true;
+        isIdChecked.value = false;
+    } else {
+        alert("사용 가능한 아이디입니다.");
+        isIdChecked.value = true;
+    }
+};
+
+const checkNicknameDuplicate = async () => {
+    if (!signUpNickname.value.trim()) {
+        errorMessage.value = "닉네임을 입력해주세요.";
+        isErrorModalOpen.value = true;
+        return;
+    }
+    // TODO: API 연결
+    alert("사용 가능한 닉네임입니다.");
+    isNicknameChecked.value = true;
+};
+
+const confirmSignUp = async () => {
+    if (!signUpId.value || !signUpPw.value || !signUpPwConfirm.value || !signUpNickname.value) {
+        triggerShake();
+        errorMessage.value = "모든 정보를 입력해주세요!";
+        isErrorModalOpen.value = true;
+        return;
+    }
+    if (!isIdChecked.value) {
+        triggerShake();
+        errorMessage.value = "아이디 중복 확인을 해주세요!";
+        isErrorModalOpen.value = true;
+        return;
+    }
+    if (!isNicknameChecked.value) {
+        triggerShake();
+        errorMessage.value = "닉네임 중복 확인을 해주세요!";
+        isErrorModalOpen.value = true;
+        return;
+    }
+    if (signUpPw.value !== signUpPwConfirm.value) {
+        triggerShake();
+        errorMessage.value = "비밀번호가 일치하지 않습니다!";
+        isErrorModalOpen.value = true;
+        return;
+    }
+
+    // 회원가입 로직 (Mock)
+    // 실제로는 API 호출 후 성공 시 로그인 처리
+    const loginResult = await userStore.login(signUpId.value, signUpPw.value); // API 구현 전이라 임시
+    if (loginResult) {
+        // 닉네임 강제 설정 (Store가 Mock이라)
+        userStore.updateUsername(signUpNickname.value);
+        isNicknameSet.value = true;
+        showGuideModal.value = true;
+    }
 };
 
 const triggerShake = () => {
@@ -401,7 +474,7 @@ onUnmounted(() => { stopRoulette(); });
                     <p class="game-subtitle">PDF 퀴즈 배틀</p>
                 </div>
                 <div class="input-area">
-                    <div v-if="!isGuestInputVisible && !isLoginInputVisible">
+                    <div v-if="!isGuestInputVisible && !isLoginInputVisible && !isSignUpInputVisible">
                         <button @click="handleLogin" class="cartoon-btn primary large-btn mb-4">
                             <span>로그인</span>
                             <span class="material-symbols-outlined">login</span>
@@ -438,6 +511,32 @@ onUnmounted(() => { stopRoulette(); });
                          <button @click="handleSignUp" class="cartoon-btn secondary large-btn">
                             <span>Sign up</span>
                             <span class="material-symbols-outlined">person_add</span>
+                        </button>
+                    </div>
+
+                    <!-- 회원가입 폼 -->
+                    <div v-else-if="isSignUpInputVisible">
+                        <div class="input-row mb-2">
+                            <div class="input-wrapper flex-grow">
+                                <input type="text" v-model="signUpId" placeholder="아이디" />
+                            </div>
+                            <button class="cartoon-btn secondary small-btn" @click="checkIdDuplicate">확인</button>
+                        </div>
+                        <div class="input-wrapper mb-2">
+                            <input type="password" v-model="signUpPw" placeholder="비밀번호" />
+                        </div>
+                        <div class="input-wrapper mb-2">
+                            <input type="password" v-model="signUpPwConfirm" placeholder="비밀번호 확인" />
+                        </div>
+                        <div class="input-row mb-4">
+                            <div class="input-wrapper flex-grow">
+                                <input type="text" v-model="signUpNickname" placeholder="닉네임" />
+                            </div>
+                            <button class="cartoon-btn secondary small-btn" @click="checkNicknameDuplicate">확인</button>
+                        </div>
+                        <button @click="confirmSignUp" class="cartoon-btn primary large-btn">
+                            <span>회원가입</span>
+                            <span class="material-symbols-outlined">check</span>
                         </button>
                     </div>
                 </div>
@@ -762,5 +861,20 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 }
 .edit-nickname-actions .cartoon-btn {
   flex: 1;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.flex-grow {
+  flex-grow: 1;
+}
+.cartoon-btn.small-btn {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 1rem;
+  white-space: nowrap;
 }
 </style>
