@@ -44,7 +44,7 @@ apiClient.interceptors.response.use(
  * POST /users/login
  */
 export const userLogin = async (nickname: string): Promise<UserLoginResponse> => {
-    const response = await apiClient.post<UserLoginResponse>('/users/login', { nickname })
+    const response = await apiClient.post<UserLoginResponse>('/users/login', { nickname } as unknown as UserLoginRequest)
     return response.data
 }
 
@@ -139,6 +139,9 @@ export const setDefaultQuizzes = async (roomId: string, type: string): Promise<{
  * API 에러 메시지 추출
  */
 export const getErrorMessage = (error: any): string => {
+    if (typeof error === 'string') {
+        return error
+    }
     if (error.response?.data?.message) {
         return error.response.data.message
     }

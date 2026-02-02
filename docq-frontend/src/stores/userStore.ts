@@ -1,21 +1,14 @@
 // 현재 사용자 정보 관리
-/*
-1. 사용자 인증 상태
-2. 사용자 프로필 정보
-3. 로그인/로그아웃
-4. 닉네임 및 아바타 설정
-*/
-
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { userLogin } from '@/services/api'
 
-// 타입 정의
+// 통합 사용자 프로필 타입
 export interface UserProfile {
-    id: string
+    id: string | number
     username: string
     avatar: string
-    email?: string
+    isGuest: boolean
+    loginId?: string
     createdAt?: Date
 }
 
@@ -29,226 +22,133 @@ export const useUserStore = defineStore('user', () => {
     const userId = computed(() => currentUser.value?.id || '')
     const username = computed(() => currentUser.value?.username || 'Guest')
     const avatar = computed(() => currentUser.value?.avatar || '👤')
+    const isGuest = computed(() => currentUser.value?.isGuest || false)
 
     // Actions
 
     /**
-     * 사용자 로그인
-     * @param username - 사용자 이름
-     * @param password - 비밀번호 (실제 구현 시 사용)
+     * 1. 게스트 로그인 (Mock)
      */
-    const login = async (username: string, password?: string) => {
+    const loginAsGuest = async (nickname: string) => {
         isLoading.value = true
-        try {
-            // TODO: 실제 API 호출로 대체
-            // const response = await api.login({ username, password })
+        // Mock delay
+        await new Promise(resolve => setTimeout(resolve, 500))
 
-            // 임시 로그인 처리
-            currentUser.value = {
-                id: Math.random().toString(36).substring(7),
-                username: username,
-                avatar: getRandomAvatar(),
-                createdAt: new Date()
-            }
-
-            isAuthenticated.value = true
-
-            // 세션 스토리지에 저장
-            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-
-            return { success: true }
-        } catch (error) {
-            console.error('Login failed:', error)
-            return { success: false, error }
-        } finally {
-            isLoading.value = false
-        }
-    }
-
-    /**
-     * API 기반 로그인 (닉네임으로 userId 발급)
-     */
-    const loginWithApi = async (nickname: string) => {
-        isLoading.value = true
-        try {
-            const response = await userLogin(nickname)
-            currentUser.value = {
-                id: response.userId,
-                username: response.nickname,
-                avatar: getRandomAvatar(),
-                createdAt: new Date()
-            }
-
-            isAuthenticated.value = true
-            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-
-            return { success: true }
-        } catch (error) {
-            console.error('Login failed:', error)
-            return { success: false, error }
-        } finally {
-            isLoading.value = false
-        }
-    }
-
-    /**
-     * 게스트로 입장 (닉네임만 설정)
-     * @param username - 사용자 이름
-     */
-    const loginAsGuest = (username: string) => {
         currentUser.value = {
-            id: Math.random().toString(36).substring(7),
-            username: username,
+            id: Math.random().toString(36).substring(7), // Random ID
+            username: nickname,
             avatar: getRandomAvatar(),
+            isGuest: true,
             createdAt: new Date()
         }
-
         isAuthenticated.value = true
-
-        // 세션 스토리지에 저장 (게스트는 세션만 유지)
-        sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
+        sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+        isLoading.value = false
+        return { success: true }
     }
 
     /**
-     * 사용자 로그아웃
+     * 2. 회원 로그인 (Mock)
      */
-    const logout = () => {
+    const login = async (loginId: string, password?: string) => {
+        isLoading.value = true
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        currentUser.value = {
+            id: 12345, // Dummy Number ID
+            loginId: loginId,
+            username: loginId + "_User",
+            avatar: getRandomAvatar(),
+            isGuest: false,
+            createdAt: new Date()
+        }
+        isAuthenticated.value = true
+        sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+        isLoading.value = false
+        return { success: true }
+    }
+
+    /**
+     * 3. 회원가입 (Mock)
+     */
+    const signUp = async (loginId: string, password: string, nickname: string) => {
+        isLoading.value = true
+        await new Promise(resolve => setTimeout(resolve, 500))
+        isLoading.value = false
+        return { success: true }
+    }
+
+    /**
+     * 4. 로그아웃 (Mock)
+     */
+    const logout = async () => {
         currentUser.value = null
         isAuthenticated.value = false
-
-        // 스토리지 정리
         sessionStorage.removeItem('user')
-        sessionStorage.removeItem('guestUser')
     }
 
     /**
-     * 닉네임 변경
-     * @param newUsername - 새 닉네임
+     * 5. 닉네임 중복 확인 (Mock)
      */
-    const updateUsername = (newUsername: string) => {
-        if (currentUser.value) {
-            currentUser.value.username = newUsername
-
-            // 스토리지 업데이트
-            if (sessionStorage.getItem('user')) {
-                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-            }
-            if (sessionStorage.getItem('guestUser')) {
-                sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
-            }
+    const checkNickname = async (nickname: string) => {
+        await new Promise(resolve => setTimeout(resolve, 300))
+        // 항상 성공
+        return {
+            isAvailable: true,
+            message: "사용 가능한 닉네임입니다."
         }
     }
 
     /**
-     * 아바타 변경
-     * @param newAvatar - 새 아바타 (이모지 또는 URL)
+     * 6. 닉네임 변경 (Mock)
      */
+    const updateUsername = async (newNickname: string) => {
+        if (!currentUser.value) return false
+
+        currentUser.value.username = newNickname
+        sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+        return true
+    }
+
+    /**
+     * 7. 세션 복구 (Local Only)
+     */
+    const restoreUser = async () => {
+        const stored = sessionStorage.getItem('user')
+        if (stored) {
+            currentUser.value = JSON.parse(stored)
+            isAuthenticated.value = true
+        }
+    }
+
     const updateAvatar = (newAvatar: string) => {
         if (currentUser.value) {
             currentUser.value.avatar = newAvatar
-
-            // 스토리지 업데이트
-            if (sessionStorage.getItem('user')) {
-                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-            }
-            if (sessionStorage.getItem('guestUser')) {
-                sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
-            }
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
         }
     }
 
-    /**
-     * 프로필 전체 업데이트
-     * @param updates - 업데이트할 프로필 정보
-     */
-    const updateProfile = (updates: Partial<UserProfile>) => {
-        if (currentUser.value) {
-            currentUser.value = {
-                ...currentUser.value,
-                ...updates
-            }
-
-            // 스토리지 업데이트
-            if (sessionStorage.getItem('user')) {
-                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-            }
-            if (sessionStorage.getItem('guestUser')) {
-                sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
-            }
-        }
-    }
-
-    /**
-     * 저장된 사용자 정보 복원
-     */
-    const restoreUser = () => {
-        // 세션 스토리지에서 복원 시도
-        const savedUser = sessionStorage.getItem('user')
-        if (savedUser) {
-            try {
-                currentUser.value = JSON.parse(savedUser)
-                isAuthenticated.value = true
-                return true
-            } catch (error) {
-                console.error('Failed to restore user from sessionStorage:', error)
-            }
-        }
-
-        // 세션 스토리지에서 게스트 복원 시도
-        const guestUser = sessionStorage.getItem('guestUser')
-        if (guestUser) {
-            try {
-                currentUser.value = JSON.parse(guestUser)
-                isAuthenticated.value = true
-                return true
-            } catch (error) {
-                console.error('Failed to restore guest user from sessionStorage:', error)
-            }
-        }
-
-        return false
-    }
-
-    /**
-     * 랜덤 아바타 생성 (이모지)
-     */
     const getRandomAvatar = (): string => {
-        const avatars = ['❓']
+        const avatars = ['😊', '😎', '🐱', '🐶', '🦊', '🐸', '🐼', '🐵', '🐣', '🦄']
         return avatars[Math.floor(Math.random() * avatars.length)] || '👤'
     }
 
-    /**
-     * 사용자 초기화 (개발/테스트용)
-     */
-    const reset = () => {
-        currentUser.value = null
-        isAuthenticated.value = false
-        isLoading.value = false
-        sessionStorage.removeItem('user')
-        sessionStorage.removeItem('guestUser')
-    }
-
     return {
-        // State
         currentUser,
         isAuthenticated,
         isLoading,
-
-        // Getters
         userId,
         username,
         avatar,
-
-        // Actions
+        isGuest,
         login,
-        loginWithApi,
         loginAsGuest,
+        signUp,
         logout,
+        checkNickname,
         updateUsername,
         updateAvatar,
-        updateProfile,
         restoreUser,
-        getRandomAvatar,
-        reset
+        getRandomAvatar
     }
 })

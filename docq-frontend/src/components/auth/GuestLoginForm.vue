@@ -7,10 +7,19 @@ const emit = defineEmits(['success', 'close', 'error']);
 
 const userStore = useUserStore();
 const nickname = ref('');
+const isChecked = ref(false);
+const checkMsg = ref('');
+const checkStatus = ref<'success' | 'error' | ''>('');
 
 const confirmNickname = async () => {
     if (nickname.value.trim().length < 2) {
-        emit('error', "닉네임은 두 글자 이상이어야 해요!");
+        checkMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+        checkStatus.value = 'error';
+        return;
+    }
+    if (!isChecked.value) {
+        checkMsg.value = "닉네임 중복 확인을 해주세요!";
+        checkStatus.value = 'error';
         return;
     }
     
@@ -21,12 +30,25 @@ const confirmNickname = async () => {
     // 기존 MainView의 confirmNickname 로직을 그대로 가져옴.
     
     // 만약 "게스트"가 닉네임을 짓는 것이라면, API가 loginWithApi(nickname) 형태이므로 그대로 사용.
-    const result = await userStore.loginWithApi(nickname.value.trim());
+    const result = await userStore.loginAsGuest(nickname.value.trim());
     if (!result.success) {
-        emit('error', getErrorMessage((result as any).error));
+        checkMsg.value = getErrorMessage((result as any).error);
+        checkStatus.value = 'error';
         return;
     }
     emit('success');
+};
+
+const checkNickname = async () => {
+    if (nickname.value.trim().length < 2) {
+        checkMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+        checkStatus.value = 'error';
+        return;
+    }
+    const { isAvailable, message } = await userStore.checkNickname(nickname.value.trim());
+    checkMsg.value = message;
+    checkStatus.value = isAvailable ? 'success' : 'error';
+    isChecked.value = isAvailable;
 };
 </script>
 
@@ -38,14 +60,21 @@ const confirmNickname = async () => {
         </button>
 
         <div class="input-area">
-            <div class="input-wrapper mb-4">
-                <input 
-                    type="text" 
-                    v-model="nickname" 
-                    placeholder="닉네임을 입력하세요" 
-                    @keyup.enter="confirmNickname" 
-                    autofocus 
-                />
+            <div class="input-group mb-4">
+                <div class="input-row">
+                    <div class="input-wrapper flex-grow">
+                        <input 
+                            type="text" 
+                            v-model="nickname" 
+                            placeholder="닉네임을 입력하세요" 
+                            @keyup.enter="confirmNickname" 
+                            @input="isChecked = false"
+                            autofocus 
+                        />
+                    </div>
+                    <button class="cartoon-btn secondary small-btn" @click="checkNickname">확인</button>
+                </div>
+                <p v-if="checkMsg" class="check-msg" :class="checkStatus">{{ checkMsg }}</p>
             </div>
             <button @click="confirmNickname" class="cartoon-btn primary large-btn">
                 <span>START</span>
@@ -71,6 +100,25 @@ const confirmNickname = async () => {
 .input-area { display: flex; flex-direction: column; gap: 12px; }
 .input-wrapper { position: relative; border: 3px solid #d7ccc8; border-radius: 12px; background: #fff; transition: all 0.3s; }
 .input-wrapper:focus-within { border-color: var(--leaf-green); transform: scale(1.02); }
+.input-group { display: flex; flex-direction: column; gap: 4px; }
+.input-row { display: flex; gap: 8px; align-items: center; }
+.flex-grow { flex-grow: 1; }
+
+.cartoon-btn.secondary { background: #ff7043; box-shadow: 0 5px 0 #d84315; }
+.cartoon-btn.secondary:hover { background: #ff8a65; }
+.cartoon-btn.secondary:active { top: 5px; box-shadow: 0 0 0 #d84315; }
+
+.cartoon-btn.small-btn {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.check-msg.success { color: var(--leaf-dark); }
+.check-msg.error { color: #d32f2f; }
+
 .input-area input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.3rem; text-align: center; color: var(--text-brown); font-family: 'Jua', sans-serif; outline: none; }
 .input-area input::placeholder { color: #bcaaa4; font-size: 1.1rem; }
 
