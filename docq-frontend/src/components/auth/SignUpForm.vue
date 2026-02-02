@@ -43,16 +43,11 @@ const checkIdDuplicate = async () => {
         idCheckStatus.value = 'error';
         return;
     }
-    // TODO: API 연결
-    if (signUpId.value.toLowerCase().includes('admin')) {
-        idCheckMsg.value = "사용할 수 없는 아이디입니다.";
-        idCheckStatus.value = 'error';
-        isIdChecked.value = false;
-    } else {
-        idCheckMsg.value = "사용 가능한 아이디입니다.";
-        idCheckStatus.value = 'success';
-        isIdChecked.value = true;
-    }
+    
+    const { isAvailable, message } = await userStore.checkId(signUpId.value.trim());
+    idCheckMsg.value = message;
+    idCheckStatus.value = isAvailable ? 'success' : 'error';
+    isIdChecked.value = isAvailable;
 };
 
 const checkNicknameDuplicate = async () => {
