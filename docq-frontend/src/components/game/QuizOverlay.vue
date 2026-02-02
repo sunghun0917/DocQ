@@ -2,14 +2,16 @@
 import { computed, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
+import { useUserStore } from '@/stores/userStore'
 
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
+const userStore = useUserStore()
 
 const quiz = computed(() => gameStore.currentQuiz)
-const myUserId = computed(() => roomStore.myUser?.id || '')
-// Access currentTurnUserId via gameState since the getter was removed from store
-const isMyTurn = computed(() => gameStore.gameState.currentTurnUserId === myUserId.value)
+const myPlayerId = computed(() => userStore.playerId)
+// currentTurnPlayerId = 게임 참여자 ID (playerId)
+const isMyTurn = computed(() => gameStore.gameState.currentTurnPlayerId === myPlayerId.value)
 
 // Local state for submission feedback since store doesn't support it yet
 const localSelectedAnswer = ref<number | null>(null)
@@ -48,7 +50,7 @@ const emit = defineEmits(['submit'])
 
 // 답안 제출 핸들러
 const handleAnswer = (index: number) => {
-  if (!myUserId.value || hasSubmitted.value || !canAnswer.value) return
+  if (!myPlayerId.value || hasSubmitted.value || !canAnswer.value) return
   
   // Update local visual state
   localSelectedAnswer.value = index

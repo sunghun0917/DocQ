@@ -24,8 +24,8 @@ const targetUser = computed(() => roomStore.users.find(u => u.id === targetUserI
 // 플레이어 턴 승리: 8칸(-1~7, 0제외) / 고스트 턴 승리: 4칸(-1~3, 0제외)
 watch(() => gameStore.rouletteTargetId, (targetId) => {
     if (targetId) {
-        const currentTurnUserId = gameStore.gameState.currentTurnUserId;
-        const isTurnOwner = targetId === currentTurnUserId;
+        const currentTurnPlayerId = gameStore.gameState.currentTurnPlayerId;
+        const isTurnOwner = targetId === currentTurnPlayerId;
         labelByIndex.value = isTurnOwner ? [-1, 1, 2, 3, 4, 5, 6, 7] : [-1, 1, 2, 3];
     }
 }, { immediate: true });
