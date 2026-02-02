@@ -18,6 +18,8 @@ services:
   backend:
     build: ../../docq_backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - ai.url=http://ai-service:8000
