@@ -24,26 +24,25 @@ export type RoomStatus =
  * ----------------------------------------------------------------------------
  */
 
-// 사용자 로그인
-export interface UserLoginRequest {
+// 게스트 로그인 (Phase 1)
+export interface GuestLoginRequest {
     nickname: string
 }
-export interface UserLoginResponse {
-    userId: string
+export interface GuestLoginResponse {
+    playerId: string
     nickname: string
 }
-
-export interface UserNicknameUpdateRequest {
+export interface GuestNicknameUpdateRequest {
     nickname: string
 }
-export interface UserNicknameUpdateResponse {
-    userId: string
+export interface GuestNicknameUpdateResponse {
+    playerId: string
     nickname: string
 }
 
 // 방 생성
 export interface CreateRoomRequest {
-    userId: string
+    playerId: string
     capacity: number
     title: string
     isPrivate?: boolean
@@ -52,7 +51,7 @@ export interface CreateRoomRequest {
 export interface CreateRoomResponse {
     roomId: string
     inviteCode: string
-    hostId: string
+    hostPlayerId: string
     isPrivate: boolean
 }
 
@@ -99,7 +98,7 @@ export interface QuizGenerateResponse {
  * 플레이어 상세 정보
  */
 export interface PlayerInfo {
-    userId: string
+    playerId: string
     nickname: string
     isHost: boolean
     connected: boolean
@@ -135,7 +134,7 @@ export interface Quiz {
 export interface GameStateResponse {
     state: RoomStatus
     round?: number | null
-    currentTurnUserId?: string | null
+    currentTurnPlayerId?: string | null
     players: PlayerInfo[]
     turnOrder?: string[]
     cardDrawResult?: Record<string, number>
@@ -170,7 +169,7 @@ export interface RoundResult {
     quizId: number
     correctAnswer: string
     isTurnUserCorrect: boolean
-    winnerUserId?: string | null
+    winnerPlayerId?: string | null
     rouletteType?: 'BUFF' | 'MOVE' | 'NONE' | string
     rouletteValue?: number
 }
@@ -185,14 +184,14 @@ export interface MoveAction {
     effectType?: string
     before?: number
     after?: number
-    targetUserId?: string
+    targetPlayerId?: string
 }
 
 /**
  * 전체 이동 정보
  */
 export interface MoveInfo {
-    userId: string
+    playerId: string
     startPosition: number
     endPosition: number
     moveProcess: MoveAction[]
@@ -202,7 +201,7 @@ export interface MoveInfo {
  * 최종 순위 정보
  */
 export interface FinishRank {
-    userId: string
+    playerId: string
     nickname: string
     position: number
     remaining: number
@@ -215,6 +214,6 @@ export interface FinishRank {
  */
 export interface FinishResponse {
     type: 'FINISH'
-    winnerUserId: string
+    winnerPlayerId: string
     rankings: FinishRank[]
 }
