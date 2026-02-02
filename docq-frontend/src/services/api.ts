@@ -12,7 +12,13 @@ import type {
     JoinRoomRequest,
     JoinRoomResponse,
     QuizResponse,
-    QuizGenerateResponse
+    QuizGenerateResponse,
+    CheckNicknameResponse,
+    CheckIdResponse,
+    SignUpRequest,
+    SignUpResponse,
+    LoginRequest,
+    LoginResponse
 } from '@/types/docq-api'
 
 // Axios 인스턴스 생성
@@ -38,6 +44,24 @@ apiClient.interceptors.response.use(
  * 📡 API 함수 목록
  * ============================================================================
  */
+
+/**
+ * 회원 가입
+ * POST /auth/signup
+ */
+export const signUp = async (data: SignUpRequest): Promise<SignUpResponse> => {
+    const response = await apiClient.post<SignUpResponse>('/auth/signup', data)
+    return response.data
+}
+
+/**
+ * 회원 로그인
+ * POST /auth/login
+ */
+export const login = async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await apiClient.post<LoginResponse>('/auth/login', data)
+    return response.data
+}
 
 /**
  * 게스트 로그인 (닉네임으로 playerId 발급)
@@ -133,6 +157,28 @@ export const setDefaultQuizzes = async (roomId: string, type: string): Promise<{
     return response.data
 }
 
+/**
+ * 닉네임 중복 확인
+ * GET /users/nickname/exists?nickname={nickname}
+ */
+export const checkNicknameAvailability = async (nickname: string): Promise<CheckNicknameResponse> => {
+    const response = await apiClient.get<CheckNicknameResponse>('/users/nickname/exists', {
+        params: { nickname }
+    })
+    return response.data
+}
+
+/**
+ * 아이디 중복 확인
+ * GET /users/userId/exists?userId={userId}
+ */
+export const checkUserIdAvailability = async (userId: string): Promise<CheckIdResponse> => {
+    const response = await apiClient.get<CheckIdResponse>('/users/userId/exists', {
+        params: { userId }
+    })
+    return response.data
+}
+
 // ==================== 에러 처리 헬퍼 ====================
 
 /**
@@ -169,6 +215,10 @@ export default {
     generateQuiz,
     getQuizzes,
     setDefaultQuizzes,
+    checkNicknameAvailability,
+    checkUserIdAvailability,
+    signUp,
+    login,
     getErrorMessage,
     getErrorCode
 }

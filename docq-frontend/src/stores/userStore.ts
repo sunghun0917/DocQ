@@ -1,7 +1,14 @@
 // 현재 사용자 정보 관리
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { guestLogin, updateGuestNickname } from '@/services/api'
+import {
+    guestLogin,
+    updateGuestNickname,
+    checkNicknameAvailability,
+    checkUserIdAvailability as checkIdApi,
+    signUp as signUpApi,
+    login as loginApi
+} from '@/services/api'
 
 // 통합 사용자 프로필 타입
 export interface UserProfile {
@@ -72,22 +79,28 @@ export const useUserStore = defineStore('user', () => {
      * 2. 회원 로그인 (Mock)
      */
     const login = async (loginId: string, password?: string) => {
+        if (!password) return { success: false, error: 'Password is required' }
         isLoading.value = true
-        await new Promise(resolve => setTimeout(resolve, 500))
-
-        currentUser.value = {
-            userId: '12345',
-            playerId: 'player_12345',
-            loginId: loginId,
-            username: loginId + "_User",
-            avatar: getRandomAvatar(),
-            isGuest: false,
-            createdAt: new Date()
+        try {
+            const response = await loginApi({ loginId, password })
+            currentUser.value = {
+                userId: String(response.id),
+                playerId: String(response.id), // 회원 ID를 playerId로 사용 (백엔드 맞춰서 수정 가능)
+                loginId: response.loginId,
+                username: response.nickname,
+                avatar: getRandomAvatar(),
+                isGuest: false,
+                createdAt: new Date()
+            }
+            isAuthenticated.value = true
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+            return { success: true }
+        } catch (error) {
+            console.error('Login failed:', error)
+            return { success: false, error }
+        } finally {
+            isLoading.value = false
         }
-        isAuthenticated.value = true
-        sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-        isLoading.value = false
-        return { success: true }
     }
 
     /**
@@ -95,9 +108,16 @@ export const useUserStore = defineStore('user', () => {
      */
     const signUp = async (loginId: string, password: string, nickname: string) => {
         isLoading.value = true
-        await new Promise(resolve => setTimeout(resolve, 500))
-        isLoading.value = false
-        return { success: true }
+        try {
+            const response = await signUpApi({ loginId, password, nickname })
+            console.log('Signup success:', response)
+            return { success: true }
+        } catch (error) {
+            console.error('Signup failed:', error)
+            return { success: false, error }
+        } finally {
+            isLoading.value = false
+        }
     }
 
     /**
@@ -113,11 +133,37 @@ export const useUserStore = defineStore('user', () => {
      * 5. 닉네임 중복 확인 (Mock)
      */
     const checkNickname = async (nickname: string) => {
-        await new Promise(resolve => setTimeout(resolve, 300))
-        // 항상 성공
-        return {
-            isAvailable: true,
-            message: "사용 가능한 닉네임입니다."
+        try {
+            const { available } = await checkNicknameAvailability(nickname)
+            return {
+                isAvailable: available,
+                message: available ? "사용 가능한 닉네임입니다." : "이미 사용 중인 닉네임입니다."
+            }
+        } catch (error) {
+            console.error('Nickname check failed:', error)
+            return {
+                isAvailable: false,
+                message: "닉네임 확인 중 오류가 발생했습니다."
+            }
+        }
+    }
+
+    /**
+     * 아이디 중복 확인
+     */
+    const checkId = async (userId: string) => {
+        try {
+            const { available, message } = await checkIdApi(userId)
+            return {
+                isAvailable: available,
+                message: message
+            }
+        } catch (error) {
+            console.error('ID check failed:', error)
+            return {
+                isAvailable: false,
+                message: "아이디 확인 중 오류가 발생했습니다."
+            }
         }
     }
 
@@ -234,6 +280,7 @@ export const useUserStore = defineStore('user', () => {
         signUp,
         logout,
         checkNickname,
+        checkId,
         updateUsername,
         updateAvatar,
         restoreUser,

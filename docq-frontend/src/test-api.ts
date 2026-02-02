@@ -52,24 +52,6 @@ export const testAPI = {
         }
     },
 
-    // 3. 비밀방 생성 테스트
-    async testCreatePrivateRoom(playerId: string) {
-        console.log('🧪 [TEST] 비밀방 생성 테스트')
-        try {
-            const result = await createRoom({
-                playerId: playerId,
-                capacity: 4,
-                title: '비밀 테스트 방',
-                isPrivate: true,
-                password: '1234'
-            })
-            console.log('✅ 성공:', result)
-            return result
-        } catch (error) {
-            console.error('❌ 실패:', getErrorMessage(error))
-            throw error
-        }
-    },
 
     // 4. 입장 코드로 방 조회 테스트
     async testGetRoomByInviteCode(inviteCode: string) {
@@ -97,18 +79,6 @@ export const testAPI = {
         }
     },
 
-    // 6. 방 참가 검증 테스트 (비밀방)
-    async testJoinPrivateRoom(roomId: string, password: string) {
-        console.log('🧪 [TEST] 비밀방 참가 테스트')
-        try {
-            const result = await verifyJoinRoom({ roomId, password })
-            console.log('✅ 성공:', result)
-            return result
-        } catch (error) {
-            console.error('❌ 실패:', getErrorMessage(error))
-            throw error
-        }
-    },
 
     // 7. WebSocket 연결 테스트
     async testWebSocketConnect() {

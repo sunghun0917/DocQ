@@ -16,8 +16,6 @@ const wsStore = useWebSocketStore()
 const isSubmitting = ref(false)
 
 const roomCode = ref('');
-const password = ref('');
-const isPrivateRoom = ref(false);
 const resolvedRoom = ref<RoomResponse | null>(null)
 const lastCheckedCode = ref('')
 const isNicknameSet = computed(() => !!userStore.playerId);
@@ -53,16 +51,9 @@ const joinRoom = async () => {
     const room = await getRoomByInviteCode(inviteCode)
     resolvedRoom.value = room
     lastCheckedCode.value = inviteCode
-    isPrivateRoom.value = room.isPrivate
-
-    if (room.isPrivate && !password.value.trim()) {
-      triggerAlert("비밀번호를 입력해주세요!");
-      return;
-    }
 
     await verifyJoinRoom({
-      roomId: room.roomId,
-      password: room.isPrivate ? password.value.trim() : undefined
+      roomId: room.roomId
     })
 
     roomStore.joinRoom({
@@ -99,10 +90,8 @@ const checkRoomType = async () => {
     const room = await getRoomByInviteCode(inviteCode)
     resolvedRoom.value = room
     lastCheckedCode.value = inviteCode
-    isPrivateRoom.value = room.isPrivate
   } catch (error) {
     resolvedRoom.value = null
-    isPrivateRoom.value = false
   }
 };
 </script>
@@ -147,23 +136,6 @@ const checkRoomType = async () => {
             />
           </div>
 
-          <div v-if="isPrivateRoom" class="animate-slide-down w-full">
-            <label class="block text-[#8d6e63] text-xl font-bold mb-3 ml-1 flex items-center gap-2">
-              <span class="material-symbols-outlined text-2xl">lock</span>
-              비밀번호
-            </label>
-            <input 
-              v-model="password"
-              type="password" 
-              placeholder="비밀번호 4자리" 
-              maxlength="4"
-              class="w-full h-14 px-6 rounded-2xl border-4 border-[#ef5350] bg-[#fff1f2] 
-                     focus:border-[#e53935] focus:bg-[#ffebee] outline-none 
-                     font-black text-2xl text-center text-[#c62828] tracking-widest 
-                     placeholder:text-[#ef9a9a] placeholder:font-normal placeholder:tracking-normal placeholder:text-xl transition-all"
-              @keyup.enter="joinRoom"
-            />
-          </div>
 
         </div>
 

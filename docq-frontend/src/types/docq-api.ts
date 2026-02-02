@@ -24,6 +24,30 @@ export type RoomStatus =
  * ----------------------------------------------------------------------------
  */
 
+// 회원가입
+export interface SignUpRequest {
+    loginId: string
+    password: string
+    nickname: string
+}
+export interface SignUpResponse {
+    id: number
+    loginId: string
+    nickname: string
+    createdAt: string
+}
+
+// 회원 로그인
+export interface LoginRequest {
+    loginId: string
+    password: string
+}
+export interface LoginResponse {
+    id: number
+    loginId: string
+    nickname: string
+}
+
 // 게스트 로그인 (Phase 1)
 export interface GuestLoginRequest {
     nickname: string
@@ -49,13 +73,17 @@ export interface CheckNicknameResponse {
     available: boolean
 }
 
+export interface CheckIdResponse {
+    available: boolean
+    message: string
+}
+
 // 방 생성
 export interface CreateRoomRequest {
     playerId: string
     capacity: number
     title: string
     isPrivate?: boolean
-    password?: string
 }
 export interface CreateRoomResponse {
     roomId: string
@@ -76,7 +104,6 @@ export interface RoomResponse {
 }
 export interface JoinRoomRequest {
     roomId: string
-    password?: string
 }
 export interface JoinRoomResponse {
     roomId: string

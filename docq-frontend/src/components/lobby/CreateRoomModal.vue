@@ -17,8 +17,6 @@ const isSubmitting = ref(false)
 // 방 정보 상태
 const roomName = ref('');
 const maxUsers = ref(4);
-const isSecret = ref(false);
-const password = ref('');
 
 // 알림 상태
 const isAlertOpen = ref(false);
@@ -50,9 +48,7 @@ const createRoom = async () => {
     const room = await createRoomApi({
       playerId: userStore.playerId,
       capacity: maxUsers.value,
-      title: roomName.value.trim(),
-      isPrivate: isSecret.value,
-      password: isSecret.value ? password.value.trim() : undefined
+      title: roomName.value.trim()
     })
 
     roomStore.createRoom({
