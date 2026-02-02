@@ -23,7 +23,7 @@ const wsStore = useWebSocketStore()
 const userStore = useUserStore()
 const uiStore = useUiStore()
 
-const myUserId = computed(() => userStore.userId)
+const myPlayerId = computed(() => userStore.playerId)
 const currentQuiz = computed(() => gameStore.currentQuiz)
 const timeRemaining = computed(() => gameStore.timeRemaining)
 const isGameFinished = computed(() => gameStore.isGameFinished)
@@ -39,9 +39,9 @@ const orderedPlayers = computed(() => {
     const list = players.value.slice()
     const order = gameStore.gameState.turnOrder || []
     if (!order.length) return list
-    const byId = new Map(list.map(p => [p.userId, p]))
+    const byId = new Map(list.map(p => [p.playerId, p]))
     const ordered = order.map(id => byId.get(id)).filter((p): p is typeof list[number] => !!p)
-    const remaining = list.filter(p => !order.includes(p.userId))
+    const remaining = list.filter(p => !order.includes(p.playerId))
     return [...ordered, ...remaining]
 })
 const cornerPlayers = computed(() => {
@@ -81,7 +81,7 @@ const rankingResults = computed(() => {
     })
     
     return sorted.map((p, index) => {
-        const user = roomStore.users.find(u => u.id === p.userId)
+        const user = roomStore.users.find(u => u.id === p.playerId)
         let avatarVal = user?.avatar || '0'
         const mapped = AVATAR_REVERSE_MAP[avatarVal]
         if (mapped) {
@@ -91,9 +91,9 @@ const rankingResults = computed(() => {
             rank: index + 1,
             nickname: user?.nickname || p.nickname || (gamePhase.value === 'FINISHED' ? p.nickname : 'Unknown'),
             score: p.score ?? 0,
-            isMe: p.userId === myUserId.value,
+            isMe: p.playerId === myPlayerId.value,
             avatar: avatarVal,
-            userId: p.userId
+            playerId: p.playerId
         }
     })
 })
@@ -117,7 +117,7 @@ watch(
             })
             
             finalRankingResults.value = sorted.map((p, index) => {
-                const user = roomStore.users.find(u => u.id === p.userId)
+                const user = roomStore.users.find(u => u.id === p.playerId)
                 let avatarVal = user?.avatar || '0'
                 const mapped = AVATAR_REVERSE_MAP[avatarVal]
                 if (mapped) {
@@ -128,9 +128,9 @@ watch(
                     // Prioritize gameStore nickname if roomStore user is missing (e.g. they left)
                     nickname: user?.nickname || p.nickname || 'Unknown Player', 
                     score: p.score ?? 0,
-                    isMe: p.userId === myUserId.value,
+                    isMe: p.playerId === myPlayerId.value,
                     avatar: avatarVal,
-                    userId: p.userId
+                    playerId: p.playerId
                 }
             })
         } else if (!visible) {
@@ -155,9 +155,9 @@ let systemNoticeTimer: number | null = null
 let systemNoticeResolver: (() => void) | null = null
 
 const handleBeforeUnload = () => {
-    if (!userStore.userId || !roomId.value) return
+    if (!userStore.playerId || !roomId.value) return
     sessionStorage.setItem('docq:lastPage', 'game')
-    wsStore.leaveGame(roomId.value, userStore.userId)
+    wsStore.leaveGame(roomId.value, userStore.playerId)
     wsStore.cleanup()
     roomStore.leaveRoom()
     gameStore.reset()
@@ -197,7 +197,7 @@ const showSystemNotice = (text: string, duration = 2000) => {
 }
 
 const winnerName = computed(() => {
-    const winnerId = miniGame.value.result?.winnerUserId
+    const winnerId = miniGame.value.result?.winnerPlayerId
     if (!winnerId) return ''
     return roomStore.users.find(u => u.id === winnerId)?.nickname || ''
 })
@@ -228,6 +228,8 @@ const miniGameUiType = computed(() => {
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
 const catchEffect = ref<string | null>(null)
 const pendingCatchEffect = ref<string | null>(null)
+/** 이동이 끝난 뒤 표시할 CATCH 메시지 (이동 종료 watch에서만 읽고 비움) */
+const catchMessageToShowAfterMove = ref<string | null>(null)
 let pendingCatchKey: string | null = null
 let catchEffectTimer: number | null = null
 let resultNoticeToken = 0
@@ -239,8 +241,8 @@ watch(
     async (result) => {
         if (!result) return
         const token = ++resultNoticeToken
-        const winnerId = result.winnerUserId ?? null
-        const currentTurnId = gameStore.gameState.currentTurnUserId ?? null
+        const winnerId = result.winnerPlayerId ?? null
+        const currentTurnId = gameStore.gameState.currentTurnPlayerId ?? null
         let noticeText = '맞춘 사람이 없습니다.'
         if (winnerId) {
             const winnerName = roomStore.users.find(u => u.id === winnerId)?.nickname || '알 수 없음'
@@ -263,30 +265,32 @@ watch(
 watch(
     () => gameStore.currentMove,
     (move) => {
-        if (!move || !myUserId.value) return
+        if (!move || !myPlayerId.value) return
 
         const catchAction = move.moveProcess?.find((item: any) => item.type === 'CATCH')
         if (!catchAction) {
             pendingCatchEffect.value = null
+            catchMessageToShowAfterMove.value = null
             pendingCatchKey = null
             return
         }
 
         const moveKey = JSON.stringify({
-            userId: move.userId,
+            playerId: move.playerId,
             start: move.startPosition,
             end: move.endPosition,
             process: move.moveProcess
         })
         pendingCatchKey = moveKey
 
-        if (catchAction.targetUserId === myUserId.value) {
-            pendingCatchEffect.value = '잡혔습니다. 출발지로 이동합니다.'
-        } else if (move.userId === myUserId.value) {
-            pendingCatchEffect.value = '잡았습니다. 출발지로 이동시킵니다.'
-        } else {
-            pendingCatchEffect.value = null
+        let message: string | null = null
+        if (catchAction.targetPlayerId === myPlayerId.value) {
+            message = '잡혔습니다. 출발지로 이동합니다.'
+        } else if (move.playerId === myPlayerId.value) {
+            message = '잡았습니다. 출발지로 이동시킵니다.'
         }
+        pendingCatchEffect.value = message
+        catchMessageToShowAfterMove.value = message
     }
 )
 
@@ -294,30 +298,22 @@ watch(
     () => gameStore.movementInProgress,
     (moving, prev) => {
         if (moving || !prev) return
-        if (!pendingCatchEffect.value || !gameStore.currentMove) return
-
-        const move = gameStore.currentMove
-        const moveKey = JSON.stringify({
-            userId: move.userId,
-            start: move.startPosition,
-            end: move.endPosition,
-            process: move.moveProcess
-        })
-        if (pendingCatchKey !== moveKey) return
+        const message = catchMessageToShowAfterMove.value
+        if (!message) return
 
         if (catchEffectTimer !== null) {
             clearTimeout(catchEffectTimer)
             catchEffectTimer = null
         }
-
-        catchEffect.value = pendingCatchEffect.value
+        catchEffect.value = message
+        catchMessageToShowAfterMove.value = null
         pendingCatchEffect.value = null
         pendingCatchKey = null
 
         catchEffectTimer = window.setTimeout(() => {
             catchEffect.value = null
             catchEffectTimer = null
-        }, 2000)
+        }, 2500)
     }
 )
 
@@ -327,8 +323,8 @@ const submitAnswer = (index: number) => {
     const answerText = currentQuiz.value.options[index]
     
     const roomId = roomStore.roomInfo.roomId
-    if (roomId && myUserId.value) {
-        wsStore.submitAnswer(roomId, myUserId.value, currentQuiz.value.quizId, answerText || "")
+    if (roomId && myPlayerId.value) {
+        wsStore.submitAnswer(roomId, myPlayerId.value, currentQuiz.value.quizId, answerText || "")
     }
 }
 
@@ -387,8 +383,8 @@ const handleConfirm = () => {
 }
 
 const leaveGame = () => {
-    if (!userStore.userId || !roomId.value) return
-    wsStore.leaveGame(roomId.value, userStore.userId)
+    if (!userStore.playerId || !roomId.value) return
+    wsStore.leaveGame(roomId.value, userStore.playerId)
     setTimeout(() => {
         wsStore.cleanup()
         roomStore.leaveRoom()
@@ -398,13 +394,13 @@ const leaveGame = () => {
 }
 
 const endGame = () => {
-    if (!userStore.userId || !roomId.value) return
-    wsStore.endGame(roomId.value, userStore.userId)
+    if (!userStore.playerId || !roomId.value) return
+    wsStore.endGame(roomId.value, userStore.playerId)
 }
 
 const restartGame = () => {
-    if (!userStore.userId || !roomId.value) return
-    wsStore.restartGame(roomId.value, userStore.userId)
+    if (!userStore.playerId || !roomId.value) return
+    wsStore.restartGame(roomId.value, userStore.playerId)
 }
 
 watchEffect(() => {
@@ -432,11 +428,11 @@ watchEffect(() => {
 })
 
 const handleMiniGameSubmit = (score: number) => {
-    if (!roomId.value || !userStore.userId || !miniGame.value.gameType) return
+    if (!roomId.value || !userStore.playerId || !miniGame.value.gameType) return
     // 점수는 높을수록 유리하도록 변환 (시간 기반 -> 역수 점수)
     const safeScore = Math.max(score, 0.001)
     const resultValue = Math.max(1, Math.round((1 / safeScore) * 1000))
-    wsStore.submitMiniGameResult(roomId.value, userStore.userId, miniGame.value.gameType, resultValue)
+    wsStore.submitMiniGameResult(roomId.value, userStore.playerId, miniGame.value.gameType, resultValue)
 }
 
 const handleMiniGameClose = () => {
@@ -590,25 +586,25 @@ onUnmounted(() => {
       <div class="corner-players pointer-events-auto">
         <div
           v-for="(p, idx) in cornerPlayers"
-          :key="p?.userId ?? `corner-empty-${idx}`"
+          :key="p?.playerId ?? `corner-empty-${idx}`"
           class="corner-card flex flex-row items-center overflow-visible"
           :class="[
             `corner-${idx + 1}`,
-            { 'corner-card-active': p?.userId === currentTurnPlayer?.userId }
+            { 'corner-card-active': p?.playerId === currentTurnPlayer?.playerId }
           ]"
         >
           <template v-if="p">
             <!-- Left: Avatar (Static Emoji) -->
             <div class="w-[80px] h-[80px] flex items-center justify-center text-6xl pointer-events-none z-10 -ml-2">
-                {{ roomStore.users.find(u => u.id === p.userId)?.avatar || '👤' }}
+                {{ roomStore.users.find(u => u.id === p.playerId)?.avatar || '👤' }}
             </div>
 
             <!-- Right: Info -->
             <div class="flex flex-col flex-1 pl-2 z-0">
                 <div class="corner-card-name text-lg">
                 {{ p.nickname }}
-                <span v-if="p.userId === myUserId" class="corner-card-me">MY</span>
-                <span v-if="p.userId === currentTurnPlayer?.userId" class="corner-card-turn">TURN</span>
+                <span v-if="p.playerId === myPlayerId" class="corner-card-me">MY</span>
+                <span v-if="p.playerId === currentTurnPlayer?.playerId" class="corner-card-turn">TURN</span>
                 </div>
                 <div class="corner-card-meta">
                 <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>

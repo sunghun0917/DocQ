@@ -14,7 +14,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MovePlanPayload {
-    private String winnerUserId;
+    private String winnerPlayerId;
     private int startPosition;
     private int endPosition;
     private boolean consumeDoubleMove;

@@ -26,7 +26,7 @@ public class MiniGameDto {
     @Builder
     public static class SubmissionRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
         private String gameType; // "SPACE_MASH"
         private int resultValue;
     }
@@ -36,7 +36,7 @@ public class MiniGameDto {
     public static class ResultResponse {
         private String type; // "RESULT" 또는 "MINIGAME_END"
         private String gameType; // "SPACE_MASH"
-        private String winnerUserId;
+        private String winnerPlayerId;
         private String rewardBuff; // "DOUBLE_SCORE"
         private List<RankInfo> rankings;
     }
@@ -44,7 +44,7 @@ public class MiniGameDto {
     @Getter
     @Builder
     public static class RankInfo {
-        private String userId;
+        private String playerId;
         private String nickname;
         private int value;
         private int rank;
@@ -56,6 +56,6 @@ public class MiniGameDto {
     @AllArgsConstructor
     public static class RouletteRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
     }
 }

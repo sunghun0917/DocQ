@@ -2,10 +2,10 @@
 // AxiosInstance 타입을 명시적으로 사용
 import axios, { type AxiosInstance } from 'axios'
 import type {
-    UserLoginRequest,
-    UserLoginResponse,
-    UserNicknameUpdateRequest,
-    UserNicknameUpdateResponse,
+    GuestLoginRequest,
+    GuestLoginResponse,
+    GuestNicknameUpdateRequest,
+    GuestNicknameUpdateResponse,
     CreateRoomRequest,
     CreateRoomResponse,
     RoomResponse,
@@ -40,22 +40,22 @@ apiClient.interceptors.response.use(
  */
 
 /**
- * 사용자 로그인 (닉네임으로 userId 발급)
- * POST /users/login
+ * 게스트 로그인 (닉네임으로 playerId 발급)
+ * POST /guests/login
  */
-export const userLogin = async (nickname: string): Promise<UserLoginResponse> => {
-    const response = await apiClient.post<UserLoginResponse>('/users/login', { nickname })
+export const guestLogin = async (nickname: string): Promise<GuestLoginResponse> => {
+    const response = await apiClient.post<GuestLoginResponse>('/guests/login', { nickname } as GuestLoginRequest)
     return response.data
 }
 
 /**
- * 사용자 닉네임 변경
- * PUT /users/{userId}/nickname
+ * 게스트 닉네임 변경
+ * PUT /guests/{playerId}/nickname
  */
-export const updateNickname = async (userId: string, nickname: string): Promise<UserNicknameUpdateResponse> => {
-    const response = await apiClient.put<UserNicknameUpdateResponse>(`/users/${userId}/nickname`, {
+export const updateGuestNickname = async (playerId: string, nickname: string): Promise<GuestNicknameUpdateResponse> => {
+    const response = await apiClient.put<GuestNicknameUpdateResponse>(`/guests/${playerId}/nickname`, {
         nickname
-    } as UserNicknameUpdateRequest)
+    } as GuestNicknameUpdateRequest)
     return response.data
 }
 
@@ -157,8 +157,8 @@ export const getErrorCode = (error: any): string | null => {
 
 // 기본 export
 export default {
-    userLogin,
-    updateNickname,
+    guestLogin,
+    updateGuestNickname,
     createRoom,
     getRoomById,
     getRoomByInviteCode,

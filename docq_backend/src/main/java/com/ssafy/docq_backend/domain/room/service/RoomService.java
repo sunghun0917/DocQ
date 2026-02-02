@@ -5,7 +5,7 @@ import com.ssafy.docq_backend.domain.room.dto.RoomDto.RoomJoinResponse;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.user.repository.UserRepository;
+import com.ssafy.docq_backend.domain.guest.repository.GuestRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 
@@ -20,11 +20,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class RoomService {
 
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
+    private final GuestRepository guestRepository;
 
     public RoomDto.RoomCreateResponse createRoom(RoomDto.RoomCreateRequest request) {
-        // 1. Host 검증
-        if (!userRepository.findById(request.getUserId()).isPresent()) {
+        // 1. Host(playerId) 검증
+        if (!guestRepository.findById(request.getPlayerId()).isPresent()) {
             throw new DocqException(ErrorCode.USER_NOT_FOUND); // U001
         }
 
@@ -39,7 +39,7 @@ public class RoomService {
 
         Room room = Room.builder()
                 .id(roomId)
-                .hostId(request.getUserId())
+                .hostPlayerId(request.getPlayerId())
                 .title(request.getTitle())
                 .capacity(request.getCapacity())
                 .isPrivate(Boolean.TRUE.equals(request.getIsPrivate()))
@@ -52,7 +52,7 @@ public class RoomService {
         return RoomDto.RoomCreateResponse.builder()
                 .roomId(room.getId())
                 .inviteCode(room.getInviteCode())
-                .hostId(room.getHostId())
+                .hostPlayerId(room.getHostPlayerId())
                 .isPrivate(room.isPrivate())
                 .build();
     }

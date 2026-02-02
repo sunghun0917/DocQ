@@ -9,16 +9,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class SessionRegistry {
     private final Map<String, SessionInfo> sessions = new ConcurrentHashMap<>();
-    private final Map<String, String> userToSession = new ConcurrentHashMap<>();
-    private final Map<String, Set<String>> roomUsers = new ConcurrentHashMap<>();
+    private final Map<String, String> playerToSession = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> roomPlayers = new ConcurrentHashMap<>();
 
-    public void register(String sessionId, String roomId, String userId) {
-        if (sessionId == null || roomId == null || userId == null) {
+    public void register(String sessionId, String roomId, String playerId) {
+        if (sessionId == null || roomId == null || playerId == null) {
             return;
         }
-        sessions.put(sessionId, new SessionInfo(roomId, userId));
-        userToSession.put(userId, sessionId);
-        roomUsers.computeIfAbsent(roomId, key -> ConcurrentHashMap.newKeySet()).add(userId);
+        sessions.put(sessionId, new SessionInfo(roomId, playerId));
+        playerToSession.put(playerId, sessionId);
+        roomPlayers.computeIfAbsent(roomId, key -> ConcurrentHashMap.newKeySet()).add(playerId);
     }
 
     public SessionInfo removeBySessionId(String sessionId) {
@@ -27,10 +27,10 @@ public class SessionRegistry {
         }
         SessionInfo info = sessions.remove(sessionId);
         if (info != null) {
-            String currentSession = userToSession.get(info.userId);
+            String currentSession = playerToSession.get(info.playerId);
             if (sessionId.equals(currentSession)) {
-                userToSession.remove(info.userId);
-                removeFromRoom(info.roomId, info.userId);
+                playerToSession.remove(info.playerId);
+                removeFromRoom(info.roomId, info.playerId);
                 return info;
             }
             return null;
@@ -38,15 +38,15 @@ public class SessionRegistry {
         return info;
     }
 
-    public void removeByUserId(String userId) {
-        if (userId == null) {
+    public void removeByPlayerId(String playerId) {
+        if (playerId == null) {
             return;
         }
-        String sessionId = userToSession.remove(userId);
+        String sessionId = playerToSession.remove(playerId);
         if (sessionId != null) {
             SessionInfo info = sessions.remove(sessionId);
             if (info != null) {
-                removeFromRoom(info.roomId, info.userId);
+                removeFromRoom(info.roomId, info.playerId);
             }
         }
     }
@@ -55,32 +55,32 @@ public class SessionRegistry {
         if (roomId == null) {
             return 0;
         }
-        Set<String> users = roomUsers.get(roomId);
-        return users == null ? 0 : users.size();
+        Set<String> players = roomPlayers.get(roomId);
+        return players == null ? 0 : players.size();
     }
 
-    private void removeFromRoom(String roomId, String userId) {
-        if (roomId == null || userId == null) {
+    private void removeFromRoom(String roomId, String playerId) {
+        if (roomId == null || playerId == null) {
             return;
         }
-        Set<String> users = roomUsers.get(roomId);
-        if (users == null) {
+        Set<String> players = roomPlayers.get(roomId);
+        if (players == null) {
             return;
         }
-        users.remove(userId);
-        if (users.isEmpty()) {
-            roomUsers.remove(roomId);
+        players.remove(playerId);
+        if (players.isEmpty()) {
+            roomPlayers.remove(roomId);
         }
     }
 
     @Getter
     public static class SessionInfo {
         private final String roomId;
-        private final String userId;
+        private final String playerId;
 
-        public SessionInfo(String roomId, String userId) {
+        public SessionInfo(String roomId, String playerId) {
             this.roomId = roomId;
-            this.userId = userId;
+            this.playerId = playerId;
         }
     }
 }

@@ -26,9 +26,9 @@ public class AckStore {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    public long addAckAndCount(String roomId, GameDto.AckType ackType, String keyId, String userId) {
+    public long addAckAndCount(String roomId, GameDto.AckType ackType, String keyId, String playerId) {
         String key = ackKey(roomId, ackType, keyId);
-        redisTemplate.opsForSet().add(key, userId);
+        redisTemplate.opsForSet().add(key, playerId);
         redisTemplate.expire(key, DEFAULT_ACK_TTL);
         Long count = redisTemplate.opsForSet().size(key);
         return count == null ? 0L : count;
@@ -99,12 +99,12 @@ public class AckStore {
         }
     }
 
-    public Set<AckKeyInfo> removeUserFromRoomAcks(String roomId, String userId) {
+    public Set<AckKeyInfo> removePlayerFromRoomAcks(String roomId, String playerId) {
         Set<AckKeyInfo> results = new HashSet<>();
         try {
             Set<String> keys = scanKeys("ack:" + roomId + ":*");
             for (String key : keys) {
-                redisTemplate.opsForSet().remove(key, userId);
+                redisTemplate.opsForSet().remove(key, playerId);
                 Long count = redisTemplate.opsForSet().size(key);
                 AckKeyInfo info = parseAckKey(key, count == null ? 0L : count);
                 if (info != null) {
@@ -112,7 +112,7 @@ public class AckStore {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to remove user {} from acks in room {}", userId, roomId, e);
+            log.error("Failed to remove player {} from acks in room {}", playerId, roomId, e);
         }
         return results;
     }

@@ -10,9 +10,9 @@ const props = defineProps<{
   timeLimitMs?: number;
   description?: string;
   result?: {
-    winnerUserId?: string | null;
+    winnerPlayerId?: string | null;
     rewardBuff?: string | null;
-    rankings?: Array<{ userId: string; nickname: string; value: number; rank: number }>;
+    rankings?: Array<{ playerId: string; nickname: string; value: number; rank: number }>;
   };
 }>();
 
@@ -42,7 +42,7 @@ const getPlayerStyle = (index: number) => {
 const resultScores = computed(() => {
   const map: Record<string, number> = {};
   props.result?.rankings?.forEach(rank => {
-    map[rank.userId] = rank.value;
+    map[rank.playerId] = rank.value;
   });
   return map;
 });
@@ -63,9 +63,9 @@ const showMiniTimer = computed(() =>
 );
 
 const winnerId = computed(() => {
-  if (props.result?.winnerUserId) return props.result.winnerUserId;
+  if (props.result?.winnerPlayerId) return props.result.winnerPlayerId;
   const top = props.result?.rankings?.[0];
-  return top?.userId ?? null;
+  return top?.playerId ?? null;
 });
 
 const handleGameEnd = (myScore: number) => {

@@ -5,8 +5,8 @@ import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.user.entity.User;
-import com.ssafy.docq_backend.domain.user.repository.UserRepository;
+import com.ssafy.docq_backend.domain.guest.entity.Guest;
+import com.ssafy.docq_backend.domain.guest.repository.GuestRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +45,7 @@ import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 public class GameService {
 
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
+    private final GuestRepository guestRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final AiClient aiClient;
     private final ObjectProvider<MiniGameService> miniGameServiceProvider;
@@ -211,39 +211,39 @@ public class GameService {
     }
 
     public void joinGame(GameDto.JoinRequest request) {
-        log.info("Join Request: roomId={}, userId={}, nickname={}", request.getRoomId(), request.getUserId(),
+        log.info("Join Request: roomId={}, userId={}, nickname={}", request.getRoomId(), request.getPlayerId(),
                 request.getNickname());
 
         try {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            userRepository.findById(request.getUserId())
+            guestRepository.findById(request.getPlayerId())
                     .orElseThrow(() -> new DocqException(ErrorCode.USER_NOT_FOUND));
 
-            if (!room.getPlayers().contains(request.getUserId())) {
+            if (!room.getPlayers().contains(request.getPlayerId())) {
                 if (room.getCurrentCount() >= room.getCapacity()) {
-                    sendError(request.getUserId(), ErrorCode.ROOM_FULL);
+                    sendError(request.getPlayerId(), ErrorCode.ROOM_FULL);
                     return;
                 }
                 if (room.getStatus() != RoomStatus.WAITING) {
-                    sendError(request.getUserId(), ErrorCode.GAME_ALREADY_STARTED);
+                    sendError(request.getPlayerId(), ErrorCode.GAME_ALREADY_STARTED);
                     return;
                 }
-                room.addPlayer(request.getUserId());
+                room.addPlayer(request.getPlayerId());
                 roomRepository.save(room); // Persistence Fix
             }
             broadcastGameState(room);
         } catch (DocqException e) {
-            sendError(request.getUserId(), e.getErrorCode());
+            sendError(request.getPlayerId(), e.getErrorCode());
         } catch (Exception e) {
             log.error("Unknown error in joinGame", e);
-            sendError(request.getUserId(), ErrorCode.SERVER_ERROR);
+            sendError(request.getPlayerId(), ErrorCode.SERVER_ERROR);
         }
     }
 
     public void leaveGame(GameDto.LeaveRequest request) {
-        log.info("Leave Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        log.info("Leave Request: roomId={}, userId={}", request.getRoomId(), request.getPlayerId());
 
         try {
             Room room = roomRepository.findById(request.getRoomId())
@@ -252,8 +252,8 @@ public class GameService {
                 return;
             }
 
-            String userId = request.getUserId();
-            boolean wasHost = userId.equals(room.getHostId());
+            String userId = request.getPlayerId();
+            boolean wasHost = userId.equals(room.getHostPlayerId());
             boolean removed = false;
 
             if (room.getPlayers().contains(userId)) {
@@ -266,12 +266,12 @@ public class GameService {
                 room.getQuizAnswers().remove(userId);
                 room.getTurnOrder().remove(userId);
 
-                if (userId.equals(room.getCurrentTurnUserId())) {
+                if (userId.equals(room.getCurrentTurnPlayerId())) {
                     if (!room.getTurnOrder().isEmpty()) {
                         int nextIndex = removedIndex >= room.getTurnOrder().size() ? 0 : Math.max(removedIndex, 0);
-                        room.setCurrentTurnUserId(room.getTurnOrder().get(nextIndex));
+                        room.setCurrentTurnPlayerId(room.getTurnOrder().get(nextIndex));
                     } else {
-                        room.setCurrentTurnUserId(null);
+                        room.setCurrentTurnPlayerId(null);
                     }
                 }
             }
@@ -308,7 +308,7 @@ public class GameService {
     }
 
     public void readyGame(GameDto.ReadyRequest request) {
-        log.info("Ready Request: roomId={}, userId={}, isReady={}", request.getRoomId(), request.getUserId(),
+        log.info("Ready Request: roomId={}, userId={}, isReady={}", request.getRoomId(), request.getPlayerId(),
                 request.isReady());
 
         try {
@@ -316,25 +316,25 @@ public class GameService {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            if (!room.getPlayers().contains(request.getUserId())) {
-                log.warn("User {} not found in room {} players: {}", request.getUserId(), request.getRoomId(),
+            if (!room.getPlayers().contains(request.getPlayerId())) {
+                log.warn("User {} not found in room {} players: {}", request.getPlayerId(), request.getRoomId(),
                         room.getPlayers());
-                sendError(request.getUserId(), ErrorCode.USER_NOT_FOUND);
+                sendError(request.getPlayerId(), ErrorCode.USER_NOT_FOUND);
                 return;
             }
-            log.info("Setting ready state for user {} to {}", request.getUserId(), request.isReady());
+            log.info("Setting ready state for user {} to {}", request.getPlayerId(), request.isReady());
 
-            room.setReady(request.getUserId(), request.isReady());
+            room.setReady(request.getPlayerId(), request.isReady());
             roomRepository.save(room); // Persistence Fix
 
             log.info("Broadcasting game state after ready update");
             broadcastGameState(room);
         } catch (DocqException e) {
             log.error("DocqException in readyGame: {}", e.getMessage());
-            sendError(request.getUserId(), e.getErrorCode());
+            sendError(request.getPlayerId(), e.getErrorCode());
         } catch (Exception e) {
             log.error("Unknown error in readyGame", e);
-            sendError(request.getUserId(), ErrorCode.SERVER_ERROR);
+            sendError(request.getPlayerId(), ErrorCode.SERVER_ERROR);
         }
     }
 
@@ -345,7 +345,7 @@ public class GameService {
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
             // 권한 체크: 방장만 시작 가능
-            if (!userId.equals(room.getHostId())) {
+            if (!userId.equals(room.getHostPlayerId())) {
                 sendError(userId, ErrorCode.ACCESS_DENIED);
                 return;
             }
@@ -401,15 +401,15 @@ public class GameService {
     }
 
     public void endGame(GameDto.EndGameRequest request) {
-        log.info("End Game Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        log.info("End Game Request: roomId={}, userId={}", request.getRoomId(), request.getPlayerId());
         try {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElse(null);
             if (room == null)
                 return;
 
-            if (!request.getUserId().equals(room.getHostId())) {
-                sendError(request.getUserId(), ErrorCode.ACCESS_DENIED);
+            if (!request.getPlayerId().equals(room.getHostPlayerId())) {
+                sendError(request.getPlayerId(), ErrorCode.ACCESS_DENIED);
                 return;
             }
 
@@ -420,15 +420,15 @@ public class GameService {
     }
 
     public void restartGame(GameDto.RestartRequest request) {
-        log.info("Restart Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        log.info("Restart Request: roomId={}, userId={}", request.getRoomId(), request.getPlayerId());
         try {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElse(null);
             if (room == null)
                 return;
 
-            if (!request.getUserId().equals(room.getHostId())) {
-                sendError(request.getUserId(), ErrorCode.ACCESS_DENIED);
+            if (!request.getPlayerId().equals(room.getHostPlayerId())) {
+                sendError(request.getPlayerId(), ErrorCode.ACCESS_DENIED);
                 return;
             }
 
@@ -448,13 +448,13 @@ public class GameService {
         room.setRound(1);
         // 첫 번째 턴 유저
         if (!room.getTurnOrder().isEmpty()) {
-            room.setCurrentTurnUserId(room.getTurnOrder().get(0));
+            room.setCurrentTurnPlayerId(room.getTurnOrder().get(0));
         }
 
         // 플레이어별 상태 초기화
         for (String pid : room.getPlayers()) {
             PlayerState ps = PlayerState.builder()
-                    .userId(pid)
+                    .playerId(pid)
                     .score(0)
                     .position(START_POSITION)
                     .hasBuff(null)
@@ -506,8 +506,8 @@ public class GameService {
     private void broadcastGameState(Room room) {
         List<GameDto.PlayerInfo> playerInfos = room.getPlayers().stream()
                 .map(userId -> {
-                    User u = userRepository.findById(userId).orElse(null);
-                    if (u == null)
+                    Guest g = guestRepository.findById(userId).orElse(null);
+                    if (g == null)
                         return null;
 
                     // 게임 상태 조회 (없으면 null)
@@ -519,11 +519,11 @@ public class GameService {
                     Integer avatarId = room.getPlayerAvatars().get(userId);
 
                     return GameDto.PlayerInfo.builder()
-                            .userId(u.getId())
-                            .nickname(u.getNickname())
-                            .isHost(u.getId().equals(room.getHostId()))
+                            .playerId(g.getId())
+                            .nickname(g.getNickname())
+                            .isHost(g.getId().equals(room.getHostPlayerId()))
                             .connected(true)
-                            .isReady(room.isReady(u.getId()))
+                            .isReady(room.isReady(g.getId()))
                             .score(score)
                             .position(position)
                             .hasBuff(buff)
@@ -534,7 +534,7 @@ public class GameService {
                 .collect(Collectors.toList());
 
         Integer round = room.getStatus() == RoomStatus.WAITING ? null : room.getRound();
-        String currentTurnUserId = room.getStatus() == RoomStatus.WAITING ? null : room.getCurrentTurnUserId();
+        String currentTurnUserId = room.getStatus() == RoomStatus.WAITING ? null : room.getCurrentTurnPlayerId();
         List<String> turnOrder = room.getStatus() == RoomStatus.WAITING ? null : room.getTurnOrder();
         Map<String, Integer> cardDrawResult = room.getStatus() == RoomStatus.WAITING ? null : room.getCardDrawResult();
         Map<Integer, String> mapEvents = room.getStatus() == RoomStatus.WAITING ? null : room.getMapEvents();
@@ -542,7 +542,7 @@ public class GameService {
         GameDto.GameStateResponse response = GameDto.GameStateResponse.builder()
                 .state(room.getStatus())
                 .round(round)
-                .currentTurnUserId(currentTurnUserId)
+                .currentTurnPlayerId(currentTurnUserId)
                 .players(playerInfos)
                 .turnOrder(turnOrder)
                 .cardDrawResult(cardDrawResult)
@@ -568,7 +568,7 @@ public class GameService {
 
     private void resetGameState(Room room) {
         room.setRound(1);
-        room.setCurrentTurnUserId(null);
+        room.setCurrentTurnPlayerId(null);
         room.setCurrentQuizId(null);
         room.setQuizStartTimeMs(null);
         room.setGhostOptionsRevealed(false);
@@ -583,7 +583,7 @@ public class GameService {
 
         for (String pid : room.getPlayers()) {
             PlayerState ps = PlayerState.builder()
-                    .userId(pid)
+                    .playerId(pid)
                     .score(0)
                     .position(START_POSITION)
                     .hasBuff(null)
@@ -608,10 +608,10 @@ public class GameService {
                 return;
             }
             Room room = roomRepository.findById(request.getRoomId()).orElse(null);
-            if (room == null || request.getUserId() == null) {
+            if (room == null || request.getPlayerId() == null) {
                 return;
             }
-            if (!room.getPlayers().contains(request.getUserId())) {
+            if (!room.getPlayers().contains(request.getPlayerId())) {
                 return;
             }
 
@@ -622,7 +622,7 @@ public class GameService {
             }
 
             long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId,
-                    request.getUserId());
+                    request.getPlayerId());
             int expected = resolveExpectedAckCount(room);
             if (count < expected) {
                 return;
@@ -635,7 +635,7 @@ public class GameService {
 
     private void handlePlayerExitAcks(Room room, String userId) {
         int expected = resolveExpectedAckCount(room);
-        for (AckStore.AckKeyInfo info : ackStore.removeUserFromRoomAcks(room.getId(), userId)) {
+        for (AckStore.AckKeyInfo info : ackStore.removePlayerFromRoomAcks(room.getId(), userId)) {
             if (info.getCount() < expected) {
                 continue;
             }
@@ -766,12 +766,12 @@ public class GameService {
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
             // Update Avatar
-            room.getPlayerAvatars().put(request.getUserId(), request.getAvatarId());
-            log.info("User {} selected avatar {}", request.getUserId(), request.getAvatarId());
+            room.getPlayerAvatars().put(request.getPlayerId(), request.getAvatarId());
+            log.info("User {} selected avatar {}", request.getPlayerId(), request.getAvatarId());
 
             // Broadcast Update (Lightweight)
             GameDto.AvatarUpdateResponse response = GameDto.AvatarUpdateResponse.builder()
-                    .userId(request.getUserId())
+                    .playerId(request.getPlayerId())
                     .avatarId(request.getAvatarId())
                     .build();
 
@@ -848,9 +848,9 @@ public class GameService {
 
             // Broadcast Quiz
             messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quizForGhosts);
-            if (room.getCurrentTurnUserId() != null) {
+            if (room.getCurrentTurnPlayerId() != null) {
                 messagingTemplate.convertAndSend(
-                        "/queue/game/" + room.getCurrentTurnUserId() + "/quiz",
+                        "/queue/game/" + room.getCurrentTurnPlayerId() + "/quiz",
                         quiz);
             }
 
@@ -876,33 +876,33 @@ public class GameService {
             }
 
             // Validate Duplicates
-            if (room.getQuizAnswers().containsKey(request.getUserId())) {
-                sendError(request.getUserId(), ErrorCode.ALREADY_SUBMITTED);
+            if (room.getQuizAnswers().containsKey(request.getPlayerId())) {
+                sendError(request.getPlayerId(), ErrorCode.ALREADY_SUBMITTED);
                 return;
             }
 
-            String turnUserId = room.getCurrentTurnUserId();
+            String turnUserId = room.getCurrentTurnPlayerId();
             if (turnUserId != null
-                    && !turnUserId.equals(request.getUserId())
+                    && !turnUserId.equals(request.getPlayerId())
                     && !room.isGhostOptionsRevealed()) {
-                sendError(request.getUserId(), ErrorCode.GHOST_OPTIONS_HIDDEN);
+                sendError(request.getPlayerId(), ErrorCode.GHOST_OPTIONS_HIDDEN);
                 return;
             }
             if (turnUserId != null
-                    && turnUserId.equals(request.getUserId())
+                    && turnUserId.equals(request.getPlayerId())
                     && room.isGhostOptionsRevealed()) {
-                sendError(request.getUserId(), ErrorCode.TURN_SUBMISSION_CLOSED);
+                sendError(request.getPlayerId(), ErrorCode.TURN_SUBMISSION_CLOSED);
                 return;
             }
             // Save Answer with Timestamp
             request.setSubmitTime(LocalDateTime.now());
-            room.getQuizAnswers().put(request.getUserId(), request);
+            room.getQuizAnswers().put(request.getPlayerId(), request);
             roomRepository.save(room); // Persistence Fix
-            log.info("User {} submitted answer: {} at {}", request.getUserId(), request.getAnswer(),
+            log.info("User {} submitted answer: {} at {}", request.getPlayerId(), request.getAnswer(),
                     request.getSubmitTime());
 
             if (turnUserId != null
-                    && turnUserId.equals(request.getUserId())
+                    && turnUserId.equals(request.getPlayerId())
                     && !room.isGhostOptionsRevealed()) {
                 Quiz quizEntity = room.getQuizList().stream()
                         .filter(q -> q.getQuizId().equals(room.getCurrentQuizId()))
@@ -918,7 +918,7 @@ public class GameService {
                         GameDto.AnswerFeedbackMessage feedback = GameDto.AnswerFeedbackMessage.builder()
                                 .correct(false)
                                 .build();
-                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getUserId(),
+                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getPlayerId(),
                                 feedback);
                         room.setGhostOptionsRevealed(true);
                         long ghostEndAt = System.currentTimeMillis() + QUIZ_TIME_LIMIT_MS;
@@ -941,7 +941,7 @@ public class GameService {
             }
 
             if (turnUserId != null
-                    && !turnUserId.equals(request.getUserId())
+                    && !turnUserId.equals(request.getPlayerId())
                     && room.isGhostOptionsRevealed()
                     && areAllGhostsSubmitted(room, turnUserId)) {
                 processRoundResult(room.getId(), room.getCurrentQuizId());
@@ -971,7 +971,7 @@ public class GameService {
             if (!quizId.equals(room.getCurrentQuizId()))
                 return;
 
-            String turnUser = room.getCurrentTurnUserId();
+            String turnUser = room.getCurrentTurnPlayerId();
             long nowMs = System.currentTimeMillis();
             Long ghostEndAt = room.getGhostPhaseEndTimeMs();
             boolean allGhostsSubmitted = turnUser != null && areAllGhostsSubmitted(room, turnUser);
@@ -1151,7 +1151,7 @@ public class GameService {
                     if (other != null && other.getPosition() == nextPos && nextPos != START_POSITION) {
                         actions.add(GameDto.MoveAction.builder()
                                 .type("CATCH")
-                                .targetUserId(pid)
+                                .targetPlayerId(pid)
                                 .before(other.getPosition())
                                 .after(START_POSITION)
                                 .build());
@@ -1160,7 +1160,7 @@ public class GameService {
 
                 List<MoveActionPayload> actionPayloads = toActionPayloads(actions);
                 movePlan = MovePlanPayload.builder()
-                        .winnerUserId(winnerUserId)
+                        .winnerPlayerId(winnerUserId)
                         .startPosition(currentPos)
                         .endPosition(nextPos)
                         .consumeDoubleMove(consumeBuff)
@@ -1183,7 +1183,7 @@ public class GameService {
                     .quizId(room.getCurrentQuizId())
                     .correctAnswer(correctAnswer)
                     .isTurnUserCorrect(isTurnUserCorrect)
-                    .winnerUserId(winnerUserId)
+                    .winnerPlayerId(winnerUserId)
                     .rouletteType(rouletteType)
                     .rouletteValue(rouletteValue)
                     .build();
@@ -1215,7 +1215,7 @@ public class GameService {
 
             NextTurnPayload nextTurnPayload = NextTurnPayload.builder()
                     .quizId(quizId)
-                    .turnUserId(turnUser)
+                    .turnPlayerId(turnUser)
                     .finishPlanned(finishPlanned)
                     .build();
             if (!finishPlanned) {
@@ -1254,7 +1254,7 @@ public class GameService {
             }
 
             MovePlanPayload plannedMove = payload.getMovePlan();
-            PlayerState winnerState = latest.getPlayerStates().get(plannedMove.getWinnerUserId());
+            PlayerState winnerState = latest.getPlayerStates().get(plannedMove.getWinnerPlayerId());
             if (winnerState == null) {
                 return;
             }
@@ -1268,7 +1268,7 @@ public class GameService {
             if (plannedMove.getActions() != null) {
                 for (MoveActionPayload action : plannedMove.getActions()) {
                     if ("CATCH".equals(action.getType())) {
-                        PlayerState other = latest.getPlayerStates().get(action.getTargetUserId());
+                        PlayerState other = latest.getPlayerStates().get(action.getTargetPlayerId());
                         if (other != null) {
                             other.setPosition(action.getAfter());
                         }
@@ -1278,7 +1278,7 @@ public class GameService {
 
             List<GameDto.MoveAction> moveActions = toMoveActions(plannedMove.getActions());
             GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
-                    .userId(plannedMove.getWinnerUserId())
+                    .playerId(plannedMove.getWinnerPlayerId())
                     .startPosition(plannedMove.getStartPosition())
                     .endPosition(plannedMove.getEndPosition())
                     .moveProcess(moveActions)
@@ -1330,7 +1330,7 @@ public class GameService {
             }
 
             List<String> order = latest.getTurnOrder();
-            int idx = order.indexOf(payload.getTurnUserId()) + 1;
+            int idx = order.indexOf(payload.getTurnPlayerId()) + 1;
 
             if (idx >= order.size()) {
                 if (latest.getRound() % 2 != 0) {
@@ -1341,7 +1341,7 @@ public class GameService {
                 latest.setRound(latest.getRound() + 1);
             }
 
-            latest.setCurrentTurnUserId(order.get(idx));
+            latest.setCurrentTurnPlayerId(order.get(idx));
             latest.setStatus(RoomStatus.STARTING);
             roomRepository.save(latest);
             broadcastGameState(latest);
@@ -1364,7 +1364,7 @@ public class GameService {
                         .effectType(action.getEffectType())
                         .before(action.getBefore())
                         .after(action.getAfter())
-                        .targetUserId(action.getTargetUserId())
+                        .targetPlayerId(action.getTargetPlayerId())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -1381,7 +1381,7 @@ public class GameService {
                         .effectType(action.getEffectType())
                         .before(action.getBefore())
                         .after(action.getAfter())
-                        .targetUserId(action.getTargetUserId())
+                        .targetPlayerId(action.getTargetPlayerId())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -1414,7 +1414,7 @@ public class GameService {
 
             if (!room.getTurnOrder().isEmpty()) {
                 room.setRound(room.getRound() + 1);
-                room.setCurrentTurnUserId(room.getTurnOrder().get(0));
+                room.setCurrentTurnPlayerId(room.getTurnOrder().get(0));
             }
 
             room.setStatus(RoomStatus.QUIZ_TIME);
@@ -1448,11 +1448,11 @@ public class GameService {
 
     private GameDto.FinishResponse buildFinishResponse(Room room) {
         List<GameDto.FinishRank> rankings = buildFinishRankings(room);
-        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getUserId();
+        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getPlayerId();
 
         return GameDto.FinishResponse.builder()
                 .type("FINISH")
-                .winnerUserId(winnerUserId)
+                .winnerPlayerId(winnerUserId)
                 .rankings(rankings)
                 .build();
     }
@@ -1460,12 +1460,12 @@ public class GameService {
     private List<GameDto.FinishRank> buildFinishRankings(Room room) {
         return room.getPlayerStates().values().stream()
                 .map(state -> {
-                    User user = userRepository.findById(state.getUserId()).orElse(null);
-                    String nickname = user != null ? user.getNickname() : "Unknown";
+                    Guest guest = guestRepository.findById(state.getPlayerId()).orElse(null);
+                    String nickname = guest != null ? guest.getNickname() : "Unknown";
                     int position = state.getPosition();
                     int remaining = Math.max(TARGET_POSITION - position, 0);
                     int score = state.getScore();
-                    return new Object[] { state.getUserId(), nickname, position, remaining, score };
+                    return new Object[] { state.getPlayerId(), nickname, position, remaining, score };
                 })
                 .sorted((a, b) -> {
                     int remainingA = (int) a[3];
@@ -1482,7 +1482,7 @@ public class GameService {
                     for (int i = 0; i < list.size(); i++) {
                         Object[] item = list.get(i);
                         ranks.add(GameDto.FinishRank.builder()
-                                .userId((String) item[0])
+                                .playerId((String) item[0])
                                 .nickname((String) item[1])
                                 .position((int) item[2])
                                 .remaining((int) item[3])

@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend.domain.user.entity;
+package com.ssafy.docq_backend.domain.guest.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @Builder
 @AllArgsConstructor
-public class User {
+public class Guest {
     private String id;
     private String nickname;
 }

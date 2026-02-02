@@ -18,5 +18,5 @@ public class MoveActionPayload {
     private String effectType;
     private Integer before;
     private Integer after;
-    private String targetUserId;
+    private String targetPlayerId;
 }
