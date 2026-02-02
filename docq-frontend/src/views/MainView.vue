@@ -226,6 +226,23 @@ const onAuthError = (msg: string) => {
     isErrorModalOpen.value = true;
 };
 
+const handleLogout = () => {
+  userStore.logout();
+  nickname.value = '';
+  isNicknameSet.value = false;
+  isLoginInputVisible.value = false;
+  isGuestInputVisible.value = false;
+  isSignUpInputVisible.value = false;
+  showGuideModal.value = false;
+  
+  // 룰렛 초기화
+  stopRoulette();
+  currentRotation = 0; 
+  targetRotation = 0; 
+  activeIndex.value = 0;
+  startRoulette();
+};
+
 const goBack = () => {
     if (isSignUpInputVisible.value) {
         isSignUpInputVisible.value = false;
@@ -425,8 +442,11 @@ onUnmounted(() => { stopRoulette(); });
                                 <div class="action-area mt-6">
                                     <div v-if="item.id === 'profile'">
                                         <div class="welcome-msg mb-4"><span class="material-symbols-outlined check-icon">check_circle</span><span><span class="highlight">{{ nickname }}</span>님</span></div>
-                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary">
+                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary mb-2">
                                             <span class="material-symbols-outlined">Edit</span>수정하기
+                                        </button>
+                                        <button v-if="!userStore.isGuest" @click.stop="handleLogout" class="cartoon-btn gray">
+                                            <span class="material-symbols-outlined">logout</span>로그아웃
                                         </button>
                                     </div>
                                     <div v-else-if="item.id === 'create'">

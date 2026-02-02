@@ -17,6 +17,7 @@ export interface UserProfile {
     avatar: string
     email?: string
     createdAt?: Date
+    isGuest?: boolean
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -29,6 +30,7 @@ export const useUserStore = defineStore('user', () => {
     const userId = computed(() => currentUser.value?.id || '')
     const username = computed(() => currentUser.value?.username || 'Guest')
     const avatar = computed(() => currentUser.value?.avatar || '👤')
+    const isGuest = computed(() => currentUser.value?.isGuest || false)
 
     // Actions
 
@@ -48,7 +50,8 @@ export const useUserStore = defineStore('user', () => {
                 id: Math.random().toString(36).substring(7),
                 username: username,
                 avatar: getRandomAvatar(),
-                createdAt: new Date()
+                createdAt: new Date(),
+                isGuest: false
             }
 
             isAuthenticated.value = true
@@ -66,7 +69,7 @@ export const useUserStore = defineStore('user', () => {
     }
 
     /**
-     * API 기반 로그인 (닉네임으로 userId 발급)
+     * API 기반 로그인 (닉네임으로 userId 발급) -> 게스트 로그인으로 간주
      */
     const loginWithApi = async (nickname: string) => {
         isLoading.value = true
@@ -76,7 +79,8 @@ export const useUserStore = defineStore('user', () => {
                 id: response.userId,
                 username: response.nickname,
                 avatar: getRandomAvatar(),
-                createdAt: new Date()
+                createdAt: new Date(),
+                isGuest: true
             }
 
             isAuthenticated.value = true
@@ -100,7 +104,8 @@ export const useUserStore = defineStore('user', () => {
             id: Math.random().toString(36).substring(7),
             username: username,
             avatar: getRandomAvatar(),
-            createdAt: new Date()
+            createdAt: new Date(),
+            isGuest: true
         }
 
         isAuthenticated.value = true
@@ -238,6 +243,7 @@ export const useUserStore = defineStore('user', () => {
         userId,
         username,
         avatar,
+        isGuest,
 
         // Actions
         login,
