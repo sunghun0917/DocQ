@@ -2,7 +2,7 @@ package com.ssafy.docq_backend.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.docq_backend.domain.room.dto.RoomDto;
-import com.ssafy.docq_backend.domain.user.dto.UserDto;
+import com.ssafy.docq_backend.domain.guest.dto.GuestDto;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,31 +30,31 @@ public class ApiVerificationTest {
         private ObjectMapper objectMapper;
 
         @Test
-        @DisplayName("유저 로그인 성공")
+        @DisplayName("게스트 로그인 성공")
         void loginSuccess() throws Exception {
-                UserDto.UserLoginRequest request = new UserDto.UserLoginRequest("testUser");
+                GuestDto.GuestLoginRequest request = new GuestDto.GuestLoginRequest("testUser");
 
-                mockMvc.perform(post("/users/login")
+                mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.userId").exists())
+                                .andExpect(jsonPath("$.playerId").exists())
                                 .andExpect(jsonPath("$.nickname").value("testUser"));
         }
 
         @Test
-        @DisplayName("유저 로그인 실패 - 중복 닉네임")
+        @DisplayName("게스트 로그인 실패 - 중복 닉네임")
         void loginFailDuplicate() throws Exception {
                 // 1. 첫 번째 로그인 (성공)
-                UserDto.UserLoginRequest request1 = new UserDto.UserLoginRequest("duplicateUser");
-                mockMvc.perform(post("/users/login")
+                GuestDto.GuestLoginRequest request1 = new GuestDto.GuestLoginRequest("duplicateUser");
+                mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request1)))
                                 .andExpect(status().isOk());
 
                 // 2. 두 번째 로그인 (실패 - U002 Conflict)
-                mockMvc.perform(post("/users/login")
+                mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request1)))
                                 .andDo(print())
@@ -65,22 +65,22 @@ public class ApiVerificationTest {
         @Test
         @DisplayName("방 생성 성공")
         void createRoomSuccess() throws Exception {
-                // 1. 유저 생성
-                UserDto.UserLoginRequest loginRequest = new UserDto.UserLoginRequest("hostUser");
-                MvcResult loginResult = mockMvc.perform(post("/users/login")
+                // 1. 게스트 로그인 (playerId 발급)
+                GuestDto.GuestLoginRequest loginRequest = new GuestDto.GuestLoginRequest("hostUser");
+                MvcResult loginResult = mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(loginRequest)))
                                 .andExpect(status().isOk())
                                 .andReturn();
 
                 String responseBody = loginResult.getResponse().getContentAsString();
-                UserDto.UserLoginResponse loginResponse = objectMapper.readValue(responseBody,
-                                UserDto.UserLoginResponse.class);
-                String userId = loginResponse.getUserId();
+                GuestDto.GuestLoginResponse loginResponse = objectMapper.readValue(responseBody,
+                                GuestDto.GuestLoginResponse.class);
+                String playerId = loginResponse.getPlayerId();
 
                 // 2. 방 생성 요청
                 RoomDto.RoomCreateRequest roomRequest = new RoomDto.RoomCreateRequest(
-                                userId, 4, "Test Room", false, null);
+                                playerId, 4, "Test Room", false, null);
 
                 mockMvc.perform(post("/rooms")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -89,11 +89,11 @@ public class ApiVerificationTest {
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.roomId").exists())
                                 .andExpect(jsonPath("$.inviteCode").exists())
-                                .andExpect(jsonPath("$.hostId").value(userId));
+                                .andExpect(jsonPath("$.hostPlayerId").value(playerId));
         }
 
         @Test
-        @DisplayName("방 생성 실패 - 존재하지 않는 유저 (U001)")
+        @DisplayName("방 생성 실패 - 존재하지 않는 playerId (U001)")
         void createRoomFailInvalidHost() throws Exception {
                 RoomDto.RoomCreateRequest roomRequest = new RoomDto.RoomCreateRequest(
                                 "invalid-uuid", 4, "Test Room", false, null);
@@ -109,19 +109,19 @@ public class ApiVerificationTest {
         @Test
         @DisplayName("방 생성 실패 - 비공개 방 비밀번호 누락 (C002)")
         void createRoomFailPrivateNoPassword() throws Exception {
-                // 1. 유저 생성
-                UserDto.UserLoginRequest loginRequest = new UserDto.UserLoginRequest("privateHost");
-                MvcResult loginResult = mockMvc.perform(post("/users/login")
+                // 1. 게스트 로그인
+                GuestDto.GuestLoginRequest loginRequest = new GuestDto.GuestLoginRequest("privateHost");
+                MvcResult loginResult = mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(loginRequest)))
                                 .andExpect(status().isOk())
                                 .andReturn();
-                String userId = objectMapper.readTree(loginResult.getResponse().getContentAsString()).get("userId")
+                String playerId = objectMapper.readTree(loginResult.getResponse().getContentAsString()).get("playerId")
                                 .asText();
 
                 // 2. 비밀번호 없는 비공개 방 생성
                 RoomDto.RoomCreateRequest roomRequest = new RoomDto.RoomCreateRequest(
-                                userId, 4, "Private Room", true, "");
+                                playerId, 4, "Private Room", true, "");
 
                 mockMvc.perform(post("/rooms")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -134,15 +134,15 @@ public class ApiVerificationTest {
         @Test
         @DisplayName("방 조회 성공 - RoomId")
         void getRoomByIdSuccess() throws Exception {
-                // 1. 유저 및 방 생성
-                UserDto.UserLoginRequest loginRequest = new UserDto.UserLoginRequest("finderUser");
-                String userId = objectMapper.readTree(mockMvc.perform(post("/users/login")
+                // 1. 게스트 로그인 및 방 생성
+                GuestDto.GuestLoginRequest loginRequest = new GuestDto.GuestLoginRequest("finderUser");
+                String playerId = objectMapper.readTree(mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(loginRequest)))
-                                .andReturn().getResponse().getContentAsString()).get("userId").asText();
+                                .andReturn().getResponse().getContentAsString()).get("playerId").asText();
 
                 RoomDto.RoomCreateRequest roomRequest = new RoomDto.RoomCreateRequest(
-                                userId, 4, "Find Me", false, null);
+                                playerId, 4, "Find Me", false, null);
 
                 String roomResponseBody = mockMvc.perform(post("/rooms")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -162,15 +162,15 @@ public class ApiVerificationTest {
         @Test
         @DisplayName("방 조회 성공 - InviteCode")
         void getRoomByInviteCodeSuccess() throws Exception {
-                // 1. 유저 및 방 생성
-                UserDto.UserLoginRequest loginRequest = new UserDto.UserLoginRequest("inviteUser");
-                String userId = objectMapper.readTree(mockMvc.perform(post("/users/login")
+                // 1. 게스트 로그인 및 방 생성
+                GuestDto.GuestLoginRequest loginRequest = new GuestDto.GuestLoginRequest("inviteUser");
+                String playerId = objectMapper.readTree(mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(loginRequest)))
-                                .andReturn().getResponse().getContentAsString()).get("userId").asText();
+                                .andReturn().getResponse().getContentAsString()).get("playerId").asText();
 
                 RoomDto.RoomCreateRequest roomRequest = new RoomDto.RoomCreateRequest(
-                                userId, 4, "Invite Me", false, null);
+                                playerId, 4, "Invite Me", false, null);
 
                 String roomResponseBody = mockMvc.perform(post("/rooms")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -203,8 +203,8 @@ public class ApiVerificationTest {
         @DisplayName("방 입장 검증 성공 - 공개방")
         void verifyJoinSuccessPublic() throws Exception {
                 // 1. 방 생성 (공개)
-                String userId = createUser("joinerHost");
-                String roomId = createRoom(userId, "Public Room", false, null);
+                String playerId = createGuest("joinerHost");
+                String roomId = createRoom(playerId, "Public Room", false, null);
 
                 // 2. 입장 검증
                 RoomDto.RoomJoinRequest joinRequest = new RoomDto.RoomJoinRequest(roomId, null);
@@ -223,8 +223,8 @@ public class ApiVerificationTest {
         @DisplayName("방 입장 검증 성공 - 비공개방")
         void verifyJoinSuccessPrivate() throws Exception {
                 // 1. 방 생성 (비공개)
-                String userId = createUser("privateJoinerHost");
-                String roomId = createRoom(userId, "Private Room", true, "1234");
+                String playerId = createGuest("privateJoinerHost");
+                String roomId = createRoom(playerId, "Private Room", true, "1234");
 
                 // 2. 입장 검증
                 RoomDto.RoomJoinRequest joinRequest = new RoomDto.RoomJoinRequest(roomId, "1234");
@@ -242,8 +242,8 @@ public class ApiVerificationTest {
         @Test
         @DisplayName("방 입장 검증 실패 - 비밀번호 불일치 (R005)")
         void verifyJoinFailWrongPassword() throws Exception {
-                String userId = createUser("wrongPwHost");
-                String roomId = createRoom(userId, "Private Room", true, "1234");
+                String playerId = createGuest("wrongPwHost");
+                String roomId = createRoom(playerId, "Private Room", true, "1234");
 
                 RoomDto.RoomJoinRequest joinRequest = new RoomDto.RoomJoinRequest(roomId, "0000");
 
@@ -256,18 +256,18 @@ public class ApiVerificationTest {
         }
 
         // Helper Methods
-        private String createUser(String nickname) throws Exception {
-                UserDto.UserLoginRequest loginRequest = new UserDto.UserLoginRequest(nickname);
-                String response = mockMvc.perform(post("/users/login")
+        private String createGuest(String nickname) throws Exception {
+                GuestDto.GuestLoginRequest loginRequest = new GuestDto.GuestLoginRequest(nickname);
+                String response = mockMvc.perform(post("/guests/login")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(loginRequest)))
                                 .andReturn().getResponse().getContentAsString();
-                return objectMapper.readTree(response).get("userId").asText();
+                return objectMapper.readTree(response).get("playerId").asText();
         }
 
-        private String createRoom(String userId, String title, boolean isPrivate, String password) throws Exception {
+        private String createRoom(String playerId, String title, boolean isPrivate, String password) throws Exception {
                 RoomDto.RoomCreateRequest roomRequest = new RoomDto.RoomCreateRequest(
-                                userId, 4, title, isPrivate, password);
+                                playerId, 4, title, isPrivate, password);
                 String response = mockMvc.perform(post("/rooms")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(roomRequest)))

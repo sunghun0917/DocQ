@@ -20,7 +20,7 @@ const password = ref('');
 const isPrivateRoom = ref(false);
 const resolvedRoom = ref<RoomResponse | null>(null)
 const lastCheckedCode = ref('')
-const isNicknameSet = computed(() => !!userStore.userId);
+const isNicknameSet = computed(() => !!userStore.playerId);
 
 // 알림 상태
 const isAlertOpen = ref(false);
@@ -44,7 +44,7 @@ const triggerAlert = (message: string, type: 'success' | 'error' = 'error') => {
 const joinRoom = async () => {
   const inviteCode = roomCode.value.trim().toUpperCase()
   if (!inviteCode) { triggerAlert("입장 코드를 입력해주세요!"); return; }
-  if (!userStore.userId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
+  if (!userStore.playerId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
   if (isSubmitting.value) return
   
   isSubmitting.value = true
@@ -77,10 +77,10 @@ const joinRoom = async () => {
     })
 
     await wsStore.connect()
-    wsStore.subscribeErrors(userStore.userId)
+    wsStore.subscribeErrors(userStore.playerId)
     wsStore.subscribeGameState(room.roomId)
     wsStore.subscribeMiniGame(room.roomId)
-    wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
+    wsStore.joinGame(room.roomId, userStore.playerId, userStore.username)
 
     router.push(`/waiting/${room.roomId}`);
     emit('close');

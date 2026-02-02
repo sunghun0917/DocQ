@@ -48,7 +48,7 @@ const getAvatarIndex = (avatarVal: any) => {
 };
 
 watchEffect(() => {
-  if (!myUser.value || !userStore.userId) return;
+  if (!myUser.value || !userStore.playerId) return;
   const idx = getAvatarIndex(myUser.value.avatar);
   if (idx >= 0 && idx < characters.length) {
     selectedChar.value = characters[idx]!;
@@ -230,9 +230,9 @@ const selectCharacter = (charEmoji: string) => {
     toastType.value = 'error'; isToastOpen.value = true; return;
   }
   selectedChar.value = charEmoji;
-  if (myUser.value && userStore.userId) {
+  if (myUser.value && userStore.playerId) {
     const avatarId = characters.indexOf(charEmoji);
-    if (avatarId !== -1) wsStore.setAvatar(roomId.value, userStore.userId, avatarId);
+    if (avatarId !== -1) wsStore.setAvatar(roomId.value, userStore.playerId, avatarId);
   }
 };
 
@@ -245,13 +245,13 @@ const isHost = computed(() => roomStore.isHost || myUser.value?.isHost || false)
 const startRequested = ref(false)
 
 const toggleReady = () => {
-  if (!myUser.value || !userStore.userId) return
+  if (!myUser.value || !userStore.playerId) return
   const currentIdx = getAvatarIndex(myUser.value.avatar);
   if (currentIdx === -1) {
     toastMessage.value = '캐릭터를 먼저 설정해주세요!'; toastType.value = 'error'; isToastOpen.value = true;
     return
   }
-  wsStore.setReady(roomId.value, userStore.userId, !myUser.value?.isReady)
+  wsStore.setReady(roomId.value, userStore.playerId, !myUser.value?.isReady)
 }
 
 const copyRoomCode = async () => {
@@ -275,10 +275,9 @@ const handleStartGame = () => {
   if (!isAllReady.value) {
     toastMessage.value = '모두 준비되어야 합니다!'; toastType.value = 'error'; isToastOpen.value = true; return;
   }
-  if (!userStore.userId || startRequested.value) return;
-
+  if (!userStore.playerId || startRequested.value) return;
   startRequested.value = true;
-  wsStore.startGame(roomId.value, userStore.userId)
+  wsStore.startGame(roomId.value, userStore.playerId)
   setTimeout(() => { if (roomInfo.value.status === 'WAITING') startRequested.value = false; }, 2000)
 };
 
@@ -290,7 +289,7 @@ watchEffect(() => {
 
 const leaveRoom = () => { showExitModal.value = true; };
 const handleExitConfirm = () => {
-  if (userStore.userId && roomId.value) wsStore.leaveGame(roomId.value, userStore.userId)
+  if (userStore.playerId && roomId.value) wsStore.leaveGame(roomId.value, userStore.playerId)
   // 방 나가면 캐릭터 초기화 → 다른 방 들어갈 때 이전 방 캐릭터로 자동 로딩되지 않도록
   userStore.updateAvatar('❓')
   setTimeout(() => { wsStore.cleanup(); roomStore.leaveRoom(); router.push('/'); }, 150)
@@ -311,9 +310,8 @@ onMounted(async () => {
   clouds.value = newClouds;
 
   if (!roomId.value) return
-  if (!userStore.userId) userStore.restoreUser()
-  if (!userStore.userId) { router.push('/'); return; }
-
+  if (!userStore.playerId) userStore.restoreUser()
+  if (!userStore.playerId) { router.push('/'); return; }
   try {
     const room = await getRoomById(roomId.value)
     roomStore.joinRoom({ roomId: room.roomId, title: room.title, capacity: room.capacity, isPrivate: room.isPrivate, status: room.status, currentCount: room.currentCount, quizCount: room.quizCount })
@@ -321,10 +319,11 @@ onMounted(async () => {
   } catch (error) { router.push('/'); return; }
 
   await wsStore.connect()
-  wsStore.subscribeErrors(userStore.userId);
-  wsStore.subscribeGameState(roomId.value);
+  wsStore.subscribeErrors(userStore.playerId); 
+  wsStore.subscribeGameState(roomId.value); 
+
   wsStore.subscribeMiniGame(roomId.value);
-  wsStore.joinGame(roomId.value, userStore.userId, userStore.username)
+  wsStore.joinGame(roomId.value, userStore.playerId, userStore.username)
 })
 
 // 유저 ID를 키로, 메시지 내용을 값으로 저장하는 상태
@@ -571,7 +570,7 @@ const quickMessages = [
             style="font-size: 70px;">chat</span>
           <div class="flex flex-wrap gap-3 justify-center items-center">
             <button v-for="msg in quickMessages" :key="msg.label"
-              @click="showQuickMessage(userStore.userId, msg.content)"
+              @click="showQuickMessage(userStore.playerId, msg.content)"
               class="bg-white hover:bg-green-50 !px-6 !py-4 rounded-[24px] border-4 border-wood-border text-2xl font-black text-wood-dark shadow-[0_2px_0_#5d4037] active:translate-y-[8px] active:shadow-none transition-all whitespace-nowrap">
               {{ msg.label }}
             </button>

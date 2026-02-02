@@ -126,7 +126,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
             // 2. RoomStore 업데이트 (로비/유저 목록 상태)
             const players = Array.isArray(data.players) ? data.players : []
             const nextUsers = players.map((player: PlayerInfo) => {
-                const isMe = player.userId === userStore.userId
+                const isMe = player.playerId === userStore.playerId
 
                 // 백엔드 naming 이슈(isReady vs ready, isHost vs host)를 방어적으로 처리
                 const isReady = player.isReady !== undefined ? player.isReady : (player.ready !== undefined ? player.ready : false)
@@ -136,21 +136,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 let avatar = '❓'
                 if (player.avatarId !== null && player.avatarId !== undefined) {
                     avatar = AVATAR_MAP[player.avatarId] || '❓'
-                    avatarCache.value[player.userId] = avatar
+                    avatarCache.value[player.playerId] = avatar
                 } else {
                     if (isMe) {
                         // 서버에 avatarId 없음(재입장 등) → 클라이언트도 ❓로 맞춰서 이전 캐릭터 안 보이게
                         avatar = '❓'
                         userStore.updateAvatar('❓')
-                        avatarCache.value[player.userId] = avatar
+                        avatarCache.value[player.playerId] = avatar
                     } else {
                         avatar = '❓'
-                        delete avatarCache.value[player.userId]
+                        delete avatarCache.value[player.playerId]
                     }
                 }
 
                 return {
-                    id: player.userId,
+                    id: player.playerId,
                     nickname: player.nickname,
                     avatar: avatar,
                     isReady: !!isReady,
@@ -193,12 +193,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
             const emoji = AVATAR_MAP[data.avatarId] || '❓'
 
             // 캐시 먼저 업데이트
-            avatarCache.value[data.userId] = emoji
+            avatarCache.value[data.playerId] = emoji
 
             // 스토어 업데이트
-            roomStore.updateUser(data.userId, { avatar: emoji })
+            roomStore.updateUser(data.playerId, { avatar: emoji })
 
-            if (data.userId === userStore.userId) {
+            if (data.playerId === userStore.playerId) {
                 userStore.updateAvatar(emoji)
             }
         })
@@ -228,8 +228,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
             }
         })
 
-        if (userStore.userId) {
-            wsService.value.subscribe(`/queue/game/${userStore.userId}/quiz`, (data: QuizMessage) => {
+        if (userStore.playerId) {
+            wsService.value.subscribe(`/queue/game/${userStore.playerId}/quiz`, (data: QuizMessage) => {
                 console.log('📨 Private Quiz Received:', data)
                 if (data?.question) {
                     gameStore.onQuizReceived(data)
@@ -244,8 +244,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
             }
         })
 
-        if (userStore.userId) {
-            wsService.value.subscribe(`/queue/game/answer-feedback/${userStore.userId}`, (data: { correct?: boolean }) => {
+        if (userStore.playerId) {
+            wsService.value.subscribe(`/queue/game/answer-feedback/${userStore.playerId}`, (data: { correct?: boolean }) => {
                 console.log('📨 Answer Feedback:', data)
                 if (data && typeof data.correct === 'boolean') {
                     gameStore.setTurnPlayerFeedback(data.correct)
@@ -305,7 +305,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
             if (data?.type === 'RESULT') {
                 gameStore.setMiniGameResult({
-                    winnerUserId: data.winnerUserId,
+                    winnerPlayerId: data.winnerPlayerId,
                     rewardBuff: data.rewardBuff,
                     rankings: data.rankings || []
                 })
@@ -321,7 +321,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/submit', {
             roomId,
-            userId,
+            playerId: userId,
             quizId,
             answer
         })
@@ -365,7 +365,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/join', {
             roomId,
-            userId,
+            playerId: userId,
             nickname
         })
     }
@@ -381,7 +381,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/leave', {
             roomId,
-            userId
+            playerId: userId
         })
     }
 
@@ -397,7 +397,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         // 서버의 Jackson 매핑 이슈를 고려하여 둘 다 전송
         wsService.value.publish('/app/game/ready', {
             roomId,
-            userId,
+            playerId: userId,
             isReady: isReady, // Java 필드명
             ready: isReady   // Jackson 기본 매핑용 키
         })
@@ -414,7 +414,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/avatar', {
             roomId,
-            userId,
+            playerId: userId,
             avatarId
         })
     }
@@ -430,7 +430,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/start', {
             roomId,
-            userId
+            playerId: userId
         })
     }
 
@@ -445,7 +445,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/end', {
             roomId,
-            userId
+            playerId: userId
         })
     }
 
@@ -460,7 +460,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/restart', {
             roomId,
-            userId
+            playerId: userId
         })
     }
 
@@ -475,7 +475,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/minigame/submit', {
             roomId,
-            userId,
+            playerId: userId,
             gameType,
             resultValue
         })
@@ -500,15 +500,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
         const roomStore = useRoomStore()
         const userStore = useUserStore()
         const roomId = roomStore.roomInfo.roomId
-        const userId = userStore.userId
+        const playerId = userStore.playerId
 
-        if (!roomId || !userId) {
+        if (!roomId || !playerId) {
             return
         }
 
         wsService.value.publish('/app/game/ack', {
             roomId,
-            userId,
+            playerId,
             ackType,
             quizId,
             round

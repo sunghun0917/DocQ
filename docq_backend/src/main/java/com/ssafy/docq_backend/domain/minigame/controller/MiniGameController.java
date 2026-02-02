@@ -18,7 +18,7 @@ public class MiniGameController {
     // 클라이언트 전송 경로: /app/game/minigame/submit
     @MessageMapping("/game/minigame/submit")
     public void submitMiniGameResult(@Payload MiniGameDto.SubmissionRequest request) {
-        log.info("MiniGame Result Submitted: Room={}, User={}, Value={}", request.getRoomId(), request.getUserId(),
+        log.info("MiniGame Result Submitted: Room={}, Player={}, Value={}", request.getRoomId(), request.getPlayerId(),
                 request.getResultValue());
         miniGameService.submitResult(request);
     }

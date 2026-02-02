@@ -47,10 +47,10 @@
         <!-- Players -->
         <GameCharacter
           v-for="p in players"
-          :key="p.userId"
-          :modelUrl="getPlayerModelUrl(p.userId)"
+          :key="p.playerId"
+          :modelUrl="getPlayerModelUrl(p.playerId)"
           :position="getPlayerWorldPos(p)"
-          :isMoving="isPlayerMoving(p.userId)"
+          :isMoving="isPlayerMoving(p.playerId)"
           :lookTarget="getPlayerLookTarget(p)"
         />
       </TresGroup>
@@ -192,19 +192,19 @@ watch(() => players.value, (newPlayers) => {
     return
   }
 
-  const movingUserId = gameStore.currentMove?.userId || null
+  const movingPlayerId = gameStore.currentMove?.playerId || null
   newPlayers.forEach(p => {
     const safePosition = p.position ?? MAP_START_POSITION
 
-    if (movingUserId && isMovingGlobal.value && p.userId === movingUserId) {
+    if (movingPlayerId && isMovingGlobal.value && p.playerId === movingPlayerId) {
       return
     }
 
-    lastStablePositions.value[p.userId] = safePosition
-    if (animatingPlayers.value[p.userId] === undefined) {
-      animatingPlayers.value[p.userId] = safePosition
+    lastStablePositions.value[p.playerId] = safePosition
+    if (animatingPlayers.value[p.playerId] === undefined) {
+      animatingPlayers.value[p.playerId] = safePosition
     } else if (!isMovingGlobal.value) {
-      animatingPlayers.value[p.userId] = safePosition
+      animatingPlayers.value[p.playerId] = safePosition
     }
   })
 }, { immediate: true, deep: true })
@@ -237,7 +237,7 @@ const CHARACTER_MODELS = [
 
 const START_SPREAD_RADIUS = 0.35
 
-const playerOrderIds = computed(() => players.value.map(p => p.userId).slice().sort())
+const playerOrderIds = computed(() => players.value.map(p => p.playerId).slice().sort())
 
 const getPlayerSlotIndex = (userId: string) => {
   const idx = playerOrderIds.value.indexOf(userId)
@@ -250,7 +250,7 @@ const getPlayerSlotIndex = (userId: string) => {
 // }
 
 const getPlayerModelUrl = (userId: string): string => {
-  const p = players.value.find(player => player.userId === userId)
+  const p = players.value.find(player => player.playerId === userId)
   // [MOD] 아바타 선택 ID를 우선 사용 (없으면 슬롯 순서)
   const idx = (p && typeof p.avatarId === 'number') ? p.avatarId : getPlayerSlotIndex(userId)
   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
@@ -271,7 +271,7 @@ const getPlayerModelUrl = (userId: string): string => {
 }
 
 const getDisplayPosition = (p: PlayerInfo): number => {
-  const userId = p.userId
+  const userId = p.playerId
   return (
     animatingPlayers.value[userId]
     ?? lastStablePositions.value[userId]
@@ -288,7 +288,7 @@ const getPlayerWorldPos = (p: PlayerInfo): Vec3 => {
   if (posNumber === MAP_START_POSITION) {
     const startCount = players.value.filter(other => getDisplayPosition(other) === MAP_START_POSITION).length
     if (startCount > 1) {
-      return applyStartSpread(base, p.userId)
+      return applyStartSpread(base, p.playerId)
     }
   }
 
@@ -300,7 +300,7 @@ const getPlayerLookTarget = (p: PlayerInfo): Vec3 => {
 
   let nextPos = posNumber
 
-  if (isMovingGlobal.value && gameStore.currentMove?.userId === p.userId) {
+  if (isMovingGlobal.value && gameStore.currentMove?.playerId === p.playerId) {
     const start = gameStore.currentMove.startPosition
     const end = gameStore.currentMove.endPosition
     const step = end > start ? 1 : (end < start ? -1 : 0)
@@ -315,7 +315,7 @@ const getPlayerLookTarget = (p: PlayerInfo): Vec3 => {
   return tile?.position ?? getPlayerWorldPos(p)
 }
 
-const isPlayerMoving = (userId: string) => isMovingGlobal.value && gameStore.currentMove?.userId === userId
+const isPlayerMoving = (userId: string) => isMovingGlobal.value && gameStore.currentMove?.playerId === userId
 
 const specialTileMarkers = computed(() => {
   const events = mapEvents.value
@@ -567,7 +567,7 @@ watch(() => gameStore.currentMove, async (move) => {
   if (!move) return
 
   const moveKey = JSON.stringify({
-    userId: move.userId,
+    playerId: move.playerId,
     start: move.startPosition,
     end: move.endPosition,
     process: move.moveProcess
@@ -577,7 +577,7 @@ watch(() => gameStore.currentMove, async (move) => {
   lastMoveKey.value = moveKey
 
   // 이동 애니메이션 전에 즉시 출발지로 고정 → gameState가 먼저 도착지로 와도 깜빡임/점프 방지
-  animatingPlayers.value[move.userId] = move.startPosition
+  animatingPlayers.value[move.playerId] = move.startPosition
 
   await waitForMoveUnlock()
 
@@ -585,7 +585,7 @@ watch(() => gameStore.currentMove, async (move) => {
   gameStore.setMovementInProgress(true)
   emit('movement-change', true)
 
-  const userId = move.userId
+  const playerId = move.playerId
 
   // 이동 시작 시점 카메라 스냅샷 저장
   const cameraSnapshotPos = [...cameraPosition.value] as [number, number, number]
@@ -599,7 +599,7 @@ watch(() => gameStore.currentMove, async (move) => {
 
   // 이동 중 카메라가 해당 플레이어를 따라가도록 step마다 타겟을 갱신
   const followCameraStep = async (_position: number) => {
-    const movingPlayer = players.value.find(p => p.userId === userId)
+    const movingPlayer = players.value.find(p => p.playerId === playerId)
     if (!movingPlayer) return
 
     const targetPos = getPlayerWorldPos(movingPlayer)
@@ -611,7 +611,7 @@ watch(() => gameStore.currentMove, async (move) => {
   }
 
   // 이동 시작 시 줌인 + 타겟 이동
-  const movingPlayer = players.value.find(p => p.userId === userId)
+  const movingPlayer = players.value.find(p => p.playerId === playerId)
   if (movingPlayer) {
     const targetPos = getPlayerWorldPos(movingPlayer)
     await animateCameraTo({
@@ -626,7 +626,7 @@ watch(() => gameStore.currentMove, async (move) => {
   const actions = Array.isArray(move.moveProcess) ? move.moveProcess : []
 
   if (actions.length === 0) {
-    await moveStep(userId, currentPos, move.endPosition, followCameraStep)
+    await moveStep(playerId, currentPos, move.endPosition, followCameraStep)
     currentPos = move.endPosition
   } else {
     for (const action of actions) {
@@ -638,7 +638,7 @@ watch(() => gameStore.currentMove, async (move) => {
       const after = action.after ?? currentPos
 
       if (before !== currentPos) {
-        await moveStep(userId, currentPos, before, followCameraStep)
+        await moveStep(playerId, currentPos, before, followCameraStep)
         currentPos = before
       }
 
@@ -651,15 +651,15 @@ watch(() => gameStore.currentMove, async (move) => {
         await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
       }
 
-      await moveStep(userId, currentPos, after, followCameraStep)
+      await moveStep(playerId, currentPos, after, followCameraStep)
       currentPos = after
     }
   }
 
   const catchActions = move.moveProcess?.filter((item: any) => item.type === 'CATCH') || []
   catchActions.forEach((action: any) => {
-    if (action.targetUserId !== undefined && action.after !== undefined) {
-      animatingPlayers.value[action.targetUserId] = action.after
+    if (action.targetPlayerId !== undefined && action.after !== undefined) {
+      animatingPlayers.value[action.targetPlayerId] = action.after
     }
   })
 
@@ -679,7 +679,7 @@ watch(() => gameStore.currentMove, async (move) => {
   isMovingGlobal.value = false
   gameStore.setMovementInProgress(false)
   emit('movement-change', false)
-  wsStore.sendAck('MOVE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
+  wsStore.sendAck('MOVE_COMPLETE', gameStore.lastMoveQuizId ?? undefined, gameStore.gameState.round ?? undefined)
 })
 
 function sleep(ms: number) {

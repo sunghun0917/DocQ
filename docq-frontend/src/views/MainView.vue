@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
-import { getErrorMessage } from '@/services/api';
+import { getErrorMessage, updateGuestNickname } from '@/services/api';
 
 // 컴포넌트 임포트
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
@@ -315,21 +315,19 @@ const saveNickname = async () => {
     onAuthError("닉네임은 두 글자 이상이어야 해요!");
     return;
   }
-  
   if (!isEditNicknameChecked.value) {
-      onAuthError("닉네임 중복 확인을 해주세요!");
-      return;
+    onAuthError("닉네임 중복 확인을 해주세요!");
+    return;
   }
   
-  if (!userStore.userId) {
+  if (!userStore.playerId) {
     onAuthError("유저 정보를 찾을 수 없어요. 다시 로그인해주세요.");
     return;
   }
 
   try {
-    await userStore.updateUsername(nextNickname); // 스토어 액션으로 통합됨(회원/게스트 분기)
-    
-    // UI 업데이트 (스토어 반응형이지만 여기서 로컬 변수도 동기화)
+    await updateGuestNickname(userStore.playerId, nextNickname);
+    userStore.updateUsername(nextNickname);
     nickname.value = nextNickname;
     isNicknameSet.value = true;
     showEditNicknameModal.value = false;

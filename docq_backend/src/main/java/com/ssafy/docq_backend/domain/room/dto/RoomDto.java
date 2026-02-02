@@ -13,8 +13,8 @@ public class RoomDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RoomCreateRequest {
-        @NotBlank(message = "userId는 필수입니다.")
-        private String userId;
+        @NotBlank(message = "playerId는 필수입니다.")
+        private String playerId;
 
         @Min(value = 2, message = "최소 인원은 2명입니다.")
         private int capacity;
@@ -32,7 +32,7 @@ public class RoomDto {
     public static class RoomCreateResponse {
         private String roomId;
         private String inviteCode;
-        private String hostId;
+        private String hostPlayerId;
         private Boolean isPrivate;
     }
 
