@@ -8,6 +8,7 @@ import {
     checkUserIdAvailability as checkIdApi,
     signUp as signUpApi,
     login as loginApi,
+    logout as logoutApi,
     getMyInfo
 } from '@/services/api'
 
@@ -114,12 +115,20 @@ export const useUserStore = defineStore('user', () => {
     }
 
     /**
-     * 4. 로그아웃 (Mock)
+     * 4. 로그아웃 (백엔드 세션 무효화 + 프론트 상태 초기화)
      */
     const logout = async () => {
-        currentUser.value = null
-        isAuthenticated.value = false
-        sessionStorage.removeItem('user')
+        try {
+            await logoutApi()  // 백엔드 세션 무효화
+        } catch (error) {
+            console.error('Logout API failed:', error)
+        } finally {
+            // 프론트엔드 상태 초기화 (API 실패해도 무조건 초기화)
+            currentUser.value = null
+            isAuthenticated.value = false
+            sessionStorage.removeItem('user')
+            sessionStorage.removeItem('guestUser')
+        }
     }
 
     /**

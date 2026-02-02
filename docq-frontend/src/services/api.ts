@@ -72,6 +72,14 @@ export const login = async (data: LoginRequest): Promise<LoginResponse> => {
 }
 
 /**
+ * 로그아웃 (세션 무효화)
+ * POST /auth/logout
+ */
+export const logout = async (): Promise<void> => {
+    await apiClient.post('/auth/logout')
+}
+
+/**
  * 게스트 로그인 (닉네임으로 playerId 발급)
  * POST /guests/login
  */
@@ -236,6 +244,7 @@ export default {
     checkUserIdAvailability,
     signUp,
     login,
+    logout,
     getMyInfo,
     getErrorMessage,
     getErrorCode
