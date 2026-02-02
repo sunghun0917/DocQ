@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
-import { getErrorMessage, updateNickname } from '@/services/api';
+import { getErrorMessage, updateGuestNickname } from '@/services/api';
 
 // 컴포넌트 임포트 (경로 확인 필요)
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
@@ -270,14 +270,14 @@ const saveNickname = async () => {
     isErrorModalOpen.value = true;
     return;
   }
-  if (!userStore.userId) {
+  if (!userStore.playerId) {
     triggerShake();
     errorMessage.value = "유저 정보를 찾을 수 없어요. 다시 로그인해주세요.";
     isErrorModalOpen.value = true;
     return;
   }
   try {
-    await updateNickname(userStore.userId, nextNickname);
+    await updateGuestNickname(userStore.playerId, nextNickname);
     userStore.updateUsername(nextNickname);
     nickname.value = nextNickname;
     isNicknameSet.value = true;

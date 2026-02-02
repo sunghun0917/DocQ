@@ -42,13 +42,13 @@ const isReadyToCreate = computed(() => roomName.value.trim().length > 0);
 
 const createRoom = async () => {
   if (!isReadyToCreate.value || isSubmitting.value) return;
-  if (!userStore.userId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
+  if (!userStore.playerId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
   
   isSubmitting.value = true
 
   try {
     const room = await createRoomApi({
-      userId: userStore.userId,
+      playerId: userStore.playerId,
       capacity: maxUsers.value,
       title: roomName.value.trim(),
       isPrivate: isSecret.value,
@@ -58,7 +58,7 @@ const createRoom = async () => {
     roomStore.createRoom({
       roomId: room.roomId,
       inviteCode: room.inviteCode,
-      hostId: room.hostId,
+      hostId: room.hostPlayerId,
       title: roomName.value.trim(),
       capacity: maxUsers.value,
       isPrivate: room.isPrivate,
@@ -68,10 +68,10 @@ const createRoom = async () => {
     })
 
     await wsStore.connect()
-    wsStore.subscribeErrors(userStore.userId)
+    wsStore.subscribeErrors(userStore.playerId)
     wsStore.subscribeGameState(room.roomId)
     wsStore.subscribeMiniGame(room.roomId)
-    wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
+    wsStore.joinGame(room.roomId, userStore.playerId, userStore.username)
 
     router.push(`/waiting/${room.roomId}`);
     emit('close');
