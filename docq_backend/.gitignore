@@ -36,3 +36,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Spring Boot env-specific config
+docq_backend/src/main/resources/application-local.properties
+docq_backend/src/main/resources/application-prod.properties
