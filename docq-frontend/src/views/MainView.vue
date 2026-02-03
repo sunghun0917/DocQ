@@ -658,7 +658,7 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .input-row { display: flex; gap: 8px; align-items: center; }
 .flex-grow { flex-grow: 1; }
 .cartoon-btn.small-btn { width: auto; padding: 8px 12px; font-size: 1rem; white-space: nowrap; }
-.edit-nickname-input-group { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.edit-nickname-input-group { display: flex; flex-direction: column; gap: 4px; }
 .check-msg { font-size: 0.9rem; margin-left: 4px; }
 .check-msg.success { color: var(--leaf-dark); }
 .check-msg.error { color: #d32f2f; }
