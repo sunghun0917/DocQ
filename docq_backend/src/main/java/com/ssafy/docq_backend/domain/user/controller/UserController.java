@@ -2,12 +2,14 @@ package com.ssafy.docq_backend.domain.user.controller;
 
 import com.ssafy.docq_backend.domain.user.dto.UserDto;
 import com.ssafy.docq_backend.domain.user.service.UserService;
-import com.ssafy.docq_backend.global.session.SessionDto;
-import jakarta.servlet.http.HttpSession;
+// import com.ssafy.docq_backend.global.session.SessionDto; // Removed unused
+// import jakarta.servlet.http.HttpSession; // Removed unused
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import com.ssafy.docq_backend.global.security.CustomUserDetails;
 
 @RestController
 @RequestMapping("/users")
@@ -32,23 +34,22 @@ public class UserController {
 
     // 내 정보 조회: GET /users/me
     @GetMapping("/me")
-    public ResponseEntity<?> getMyInfo(HttpSession session) {
-        SessionDto sessionDto = (SessionDto) session.getAttribute("user");
-        if (sessionDto == null) {
+    public ResponseEntity<?> getMyInfo(@AuthenticationPrincipal CustomUserDetails user) {
+        if (user == null) { // Should not happen if authenticated, but safe check
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(userService.getMyInfo(sessionDto));
+        return ResponseEntity.ok(userService.getMyInfo(user));
     }
 
     // 회원 닉네임 변경: PATCH /users/me/nickname
     @PatchMapping("/me/nickname")
     public ResponseEntity<UserDto.NicknameUpdateResponse> updateNickname(
             @Valid @RequestBody UserDto.NicknameUpdateRequest request,
-            HttpSession session) {
-        SessionDto sessionDto = (SessionDto) session.getAttribute("user");
-        if (sessionDto == null || sessionDto.isGuest()) {
+            @AuthenticationPrincipal CustomUserDetails user) {
+
+        if (user == null || user.isGuest()) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(userService.updateNickname(sessionDto.getId(), request, session));
+        return ResponseEntity.ok(userService.updateNickname(user.getUserId(), request));
     }
 }

@@ -25,8 +25,7 @@ public class BoardController {
     @GetMapping
     public ResponseEntity<BoardDto.BoardListResponse> getList(
             @RequestParam(required = false, defaultValue = "1") int page,
-            @RequestParam(required = false, defaultValue = "20") int size
-    ) {
+            @RequestParam(required = false, defaultValue = "20") int size) {
         BoardDto.BoardListResponse response = boardService.getList(page, size);
         return ResponseEntity.ok(response);
     }
@@ -34,8 +33,7 @@ public class BoardController {
     @PostMapping
     public ResponseEntity<BoardDto.CreateBoardResponse> create(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @Valid @RequestBody BoardDto.CreateBoardRequest request
-    ) {
+            @Valid @RequestBody BoardDto.CreateBoardRequest request) {
         BoardDto.CreateBoardResponse response = boardService.create(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -46,8 +44,7 @@ public class BoardController {
     @DeleteMapping("/{boardId}")
     public ResponseEntity<Void> delete(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @PathVariable Long boardId
-    ) {
+            @PathVariable Long boardId) {
         boardService.delete(userId, boardId);
         return ResponseEntity.noContent().build();
     }
@@ -58,8 +55,7 @@ public class BoardController {
     @PostMapping("/{boardId}/likes")
     public ResponseEntity<BoardDto.LikeResponse> like(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @PathVariable Long boardId
-    ) {
+            @PathVariable Long boardId) {
         BoardDto.LikeResponse response = boardService.like(userId, boardId);
         return ResponseEntity.ok(response);
     }
@@ -70,8 +66,7 @@ public class BoardController {
     @DeleteMapping("/{boardId}/likes")
     public ResponseEntity<BoardDto.LikeResponse> unlike(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @PathVariable Long boardId
-    ) {
+            @PathVariable Long boardId) {
         BoardDto.LikeResponse response = boardService.unlike(userId, boardId);
         return ResponseEntity.ok(response);
     }
