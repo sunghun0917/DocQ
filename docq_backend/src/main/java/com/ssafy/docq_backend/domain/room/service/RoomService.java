@@ -5,7 +5,6 @@ import com.ssafy.docq_backend.domain.room.dto.RoomDto.RoomJoinResponse;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.guest.repository.GuestRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 
@@ -20,18 +19,14 @@ import java.util.concurrent.ThreadLocalRandom;
 public class RoomService {
 
     private final RoomRepository roomRepository;
-    private final GuestRepository guestRepository;
 
-    public RoomDto.RoomCreateResponse createRoom(RoomDto.RoomCreateRequest request) {
-        // 1. Host(playerId) 검증
-        if (!guestRepository.findById(request.getPlayerId()).isPresent()) {
-            throw new DocqException(ErrorCode.USER_NOT_FOUND); // U001
-        }
+    public RoomDto.RoomCreateResponse createRoom(RoomDto.RoomCreateRequest request, String playerId) {
+        // playerId는 세션에서 가져오므로 별도 검증 불필요 (이미 로그인된 사용자)
 
-        // 2. 비공개 방일 경우 비밀번호 필수
+        // 비공개 방일 경우 비밀번호 필수
         if (Boolean.TRUE.equals(request.getIsPrivate())
                 && (request.getPassword() == null || request.getPassword().isBlank())) {
-            throw new DocqException(ErrorCode.INVALID_INPUT_VALUE); // C002
+            throw new DocqException(ErrorCode.INVALID_INPUT_VALUE);
         }
 
         String roomId = UUID.randomUUID().toString();
@@ -39,7 +34,7 @@ public class RoomService {
 
         Room room = Room.builder()
                 .id(roomId)
-                .hostPlayerId(request.getPlayerId())
+                .hostPlayerId(playerId) // 세션에서 받은 playerId 사용
                 .title(request.getTitle())
                 .capacity(request.getCapacity())
                 .isPrivate(Boolean.TRUE.equals(request.getIsPrivate()))

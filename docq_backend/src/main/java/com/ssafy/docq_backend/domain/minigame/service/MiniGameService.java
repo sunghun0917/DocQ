@@ -6,7 +6,8 @@ import com.ssafy.docq_backend.domain.minigame.dto.MiniGameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.guest.repository.GuestRepository;
+import com.ssafy.docq_backend.domain.player.entity.Player;
+import com.ssafy.docq_backend.domain.player.repository.PlayerRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
 public class MiniGameService {
 
     private final RoomRepository roomRepository;
-    private final GuestRepository guestRepository;
+    private final PlayerRepository playerRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Lazy
@@ -158,9 +159,9 @@ public class MiniGameService {
                 .map(entry -> {
                     String uid = entry.getKey();
                     String nickname = "Unknown";
-                    var guest = guestRepository.findById(uid).orElse(null);
-                    if (guest != null)
-                        nickname = guest.getNickname();
+                    Player player = playerRepository.findById(uid).orElse(null);
+                    if (player != null)
+                        nickname = player.getNickname();
 
                     return MiniGameDto.RankInfo.builder()
                             .playerId(uid)

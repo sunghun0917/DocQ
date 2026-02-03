@@ -5,8 +5,8 @@ import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.guest.entity.Guest;
-import com.ssafy.docq_backend.domain.guest.repository.GuestRepository;
+import com.ssafy.docq_backend.domain.player.entity.Player;
+import com.ssafy.docq_backend.domain.player.repository.PlayerRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +45,7 @@ import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 public class GameService {
 
     private final RoomRepository roomRepository;
-    private final GuestRepository guestRepository;
+    private final PlayerRepository playerRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final AiClient aiClient;
     private final ObjectProvider<MiniGameService> miniGameServiceProvider;
@@ -218,8 +218,7 @@ public class GameService {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            guestRepository.findById(request.getPlayerId())
-                    .orElseThrow(() -> new DocqException(ErrorCode.USER_NOT_FOUND));
+            // playerId는 웹소켓 연결 시 세션에서 이미 검증됨 (별도 검증 불필요)
 
             if (!room.getPlayers().contains(request.getPlayerId())) {
                 if (room.getCurrentCount() >= room.getCapacity()) {
@@ -506,8 +505,8 @@ public class GameService {
     private void broadcastGameState(Room room) {
         List<GameDto.PlayerInfo> playerInfos = room.getPlayers().stream()
                 .map(userId -> {
-                    Guest g = guestRepository.findById(userId).orElse(null);
-                    if (g == null)
+                    Player p = playerRepository.findById(userId).orElse(null);
+                    if (p == null)
                         return null;
 
                     // 게임 상태 조회 (없으면 null)
@@ -519,11 +518,11 @@ public class GameService {
                     Integer avatarId = room.getPlayerAvatars().get(userId);
 
                     return GameDto.PlayerInfo.builder()
-                            .playerId(g.getId())
-                            .nickname(g.getNickname())
-                            .isHost(g.getId().equals(room.getHostPlayerId()))
+                            .playerId(p.getPlayerId())
+                            .nickname(p.getNickname())
+                            .isHost(p.getPlayerId().equals(room.getHostPlayerId()))
                             .connected(true)
-                            .isReady(room.isReady(g.getId()))
+                            .isReady(room.isReady(p.getPlayerId()))
                             .score(score)
                             .position(position)
                             .hasBuff(buff)
@@ -1460,8 +1459,8 @@ public class GameService {
     private List<GameDto.FinishRank> buildFinishRankings(Room room) {
         return room.getPlayerStates().values().stream()
                 .map(state -> {
-                    Guest guest = guestRepository.findById(state.getPlayerId()).orElse(null);
-                    String nickname = guest != null ? guest.getNickname() : "Unknown";
+                    Player player = playerRepository.findById(state.getPlayerId()).orElse(null);
+                    String nickname = player != null ? player.getNickname() : "Unknown";
                     int position = state.getPosition();
                     int remaining = Math.max(TARGET_POSITION - position, 0);
                     int score = state.getScore();

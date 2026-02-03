@@ -18,7 +18,7 @@ const displayResult = ref<number | null>(null);
 const shouldMount = computed(() => !!gameStore.rouletteTargetId);
 const targetUserId = computed(() => gameStore.rouletteTargetId);
 const rouletteValue = computed(() => gameStore.currentRoundResult?.rouletteValue ?? null);
-const targetUser = computed(() => roomStore.users.find(u => u.id === targetUserId.value));
+const targetUser = computed(() => roomStore.users.find(u => u.playerId === targetUserId.value));
 
 // Init labels when target is set (Snapshot to prevent changing during spin)
 // 플레이어 턴 승리: 8칸(-1~7, 0제외) / 고스트 턴 승리: 4칸(-1~3, 0제외)
