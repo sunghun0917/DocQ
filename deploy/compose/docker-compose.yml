@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
     env_file:
       - ../../docq-ai/.env
-    environment:d
+    environment:
       - PYTHONUNBUFFERED=1
       - MINERU_API_URL=http://${EC2_HOST_IP}:8123/file_parse
     networks:
