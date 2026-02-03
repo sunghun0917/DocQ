@@ -32,10 +32,13 @@ export class WebSocketService {
                 // 연결 헤더 설정 (userId 등)
                 connectHeaders: this.config.connectHeaders,
 
-                // 디버그 로그
-                debug: this.config.debug || ((str) => {
-                    console.log('[STOMP Debug]', str)
-                }),
+                // 디버그 로그 (비활성화)
+                debug: (str) => {
+                    // 중요한 상태 변화 로그(연결됨, 에러남, 끊김)만 보이고, 지저분한 데이터 통신은 무시합니다.
+                    if (str.includes('Connected') || str.includes('Error') || str.includes('DISCONNECT')) {
+                        console.log('[STOMP Status]', str);
+                    }
+                },
 
                 // 재연결 설정
                 reconnectDelay: this.config.reconnectDelay || 5000,
