@@ -6,8 +6,12 @@ import com.ssafy.docq_backend.domain.user.entity.User;
 import com.ssafy.docq_backend.domain.user.repository.UserRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
-import com.ssafy.docq_backend.global.session.SessionDto;
-import jakarta.servlet.http.HttpSession;
+import com.ssafy.docq_backend.global.security.CustomUserDetails;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+// import com.ssafy.docq_backend.global.session.SessionDto; // Removed
+// import jakarta.servlet.http.HttpSession; // Removed
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,27 +42,26 @@ public class UserService {
                 .build();
     }
 
-    public Object getMyInfo(SessionDto sessionDto) {
-        if (sessionDto.isGuest()) {
+    public Object getMyInfo(CustomUserDetails userDetails) {
+        if (userDetails.isGuest()) {
             return UserDto.GuestMeResponse.builder()
-                    .playerId(sessionDto.getPlayerId())
-                    .nickname(sessionDto.getNickname())
+                    .playerId(userDetails.getPlayerId())
+                    .nickname(userDetails.getNickname())
                     .isGuest(true)
                     .build();
         } else {
             return UserDto.MemberMeResponse.builder()
-                    .id(sessionDto.getId())
-                    .playerId(sessionDto.getPlayerId())
-                    .loginId(sessionDto.getLoginId())
-                    .nickname(sessionDto.getNickname())
+                    .id(userDetails.getUserId())
+                    .playerId(userDetails.getPlayerId())
+                    .loginId(userDetails.getUsername())
+                    .nickname(userDetails.getNickname())
                     .isGuest(false)
                     .build();
         }
     }
 
     @Transactional
-    public UserDto.NicknameUpdateResponse updateNickname(Long userId, UserDto.NicknameUpdateRequest request,
-            HttpSession session) {
+    public UserDto.NicknameUpdateResponse updateNickname(Long userId, UserDto.NicknameUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new DocqException(ErrorCode.USER_NOT_FOUND));
 
@@ -71,17 +74,36 @@ public class UserService {
         user.setNickname(request.getNickname());
         userRepository.save(user);
 
-        // 세션 업데이트
-        SessionDto currentSession = (SessionDto) session.getAttribute("user");
-        SessionDto updatedSession = SessionDto.forMember(
-                currentSession.getPlayerId(),
-                userId,
-                currentSession.getLoginId(),
-                request.getNickname());
-        session.setAttribute("user", updatedSession);
+        // SecurityContext 업데이트
+        // 현재 접속중인 사용자의 context를 업데이트하기 위해,
+        // Authentication 객체(UsernamePasswordAuthenticationToken)를 재생성하거나 Principal을
+        // 교체해야 함.
+        // 하지만 여기서는 Service Layer이므로, PlayerId를 알기 어려울 수 있음 (Controller에서 넘겨받지 않음).
+        // -> Controller에서 principal을 넘겨받아서 playerId를 추출하거나,
+        // -> 여기서 SecurityContextHolder를 조회해서 현재 Authentication을 가져와서 수정.
+        // 현재 스레드의 SecurityContext를 가져오는 것이 확실함.
+        updateSecurityContext(user);
 
         return UserDto.NicknameUpdateResponse.builder()
                 .nickname(request.getNickname())
                 .build();
+    }
+
+    private void updateSecurityContext(User user) {
+        Authentication currentAuth = SecurityContextHolder.getContext().getAuthentication();
+
+        String playerId = null;
+        if (currentAuth.getPrincipal() instanceof CustomUserDetails) {
+            playerId = ((CustomUserDetails) currentAuth.getPrincipal()).getPlayerId();
+        }
+
+        CustomUserDetails newUserDetails = CustomUserDetails.forMember(user, playerId);
+
+        UsernamePasswordAuthenticationToken newAuth = new UsernamePasswordAuthenticationToken(
+                newUserDetails,
+                currentAuth.getCredentials(),
+                newUserDetails.getAuthorities());
+
+        SecurityContextHolder.getContext().setAuthentication(newAuth);
     }
 }
