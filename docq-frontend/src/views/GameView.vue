@@ -30,115 +30,115 @@ const isGameFinished = computed(() => gameStore.isGameFinished)
 const gamePhase = computed(() => gameStore.gamePhase)
 const isResultVisible = computed(() => isGameFinished.value || gamePhase.value === 'FINISHED')
 const canShowResultModal = computed(() =>
-    isResultVisible.value && !isBoardMoving.value && !gameStore.movementInProgress
+  isResultVisible.value && !isBoardMoving.value && !gameStore.movementInProgress
 )
 const roomId = computed(() => roomStore.roomInfo.roomId)
 const isHost = computed(() => roomStore.isHost || roomStore.myUser?.isHost || false)
 const players = computed(() => gameStore.gameState.players || [])
 const orderedPlayers = computed(() => {
-    const list = players.value.slice()
-    const order = gameStore.gameState.turnOrder || []
-    if (!order.length) return list
-    const byId = new Map(list.map(p => [p.playerId, p]))
-    const ordered = order.map(id => byId.get(id)).filter((p): p is typeof list[number] => !!p)
-    const remaining = list.filter(p => !order.includes(p.playerId))
-    return [...ordered, ...remaining]
+  const list = players.value.slice()
+  const order = gameStore.gameState.turnOrder || []
+  if (!order.length) return list
+  const byId = new Map(list.map(p => [p.playerId, p]))
+  const ordered = order.map(id => byId.get(id)).filter((p): p is typeof list[number] => !!p)
+  const remaining = list.filter(p => !order.includes(p.playerId))
+  return [...ordered, ...remaining]
 })
 const cornerPlayers = computed(() => {
-    const slots = Array.from({ length: 4 }, () => null as (typeof players.value[number] | null))
-    orderedPlayers.value.slice(0, 4).forEach((p, idx) => {
-        slots[idx] = p
-    })
-    return slots
+  const slots = Array.from({ length: 4 }, () => null as (typeof players.value[number] | null))
+  orderedPlayers.value.slice(0, 4).forEach((p, idx) => {
+    slots[idx] = p
+  })
+  return slots
 })
 const miniGame = computed(() => gameStore.miniGame)
 const isMiniGameActive = computed(() => miniGame.value.phase === 'playing' || miniGame.value.phase === 'result')
 const showBuffRoulette = computed(() =>
-    miniGame.value.phase === 'result' &&
-    !!miniGame.value.result?.rewardBuff &&
-    miniGame.value.result.rewardBuff !== 'NONE'
+  miniGame.value.phase === 'result' &&
+  !!miniGame.value.result?.rewardBuff &&
+  miniGame.value.result.rewardBuff !== 'NONE'
 )
 const buffRouletteCode = computed(() => {
-    if (!showBuffRoulette.value) return null
-    return miniGame.value.result?.rewardBuff ?? null
+  if (!showBuffRoulette.value) return null
+  return miniGame.value.result?.rewardBuff ?? null
 })
 
 const AVATAR_REVERSE_MAP: Record<string, string> = {
-    '🐔': '0',
-    '🐶': '1',
-    '🐷': '2',
-    '🐑': '3'
+  '🐔': '0',
+  '🐶': '1',
+  '🐷': '2',
+  '🐑': '3'
 }
 
 const rankingResults = computed(() => {
-    const gamePlayers = gameStore.gameState.players || []
-    // 1순위: 위치(position) 내림차순, 2순위: 점수(score) 내림차순 정렬
-    const sorted = [...gamePlayers].sort((a, b) => {
-        const posA = a.position ?? 0;
-        const posB = b.position ?? 0;
-        if (posA !== posB) return posB - posA;
-        return (b.score ?? 0) - (a.score ?? 0);
-    })
-    
-    return sorted.map((p, index) => {
-        const user = roomStore.users.find(u => u.playerId === p.playerId)
-        let avatarVal = user?.avatar || '0'
-        const mapped = AVATAR_REVERSE_MAP[avatarVal]
-        if (mapped) {
-            avatarVal = mapped
-        }
-        return {
-            rank: index + 1,
-            nickname: user?.nickname || p.nickname || (gamePhase.value === 'FINISHED' ? p.nickname : 'Unknown'),
-            score: p.score ?? 0,
-            isMe: p.playerId === myPlayerId.value,
-            avatar: avatarVal,
-            playerId: p.playerId
-        }
-    })
+  const gamePlayers = gameStore.gameState.players || []
+  // 1순위: 위치(position) 내림차순, 2순위: 점수(score) 내림차순 정렬
+  const sorted = [...gamePlayers].sort((a, b) => {
+    const posA = a.position ?? 0;
+    const posB = b.position ?? 0;
+    if (posA !== posB) return posB - posA;
+    return (b.score ?? 0) - (a.score ?? 0);
+  })
+
+  return sorted.map((p, index) => {
+    const user = roomStore.users.find(u => u.playerId === p.playerId)
+    let avatarVal = user?.avatar || '0'
+    const mapped = AVATAR_REVERSE_MAP[avatarVal]
+    if (mapped) {
+      avatarVal = mapped
+    }
+    return {
+      rank: index + 1,
+      nickname: user?.nickname || p.nickname || (gamePhase.value === 'FINISHED' ? p.nickname : 'Unknown'),
+      score: p.score ?? 0,
+      isMe: p.playerId === myPlayerId.value,
+      avatar: avatarVal,
+      playerId: p.playerId
+    }
+  })
 })
 
 // Snapshot logic for results
 const finalRankingResults = ref<any[] | null>(null)
 
 watch(
-    () => isResultVisible.value,
-    (visible) => {
-        if (visible && !finalRankingResults.value) {
-            // Snapshot the results at the moment game ends
-            // Forcefully map current players to ensure we capture nicknames even if roomStore is updating
-            const currentPlayers = gameStore.gameState.players || []
-            // 1순위: 위치(position) 내림차순, 2순위: 점수(score) 내림차순 정렬
-            const sorted = [...currentPlayers].sort((a, b) => {
-                const posA = a.position ?? 0;
-                const posB = b.position ?? 0;
-                if (posA !== posB) return posB - posA;
-                return (b.score ?? 0) - (a.score ?? 0);
-            })
-            
-            finalRankingResults.value = sorted.map((p, index) => {
-                const user = roomStore.users.find(u => u.playerId === p.playerId)
-                let avatarVal = user?.avatar || '0'
-                const mapped = AVATAR_REVERSE_MAP[avatarVal]
-                if (mapped) {
-                    avatarVal = mapped
-                }
-                return {
-                    rank: index + 1,
-                    // Prioritize gameStore nickname if roomStore user is missing (e.g. they left)
-                    nickname: user?.nickname || p.nickname || 'Unknown Player', 
-                    score: p.score ?? 0,
-                    isMe: p.playerId === myPlayerId.value,
-                    avatar: avatarVal,
-                    playerId: p.playerId
-                }
-            })
-        } else if (!visible) {
-            // Reset if game restarts or we leave result screen
-            finalRankingResults.value = null
+  () => isResultVisible.value,
+  (visible) => {
+    if (visible && !finalRankingResults.value) {
+      // Snapshot the results at the moment game ends
+      // Forcefully map current players to ensure we capture nicknames even if roomStore is updating
+      const currentPlayers = gameStore.gameState.players || []
+      // 1순위: 위치(position) 내림차순, 2순위: 점수(score) 내림차순 정렬
+      const sorted = [...currentPlayers].sort((a, b) => {
+        const posA = a.position ?? 0;
+        const posB = b.position ?? 0;
+        if (posA !== posB) return posB - posA;
+        return (b.score ?? 0) - (a.score ?? 0);
+      })
+
+      finalRankingResults.value = sorted.map((p, index) => {
+        const user = roomStore.users.find(u => u.playerId === p.playerId)
+        let avatarVal = user?.avatar || '0'
+        const mapped = AVATAR_REVERSE_MAP[avatarVal]
+        if (mapped) {
+          avatarVal = mapped
         }
-    },
-    { immediate: true }
+        return {
+          rank: index + 1,
+          // Prioritize gameStore nickname if roomStore user is missing (e.g. they left)
+          nickname: user?.nickname || p.nickname || 'Unknown Player',
+          score: p.score ?? 0,
+          isMe: p.playerId === myPlayerId.value,
+          avatar: avatarVal,
+          playerId: p.playerId
+        }
+      })
+    } else if (!visible) {
+      // Reset if game restarts or we leave result screen
+      finalRankingResults.value = null
+    }
+  },
+  { immediate: true }
 )
 
 const isBoardMoving = ref(false)
@@ -155,12 +155,12 @@ let systemNoticeTimer: number | null = null
 let systemNoticeResolver: (() => void) | null = null
 
 const handleBeforeUnload = () => {
-    if (!userStore.playerId || !roomId.value) return
-    sessionStorage.setItem('docq:lastPage', 'game')
-    wsStore.leaveGame(roomId.value, userStore.playerId)
-    wsStore.cleanup()
-    roomStore.leaveRoom()
-    gameStore.reset()
+  if (!userStore.playerId || !roomId.value) return
+  sessionStorage.setItem('docq:lastPage', 'game')
+  wsStore.leaveGame(roomId.value, userStore.playerId)
+  wsStore.cleanup()
+  roomStore.leaveRoom()
+  gameStore.reset()
 }
 
 /** 버프 코드 → 알림용 표시 이름 (버프 룰렛과 동일) */
@@ -176,52 +176,52 @@ function getBuffLabelForNotice(buffCode?: string): string {
 }
 
 const showSystemNotice = (text: string, duration = 2000) => {
-    if (systemNoticeTimer !== null) {
-        clearTimeout(systemNoticeTimer)
-        systemNoticeTimer = null
-    }
-    if (systemNoticeResolver) {
-        systemNoticeResolver()
-        systemNoticeResolver = null
-    }
-    systemNotice.value = text
-    return new Promise<void>((resolve) => {
-        systemNoticeResolver = resolve
-        systemNoticeTimer = window.setTimeout(() => {
-            systemNotice.value = null
-            systemNoticeTimer = null
-            systemNoticeResolver = null
-            resolve()
-        }, duration)
-    })
+  if (systemNoticeTimer !== null) {
+    clearTimeout(systemNoticeTimer)
+    systemNoticeTimer = null
+  }
+  if (systemNoticeResolver) {
+    systemNoticeResolver()
+    systemNoticeResolver = null
+  }
+  systemNotice.value = text
+  return new Promise<void>((resolve) => {
+    systemNoticeResolver = resolve
+    systemNoticeTimer = window.setTimeout(() => {
+      systemNotice.value = null
+      systemNoticeTimer = null
+      systemNoticeResolver = null
+      resolve()
+    }, duration)
+  })
 }
 
 const winnerName = computed(() => {
-    const winnerId = miniGame.value.result?.winnerPlayerId
-    if (!winnerId) return ''
-    return roomStore.users.find(u => u.playerId === winnerId)?.nickname || ''
+  const winnerId = miniGame.value.result?.winnerPlayerId
+  if (!winnerId) return ''
+  return roomStore.users.find(u => u.playerId === winnerId)?.nickname || ''
 })
 
 const miniGamePlayers = computed(() =>
-    roomStore.users.map(user => ({
-        playerId: user.playerId,
-        nickname: user.nickname,
-        avatar: user.avatar || '🎮',
-        isMe: user.isMe
-    }))
+  roomStore.users.map(user => ({
+    playerId: user.playerId,
+    nickname: user.nickname,
+    avatar: user.avatar || '🎮',
+    isMe: user.isMe
+  }))
 )
 
 const miniGameUiType = computed(() => {
-    switch (miniGame.value.gameType) {
-        case 'LEFT_RIGHT_MASH':
-            return 'mash'
-        case 'DIRECTION_MATCH':
-            return 'sequence'
-        case 'EXACT_TIME':
-            return 'stopwatch'
-        default:
-            return null
-    }
+  switch (miniGame.value.gameType) {
+    case 'LEFT_RIGHT_MASH':
+      return 'mash'
+    case 'DIRECTION_MATCH':
+      return 'sequence'
+    case 'EXACT_TIME':
+      return 'stopwatch'
+    default:
+      return null
+  }
 })
 
 // 현재 턴인지 확인
@@ -237,296 +237,296 @@ let miniGameNoticeToken = 0
 let gameEndNoticeToken = 0
 
 watch(
-    () => gameStore.currentRoundResult,
-    async (result) => {
-        if (!result) return
-        const token = ++resultNoticeToken
-        const winnerId = result.winnerPlayerId ?? null
-        const currentTurnId = gameStore.gameState.currentTurnPlayerId ?? null
-        let noticeText = '맞춘 사람이 없습니다.'
-        if (winnerId) {
-            const winnerName = roomStore.users.find(u => u.playerId === winnerId)?.nickname || '알 수 없음'
-            if (winnerId === currentTurnId) {
-                noticeText = `플레이어 ${winnerName}가 정답을 맞추었습니다.`
-            } else {
-                noticeText = `승자는 고스트 ${winnerName}입니다.`
-            }
-        }
-        await showSystemNotice(noticeText, 3500)
-        if (token !== resultNoticeToken) return
-        gameStore.unlockMove()
-        wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
-        if (winnerId && result.rouletteValue != null) {
-            gameStore.rouletteTargetId = winnerId
-        }
+  () => gameStore.currentRoundResult,
+  async (result) => {
+    if (!result) return
+    const token = ++resultNoticeToken
+    const winnerId = result.winnerPlayerId ?? null
+    const currentTurnId = gameStore.gameState.currentTurnPlayerId ?? null
+    let noticeText = '맞춘 사람이 없습니다.'
+    if (winnerId) {
+      const winnerName = roomStore.users.find(u => u.playerId === winnerId)?.nickname || '알 수 없음'
+      if (winnerId === currentTurnId) {
+        noticeText = `플레이어 ${winnerName}가 정답을 맞추었습니다.`
+      } else {
+        noticeText = `승자는 고스트 ${winnerName}입니다.`
+      }
     }
+    await showSystemNotice(noticeText, 3500)
+    if (token !== resultNoticeToken) return
+    gameStore.unlockMove()
+    wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
+    if (winnerId && result.rouletteValue != null) {
+      gameStore.rouletteTargetId = winnerId
+    }
+  }
 )
 
 watch(
-    () => gameStore.currentMove,
-    (move) => {
-        if (!move || !myPlayerId.value) return
+  () => gameStore.currentMove,
+  (move) => {
+    if (!move || !myPlayerId.value) return
 
-        const catchAction = move.moveProcess?.find((item: any) => item.type === 'CATCH')
-        if (!catchAction) {
-            pendingCatchEffect.value = null
-            catchMessageToShowAfterMove.value = null
-            pendingCatchKey = null
-            return
-        }
-
-        const moveKey = JSON.stringify({
-            playerId: move.playerId,
-            start: move.startPosition,
-            end: move.endPosition,
-            process: move.moveProcess
-        })
-        pendingCatchKey = moveKey
-
-        let message: string | null = null
-        if (catchAction.targetPlayerId === myPlayerId.value) {
-            message = '잡혔습니다. 출발지로 이동합니다.'
-        } else if (move.playerId === myPlayerId.value) {
-            message = '잡았습니다. 출발지로 이동시킵니다.'
-        }
-        pendingCatchEffect.value = message
-        catchMessageToShowAfterMove.value = message
+    const catchAction = move.moveProcess?.find((item: any) => item.type === 'CATCH')
+    if (!catchAction) {
+      pendingCatchEffect.value = null
+      catchMessageToShowAfterMove.value = null
+      pendingCatchKey = null
+      return
     }
+
+    const moveKey = JSON.stringify({
+      playerId: move.playerId,
+      start: move.startPosition,
+      end: move.endPosition,
+      process: move.moveProcess
+    })
+    pendingCatchKey = moveKey
+
+    let message: string | null = null
+    if (catchAction.targetPlayerId === myPlayerId.value) {
+      message = '잡혔습니다. 출발지로 이동합니다.'
+    } else if (move.playerId === myPlayerId.value) {
+      message = '잡았습니다. 출발지로 이동시킵니다.'
+    }
+    pendingCatchEffect.value = message
+    catchMessageToShowAfterMove.value = message
+  }
 )
 
 watch(
-    () => gameStore.movementInProgress,
-    (moving, prev) => {
-        if (moving || !prev) return
-        const message = catchMessageToShowAfterMove.value
-        if (!message) return
+  () => gameStore.movementInProgress,
+  (moving, prev) => {
+    if (moving || !prev) return
+    const message = catchMessageToShowAfterMove.value
+    if (!message) return
 
-        if (catchEffectTimer !== null) {
-            clearTimeout(catchEffectTimer)
-            catchEffectTimer = null
-        }
-        catchEffect.value = message
-        catchMessageToShowAfterMove.value = null
-        pendingCatchEffect.value = null
-        pendingCatchKey = null
-
-        catchEffectTimer = window.setTimeout(() => {
-            catchEffect.value = null
-            catchEffectTimer = null
-        }, 2500)
+    if (catchEffectTimer !== null) {
+      clearTimeout(catchEffectTimer)
+      catchEffectTimer = null
     }
+    catchEffect.value = message
+    catchMessageToShowAfterMove.value = null
+    pendingCatchEffect.value = null
+    pendingCatchKey = null
+
+    catchEffectTimer = window.setTimeout(() => {
+      catchEffect.value = null
+      catchEffectTimer = null
+    }, 2500)
+  }
 )
 
 const submitAnswer = (index: number) => {
-    if (!currentQuiz.value) return
+  if (!currentQuiz.value) return
 
-    const answerText = currentQuiz.value.options[index]
-    
-    const roomId = roomStore.roomInfo.roomId
-    if (roomId && myPlayerId.value) {
-        wsStore.submitAnswer(roomId, myPlayerId.value, currentQuiz.value.quizId, answerText || "")
-    }
+  const answerText = currentQuiz.value.options[index]
+
+  const roomId = roomStore.roomInfo.roomId
+  if (roomId && myPlayerId.value) {
+    wsStore.submitAnswer(roomId, myPlayerId.value, currentQuiz.value.quizId, answerText || "")
+  }
 }
 
 const confirmConfig = computed(() => {
-    switch (confirmAction.value) {
-        case 'leave':
-            return {
-                title: '게임 나가기',
-                message: '정말 게임에서 나가시겠습니까?',
-                confirmLabel: '나가기',
-                icon: 'logout',
-                variant: 'danger' as const
-            }
-        case 'end':
-            return {
-                title: '게임 종료',
-                message: '정말 게임을 종료하시겠습니까?',
-                confirmLabel: '게임 종료',
-                icon: 'stop_circle',
-                variant: 'danger' as const
-            }
-        case 'restart':
-            return {
-                title: '게임 재시작',
-                message: '게임을 재시작하시겠습니까?',
-                confirmLabel: '재시작',
-                icon: 'restart_alt',
-                variant: 'primary' as const
-            }
-        default:
-            return {
-                title: '',
-                message: '',
-                confirmLabel: '',
-                icon: 'help',
-                variant: 'danger' as const
-            }
-    }
+  switch (confirmAction.value) {
+    case 'leave':
+      return {
+        title: '게임 나가기',
+        message: '정말 게임에서 나가시겠습니까?',
+        confirmLabel: '나가기',
+        icon: 'logout',
+        variant: 'danger' as const
+      }
+    case 'end':
+      return {
+        title: '게임 종료',
+        message: '정말 게임을 종료하시겠습니까?',
+        confirmLabel: '게임 종료',
+        icon: 'stop_circle',
+        variant: 'danger' as const
+      }
+    case 'restart':
+      return {
+        title: '게임 재시작',
+        message: '게임을 재시작하시겠습니까?',
+        confirmLabel: '재시작',
+        icon: 'restart_alt',
+        variant: 'primary' as const
+      }
+    default:
+      return {
+        title: '',
+        message: '',
+        confirmLabel: '',
+        icon: 'help',
+        variant: 'danger' as const
+      }
+  }
 })
 
 const openConfirm = (action: 'leave' | 'end' | 'restart') => {
-    confirmAction.value = action
+  confirmAction.value = action
 }
 
 const closeConfirm = () => {
-    confirmAction.value = null
+  confirmAction.value = null
 }
 
 const handleConfirm = () => {
-    const action = confirmAction.value
-    confirmAction.value = null
-    if (!action) return
-    if (action === 'leave') leaveGame()
-    if (action === 'end') endGame()
-    if (action === 'restart') restartGame()
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (!action) return
+  if (action === 'leave') leaveGame()
+  if (action === 'end') endGame()
+  if (action === 'restart') restartGame()
 }
 
 const leaveGame = () => {
-    if (!userStore.playerId || !roomId.value) return
-    wsStore.leaveGame(roomId.value, userStore.playerId)
-    setTimeout(() => {
-        wsStore.cleanup()
-        roomStore.leaveRoom()
-        gameStore.reset()
-        router.push('/')
-    }, 150)
+  if (!userStore.playerId || !roomId.value) return
+  wsStore.leaveGame(roomId.value, userStore.playerId)
+  setTimeout(() => {
+    wsStore.cleanup()
+    roomStore.leaveRoom()
+    gameStore.reset()
+    router.push('/')
+  }, 150)
 }
 
 const endGame = () => {
-    if (!userStore.playerId || !roomId.value) return
-    wsStore.endGame(roomId.value, userStore.playerId)
+  if (!userStore.playerId || !roomId.value) return
+  wsStore.endGame(roomId.value, userStore.playerId)
 }
 
 const restartGame = () => {
-    if (!userStore.playerId || !roomId.value) return
-    wsStore.restartGame(roomId.value, userStore.playerId)
+  if (!userStore.playerId || !roomId.value) return
+  wsStore.restartGame(roomId.value, userStore.playerId)
 }
 
 watchEffect(() => {
-    if (roomStore.roomInfo.status === 'WAITING' && roomId.value) {
-        gameStore.reset()
-        router.push(`/waiting/${roomId.value}`)
-    }
+  if (roomStore.roomInfo.status === 'WAITING' && roomId.value) {
+    gameStore.reset()
+    router.push(`/waiting/${roomId.value}`)
+  }
 })
 
 watchEffect(() => {
-    if (miniGame.value.phase !== 'pending') {
-        showMiniGameStartNotice.value = false
-        isMiniGameStarting.value = false
-        return
-    }
+  if (miniGame.value.phase !== 'pending') {
+    showMiniGameStartNotice.value = false
+    isMiniGameStarting.value = false
+    return
+  }
 
-    if (isBoardMoving.value || isMiniGameStarting.value || catchEffect.value || pendingCatchEffect.value) return
-    isMiniGameStarting.value = true
-    showMiniGameStartNotice.value = true
-    window.setTimeout(() => {
-        showMiniGameStartNotice.value = false
-        gameStore.startMiniGame()
-        isMiniGameStarting.value = false
-    }, 2000)
+  if (isBoardMoving.value || isMiniGameStarting.value || catchEffect.value || pendingCatchEffect.value) return
+  isMiniGameStarting.value = true
+  showMiniGameStartNotice.value = true
+  window.setTimeout(() => {
+    showMiniGameStartNotice.value = false
+    gameStore.startMiniGame()
+    isMiniGameStarting.value = false
+  }, 2000)
 })
 
 const handleMiniGameSubmit = (score: number) => {
-    if (!roomId.value || !userStore.playerId || !miniGame.value.gameType) return
-    // 점수는 높을수록 유리하도록 변환 (시간 기반 -> 역수 점수)
-    const safeScore = Math.max(score, 0.001)
-    const resultValue = Math.max(1, Math.round((1 / safeScore) * 1000))
-    wsStore.submitMiniGameResult(roomId.value, userStore.playerId, miniGame.value.gameType, resultValue)
+  if (!roomId.value || !userStore.playerId || !miniGame.value.gameType) return
+  // 점수는 높을수록 유리하도록 변환 (시간 기반 -> 역수 점수)
+  const safeScore = Math.max(score, 0.001)
+  const resultValue = Math.max(1, Math.round((1 / safeScore) * 1000))
+  wsStore.submitMiniGameResult(roomId.value, userStore.playerId, miniGame.value.gameType, resultValue)
 }
 
 const handleMiniGameClose = () => {
-    wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
-    gameStore.clearMiniGame()
+  wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+  gameStore.clearMiniGame()
 }
 
 watch(
-    () => miniGame.value.phase,
-    async (phase) => {
-        if (phase !== 'result') return
-        const token = ++miniGameNoticeToken
-        isMiniGameWinnerNoticeActive.value = true
-        const name = winnerName.value
-        const rewardBuff = miniGame.value.result?.rewardBuff
-        const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
-        await showSystemNotice(noticeText, 2000)
-        if (token !== miniGameNoticeToken) return
-        isMiniGameWinnerNoticeActive.value = false
+  () => miniGame.value.phase,
+  async (phase) => {
+    if (phase !== 'result') return
+    const token = ++miniGameNoticeToken
+    isMiniGameWinnerNoticeActive.value = true
+    const name = winnerName.value
+    const rewardBuff = miniGame.value.result?.rewardBuff
+    const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
+    await showSystemNotice(noticeText, 2000)
+    if (token !== miniGameNoticeToken) return
+    isMiniGameWinnerNoticeActive.value = false
 
-        if (!rewardBuff || rewardBuff === 'NONE') {
-            wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
-            gameStore.clearMiniGame()
-        }
+    if (!rewardBuff || rewardBuff === 'NONE') {
+      wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+      gameStore.clearMiniGame()
     }
+  }
 )
 
 /** 버프 룰렛이 끝난 뒤(결과 확인 후) 획득 아이템 알림 */
 const handleBuffRouletteDone = async () => {
-    const name = winnerName.value
-    const buffCode = buffRouletteCode.value
-    const itemLabel = buffCode ? getBuffLabelForNotice(buffCode) : ''
-    if (name && itemLabel) {
-        await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
-    }
-    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
-    gameStore.clearMiniGame()
+  const name = winnerName.value
+  const buffCode = buffRouletteCode.value
+  const itemLabel = buffCode ? getBuffLabelForNotice(buffCode) : ''
+  if (name && itemLabel) {
+    await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+  }
+  wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+  gameStore.clearMiniGame()
 }
 
 watch(
-    () => gamePhase.value,
-    async (phase) => {
-        if (phase === 'WAITING') {
-            hasShownGameStartNotice.value = false
-            return
-        }
-        if (phase === 'STARTING' && !hasShownGameStartNotice.value) {
-            hasShownGameStartNotice.value = true
-            await showSystemNotice('게임이 시작됩니다.', 2000)
-        }
-    },
-    { immediate: true }
+  () => gamePhase.value,
+  async (phase) => {
+    if (phase === 'WAITING') {
+      hasShownGameStartNotice.value = false
+      return
+    }
+    if (phase === 'STARTING' && !hasShownGameStartNotice.value) {
+      hasShownGameStartNotice.value = true
+      await showSystemNotice('게임이 시작됩니다.', 2000)
+    }
+  },
+  { immediate: true }
 )
 
 watch(
-    () => [isGameFinished.value, gamePhase.value] as const,
-    async ([finished, phase]) => {
-        if (!finished && phase !== 'FINISHED') return
-        if (hasShownGameEndNotice.value) return
-        if (isBoardMoving.value || gameStore.movementInProgress) return
-        hasShownGameEndNotice.value = true
-        const token = ++gameEndNoticeToken
-        isGameEndNoticeActive.value = true
-        await showSystemNotice('게임이 종료되었습니다.', 2000)
-        if (token !== gameEndNoticeToken) return
-        isGameEndNoticeActive.value = false
-    }
+  () => [isGameFinished.value, gamePhase.value] as const,
+  async ([finished, phase]) => {
+    if (!finished && phase !== 'FINISHED') return
+    if (hasShownGameEndNotice.value) return
+    if (isBoardMoving.value || gameStore.movementInProgress) return
+    hasShownGameEndNotice.value = true
+    const token = ++gameEndNoticeToken
+    isGameEndNoticeActive.value = true
+    await showSystemNotice('게임이 종료되었습니다.', 2000)
+    if (token !== gameEndNoticeToken) return
+    isGameEndNoticeActive.value = false
+  }
 )
 
 onMounted(() => {
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    const lastPage = sessionStorage.getItem('docq:lastPage')
-    if (nav?.type === 'reload' && lastPage === 'game') {
-        sessionStorage.removeItem('docq:lastPage')
-        uiStore.openConfirm({
-            title: '연결 끊김',
-            message: '연결이 끊겼습니다. 메인으로 이동합니다.',
-            confirmLabel: '확인',
-            icon: 'warning',
-            variant: 'danger',
-            showCancel: false,
-            onConfirm: () => router.replace('/')
-        })
-        return
-    }
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+  const lastPage = sessionStorage.getItem('docq:lastPage')
+  if (nav?.type === 'reload' && lastPage === 'game') {
     sessionStorage.removeItem('docq:lastPage')
-    if (roomId.value) {
-        wsStore.subscribeMiniGame(roomId.value)
-    }
+    uiStore.openConfirm({
+      title: '연결 끊김',
+      message: '연결이 끊겼습니다. 메인으로 이동합니다.',
+      confirmLabel: '확인',
+      icon: 'warning',
+      variant: 'danger',
+      showCancel: false,
+      onConfirm: () => router.replace('/')
+    })
+    return
+  }
+  sessionStorage.removeItem('docq:lastPage')
+  if (roomId.value) {
+    wsStore.subscribeMiniGame(roomId.value)
+  }
 })
 
 onUnmounted(() => {
-    window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -537,26 +537,16 @@ onUnmounted(() => {
     <div class="map-focus-blur" aria-hidden="true" />
 
     <!-- 3D 보드게임 컴포넌트 (배경) -->
-    <GameBoard 
-      class="game-board-layer"
-      @movement-change="(moving) => (isBoardMoving = moving)" 
-    />
+    <GameBoard class="game-board-layer" @movement-change="(moving) => (isBoardMoving = moving)" />
 
-    <MiniGameModal
-      v-if="isMiniGameActive && miniGameUiType && !showBuffRoulette"
-      :game-type="miniGameUiType"
-      :time-limit-ms="miniGame.timeLimitMs ?? undefined"
-      :description="miniGame.description ?? undefined"
-      :players="miniGamePlayers"
-      :result="miniGame.result ?? undefined"
-      @submit="handleMiniGameSubmit"
-      @close="handleMiniGameClose"
-    />
+    <MiniGameModal v-if="isMiniGameActive && miniGameUiType && !showBuffRoulette" :game-type="miniGameUiType"
+      :time-limit-ms="miniGame.timeLimitMs ?? undefined" :description="miniGame.description ?? undefined"
+      :players="miniGamePlayers" :result="miniGame.result ?? undefined" @submit="handleMiniGameSubmit"
+      @close="handleMiniGameClose" />
 
     <QuizOverlay
       v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isBoardMoving && !gameStore.movementInProgress && !isMiniGameActive && !showMiniGameStartNotice"
-      @submit="submitAnswer"
-    />
+      @submit="submitAnswer" />
 
     <RouletteOverlay />
 
@@ -566,12 +556,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <BuffRouletteOverlay
-      v-if="buffRouletteCode && !isMiniGameWinnerNoticeActive"
-      :buff-code="buffRouletteCode"
-      :winner-name="winnerName"
-      @done="handleBuffRouletteDone"
-    />
+    <BuffRouletteOverlay v-if="buffRouletteCode && !isMiniGameWinnerNoticeActive" :buff-code="buffRouletteCode"
+      :winner-name="winnerName" @done="handleBuffRouletteDone" />
 
     <transition name="result-pop">
       <div v-if="systemNotice" class="system-notice">
@@ -582,35 +568,34 @@ onUnmounted(() => {
     </transition>
 
     <!-- UI 오버레이 -->
-    <div v-if="!isMiniGameActive && !showMiniGameStartNotice" class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
+    <div v-if="!isMiniGameActive && !showMiniGameStartNotice"
+      class="ui-overlay pointer-events-none flex flex-col justify-between p-6">
       <div class="corner-players pointer-events-auto">
-        <div
-          v-for="(p, idx) in cornerPlayers"
-          :key="p?.playerId ?? `corner-empty-${idx}`"
-          class="corner-card flex flex-row items-center overflow-visible"
-          :class="[
+        <div v-for="(p, idx) in cornerPlayers" :key="p?.playerId ?? `corner-empty-${idx}`"
+          class="corner-card flex flex-row items-center overflow-visible" :class="[
             `corner-${idx + 1}`,
             { 'corner-card-active': p?.playerId === currentTurnPlayer?.playerId }
-          ]"
-        >
+          ]">
           <template v-if="p">
             <!-- Left: Avatar (Static Emoji) -->
-            <div class="w-[80px] h-[80px] flex items-center justify-center text-6xl pointer-events-none z-10 -ml-2">
-                {{ roomStore.users.find(u => u.playerId === p.playerId)?.avatar || '👤' }}
+            <div class="flex items-center justify-center pointer-events-none z-10 px-4">
+              <div class="text-7xl drop-shadow-md shrink-0 leading-snug">{{roomStore.users.find(u => u.playerId ===
+                p.playerId)?.avatar || '👤'}}</div>
             </div>
 
             <!-- Right: Info -->
-            <div class="flex flex-col flex-1 pl-2 z-0">
-                <div class="corner-card-name text-lg">
+            <!-- Right: Info -->
+            <div class="flex flex-col flex-1 pl-2 z-0 justify-center">
+              <div class="corner-card-name text-2xl font-bold truncate text-[#5d4037]">
                 {{ p.nickname }}
-                <span v-if="p.playerId === myPlayerId" class="corner-card-me">MY</span>
-                <span v-if="p.playerId === currentTurnPlayer?.playerId" class="corner-card-turn">TURN</span>
-                </div>
-                <div class="corner-card-meta">
+                <span v-if="p.playerId === myPlayerId" class="corner-card-me text-[#ff7043]">MY</span>
+                <span v-if="p.playerId === currentTurnPlayer?.playerId"
+                  class="corner-card-turn text-[#d84315]">TURN</span>
+              </div>
+              <div class="corner-card-meta flex gap-2 mt-1">
                 <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
-                <span class="text-sm">맞춘 문제: {{ p.score ?? 0 }}</span>
-                <span class="text-xs text-slate-500">POS {{ p.position ?? 0 }}</span>
-                </div>
+                <span class="text-lg font-bold text-[#8d6e63]">Score: {{ p.score ?? 0 }}</span>
+              </div>
             </div>
           </template>
           <template v-else>
@@ -626,80 +611,57 @@ onUnmounted(() => {
           </div>
         </div>
       </transition>
-      
+
       <!-- 상단 정보: 라운드, 타이머 -->
       <header class="top-center-header flex justify-between items-start pointer-events-auto gap-4">
-         <div class="bg-white/90 backdrop-blur rounded-xl p-4 shadow-lg border-2 border-slate-200">
-            <h2 class="text-xl font-black text-slate-700">
-               ROUND {{ gameStore.gameState.round || 1 }}
-            </h2>
-         </div>
+        <div class="bg-white/90 backdrop-blur rounded-xl p-4 shadow-lg border-2 border-slate-200">
+          <h2 class="text-xl font-black text-slate-700">
+            ROUND {{ gameStore.gameState.round || 1 }}
+          </h2>
+        </div>
 
-         <div v-if="currentQuiz && gamePhase === 'QUIZ_TIME'" 
-              class="flex flex-col items-center">
-            <div class="text-4xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]"
-                 :class="{'text-red-400 animate-pulse': timeRemaining <= 5}">
-               {{ Math.ceil(timeRemaining) }}
-            </div>
-            <div class="text-white text-xs font-bold drop-shadow">SEC</div>
-         </div>
+        <div v-if="currentQuiz && gamePhase === 'QUIZ_TIME'" class="flex flex-col items-center">
+          <div class="text-4xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]"
+            :class="{ 'text-red-400 animate-pulse': timeRemaining <= 5 }">
+            {{ Math.ceil(timeRemaining) }}
+          </div>
+          <div class="text-white text-xs font-bold drop-shadow">SEC</div>
+        </div>
       </header>
 
       <!-- ResultModal was moved to bottom -->
     </div>
 
     <div class="global-controls pointer-events-auto">
-      <button
-        class="menu-button"
-        @click="isMenuOpen = !isMenuOpen"
-        aria-label="menu"
-      >
+      <button class="menu-button" @click="isMenuOpen = !isMenuOpen" aria-label="menu">
         <span class="material-symbols-outlined">menu</span>
       </button>
       <div v-if="isMenuOpen" class="menu-panel">
         <button
           class="bg-white text-slate-700 font-bold px-4 py-2 rounded-lg border border-slate-200 shadow hover:bg-white"
-          @click="isMenuOpen = false; openConfirm('leave')"
-        >
+          @click="isMenuOpen = false; openConfirm('leave')">
           나가기
         </button>
-        <button
-          v-if="isHost"
-          class="bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-rose-600"
-          @click="isMenuOpen = false; openConfirm('end')"
-        >
+        <button v-if="isHost" class="bg-rose-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-rose-600"
+          @click="isMenuOpen = false; openConfirm('end')">
           게임 종료
         </button>
-        <button
-          v-if="isHost"
+        <button v-if="isHost"
           class="bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-emerald-600"
-          @click="isMenuOpen = false; openConfirm('restart')"
-        >
+          @click="isMenuOpen = false; openConfirm('restart')">
           재시작
         </button>
       </div>
     </div>
-    
-    <!-- 결과 모달 (Global Scope) -->
-    <ResultModal 
-      v-if="canShowResultModal && !isGameEndNoticeActive" 
-      :is-open="true"
-      :ranking-results="finalRankingResults ?? rankingResults"
-      :is-host="isHost"
-      @close="openConfirm('leave')"
-      @restart="openConfirm('restart')"
-    />
 
-    <ConfirmModal
-      :isOpen="!!confirmAction"
-      :title="confirmConfig.title"
-      :message="confirmConfig.message"
-      :confirmLabel="confirmConfig.confirmLabel"
-      :icon="confirmConfig.icon"
-      :variant="confirmConfig.variant"
-      @close="closeConfirm"
-      @confirm="handleConfirm"
-    />
+    <!-- 결과 모달 (Global Scope) -->
+    <ResultModal v-if="canShowResultModal && !isGameEndNoticeActive" :is-open="true"
+      :ranking-results="finalRankingResults ?? rankingResults" :is-host="isHost" @close="openConfirm('leave')"
+      @restart="openConfirm('restart')" />
+
+    <ConfirmModal :isOpen="!!confirmAction" :title="confirmConfig.title" :message="confirmConfig.message"
+      :confirmLabel="confirmConfig.confirmLabel" :icon="confirmConfig.icon" :variant="confirmConfig.variant"
+      @close="closeConfirm" @confirm="handleConfirm" />
   </div>
 </template>
 
@@ -747,8 +709,10 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 10;     /* 3D 캔버스보다 위에 표시 */
-  pointer-events: none; /* 클릭 이벤트를 3D 쪽으로 통과시킴 (버튼 등은 pointer-events-auto 필요) */
+  z-index: 10;
+  /* 3D 캔버스보다 위에 표시 */
+  pointer-events: none;
+  /* 클릭 이벤트를 3D 쪽으로 통과시킴 (버튼 등은 pointer-events-auto 필요) */
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -758,7 +722,8 @@ onUnmounted(() => {
 .quiz-contents {
   width: 100%;
   height: 100%;
-  pointer-events: auto; /* 내부 버튼 클릭 가능하도록 */
+  pointer-events: auto;
+  /* 내부 버튼 클릭 가능하도록 */
 }
 
 /* 유틸리티 클래스 (Tailwind가 적용 안 될 경우를 대비해 pointer-events 명시) */
@@ -775,20 +740,28 @@ onUnmounted(() => {
 
 .corner-card {
   position: absolute;
-  width: 280px;
-  height: 110px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 3px solid #e2e8f0;
-  border-radius: 20px;
+  width: 340px;
+  height: 140px;
+  background: #fff8e1;
+  border: 4px solid #bcaaa4;
+  border-radius: 16px;
   padding: 12px 16px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
   pointer-events: auto;
   transition: all 0.3s ease;
+  font-family: 'Jua', sans-serif;
+  color: #5d4037;
+}
+
+/* 짝수 번째 카드 색상 변경 (스타일 다양화) */
+.corner-2,
+.corner-4 {
+  background: #fff3e0;
 }
 
 .corner-card-active {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 10px 24px rgba(0, 0, 0, 0.12);
+  border-color: #ff7043;
+  transform: scale(1.05);
 }
 
 .corner-1 {
@@ -1061,12 +1034,19 @@ onUnmounted(() => {
   font-size: 1.8rem;
   font-weight: 900;
   color: #1f2937;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   animation: popIn 0.25s ease-out;
 }
 
 @keyframes popIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 </style>
