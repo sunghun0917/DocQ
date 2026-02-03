@@ -32,6 +32,7 @@ public class AuthDto {
         private Long id;
         private String loginId;
         private String nickname;
+        private String playerId;  // 게임용 playerId (UUID)
         private LocalDateTime createdAt;
     }
 
@@ -54,5 +55,6 @@ public class AuthDto {
         private Long id;
         private String loginId;
         private String nickname;
+        private String playerId;  // 게임용 playerId (UUID)
     }
 }

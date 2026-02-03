@@ -1,6 +1,8 @@
 package com.ssafy.docq_backend.domain.auth.service;
 
 import com.ssafy.docq_backend.domain.auth.dto.AuthDto;
+import com.ssafy.docq_backend.domain.player.entity.Player;
+import com.ssafy.docq_backend.domain.player.repository.PlayerRepository;
 import com.ssafy.docq_backend.domain.user.entity.User;
 import com.ssafy.docq_backend.domain.user.repository.UserRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final PlayerRepository playerRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
@@ -29,6 +32,10 @@ public class AuthService {
             throw new DocqException(ErrorCode.DUPLICATE_LOGIN_ID);
         }
         if (userRepository.existsByNickname(request.getNickname())) {
+            throw new DocqException(ErrorCode.DUPLICATE_NICKNAME);
+        }
+        // 현재 접속 중인 플레이어(게스트)와 닉네임 중복 체크
+        if (playerRepository.existsByNickname(request.getNickname())) {
             throw new DocqException(ErrorCode.DUPLICATE_NICKNAME);
         }
 
@@ -44,15 +51,21 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        // 세션 생성
+        // 회원 플레이어 생성 (playerId 생성 및 저장)
         String playerId = UUID.randomUUID().toString();
-        SessionDto sessionDto = SessionDto.forMember(playerId, user.getId(), user.getLoginId(), user.getNickname());
+        Player player = Player.member(playerId, user.getNickname(), user.getId());
+                
+        playerRepository.save(player);
+
+        // 세션 생성
+        SessionDto sessionDto = SessionDto.forMember(player.getPlayerId(), user.getId(), user.getLoginId(), user.getNickname());
         session.setAttribute("user", sessionDto);
 
         return AuthDto.SignupResponse.builder()
                 .id(user.getId())
                 .loginId(user.getLoginId())
                 .nickname(user.getNickname())
+                .playerId(player.getPlayerId())
                 .createdAt(now)
                 .build();
     }
@@ -66,15 +79,21 @@ public class AuthService {
             throw new DocqException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        // 세션 생성
+        // 회원 플레이어 생성 (매 로그인마다 새 playerId 부여)
         String playerId = UUID.randomUUID().toString();
-        SessionDto sessionDto = SessionDto.forMember(playerId, user.getId(), user.getLoginId(), user.getNickname());
+        Player player = Player.member(playerId, user.getNickname(), user.getId());
+                
+        playerRepository.save(player);
+
+        // 세션 생성
+        SessionDto sessionDto = SessionDto.forMember(player.getPlayerId(), user.getId(), user.getLoginId(), user.getNickname());
         session.setAttribute("user", sessionDto);
 
         return AuthDto.LoginResponse.builder()
                 .id(user.getId())
                 .loginId(user.getLoginId())
                 .nickname(user.getNickname())
+                .playerId(player.getPlayerId())
                 .build();
     }
 }

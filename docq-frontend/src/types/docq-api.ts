@@ -80,7 +80,6 @@ export interface CheckIdResponse {
 
 // 방 생성
 export interface CreateRoomRequest {
-    playerId: string
     capacity: number
     title: string
     isPrivate?: boolean

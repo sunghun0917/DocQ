@@ -1,5 +1,6 @@
 package com.ssafy.docq_backend.domain.user.service;
 
+import com.ssafy.docq_backend.domain.player.repository.PlayerRepository;
 import com.ssafy.docq_backend.domain.user.dto.UserDto;
 import com.ssafy.docq_backend.domain.user.entity.User;
 import com.ssafy.docq_backend.domain.user.repository.UserRepository;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PlayerRepository playerRepository;
 
     public UserDto.LoginIdExistsResponse checkLoginIdExists(String loginId) {
         boolean exists = userRepository.existsByLoginId(loginId);
@@ -26,7 +28,10 @@ public class UserService {
     }
 
     public UserDto.NicknameExistsResponse checkNicknameExists(String nickname) {
-        boolean exists = userRepository.existsByNickname(nickname);
+        boolean inUser = userRepository.existsByNickname(nickname);
+        boolean inPlayer = playerRepository.existsByNickname(nickname);
+        boolean exists = inUser || inPlayer;
+
         return UserDto.NicknameExistsResponse.builder()
                 .exists(exists)
                 .message(exists ? "이미 사용중인 닉네임입니다." : "사용 가능한 닉네임입니다.")

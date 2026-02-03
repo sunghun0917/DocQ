@@ -46,7 +46,6 @@ const createRoom = async () => {
 
   try {
     const room = await createRoomApi({
-      playerId: userStore.playerId,
       capacity: maxUsers.value,
       title: roomName.value.trim()
     })
