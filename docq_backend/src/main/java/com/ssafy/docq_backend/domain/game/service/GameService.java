@@ -1497,4 +1497,63 @@ public class GameService {
         }
         return quizzes;
     }
+
+    // ========== AI Callback Handlers ==========
+
+    public void handleAiQuizResult(String jobId, List<AiDto.QuizItem> quizItems) {
+        Room room = roomRepository.findByAiJobId(jobId)
+                .orElseThrow(() -> {
+                    log.error("Room not found for jobId: {}", jobId);
+                    return new DocqException(ErrorCode.ROOM_NOT_FOUND);
+                });
+
+        // Convert AiDto.QuizItem to Quiz entity
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < quizItems.size(); i++) {
+            AiDto.QuizItem item = quizItems.get(i);
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1))
+                    .question(item.getQuestion())
+                    .options(item.getOptions())
+                    .answerIndex(item.getAnswerIndex())
+                    .answerText(item.getAnswerText())
+                    .explanation(item.getExplanation())
+                    .build());
+        }
+
+        room.setQuizList(quizzes);
+        room.setAiStatus(AiStatus.COMPLETED);
+        roomRepository.save(room);
+
+        log.info("AI quizzes loaded for room {}: {} quizzes", room.getId(), quizzes.size());
+
+        // Broadcast update to room
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+        message.put("status", "completed");
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/quiz", message);
+    }
+
+    public void handleAiJobFailed(String jobId, String error) {
+        Room room = roomRepository.findByAiJobId(jobId)
+                .orElse(null);
+
+        if (room == null) {
+            log.error("Room not found for failed jobId: {}", jobId);
+            return;
+        }
+
+        room.setAiStatus(AiStatus.FAILED);
+        roomRepository.save(room);
+
+        log.error("AI job failed for room {}: {}", room.getId(), error);
+
+        // Broadcast failure to room
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATION_FAILED");
+        message.put("error", error);
+        message.put("status", "failed");
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/quiz", message);
+    }
 }
