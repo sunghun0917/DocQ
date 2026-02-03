@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from app.pdf_pipeline import extract_text_with_fallback
 from app.fast_quiz_generator import generate_dynamic_quizzes
 
@@ -24,8 +25,11 @@ def run_gpu_job(job: dict) -> dict:
     else:
         target = 30
 
-    quizzes = generate_dynamic_quizzes(text, target=target)
+    logger.info(f"[WORKER] Ready crerate quizzes")
 
+    quizzes = asyncio.run(
+        generate_dynamic_quizzes(text, target=target)
+    )
     logger.info(f"[WORKER] Finished job {job_id}")
 
     return {
