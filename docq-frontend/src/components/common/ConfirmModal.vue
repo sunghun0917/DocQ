@@ -14,14 +14,14 @@ const props = defineProps<{
 
 const emit = defineEmits(['close', 'confirm']);
 
-const buttonClass = computed(() => {
-  return props.variant === 'primary'
-    ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30'
-    : 'bg-[#e11d48] hover:bg-[#be123c] shadow-rose-500/30';
+const confirmBtnClass = computed(() => {
+  return props.variant === 'primary' 
+    ? 'cartoon-btn primary' 
+    : 'cartoon-btn danger';
 });
 
-const iconBgClass = computed(() => {
-  return props.variant === 'primary' ? 'text-emerald-500' : 'text-[#e11d48]';
+const iconClass = computed(() => {
+  return props.variant === 'primary' ? 'text-[#7cb342]' : 'text-[#ef5350]';
 });
 
 const showCancelButton = computed(() => props.showCancel !== false);
@@ -30,41 +30,47 @@ const cancelText = computed(() => props.cancelLabel || '취소');
 
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="fixed inset-0 z-[9999] flex items-center justify-center px-4" role="dialog">
+    <div v-if="isOpen" class="fixed inset-0 z-[9999] flex items-center justify-center px-4 font-jua" role="dialog">
       <div
-        class="absolute inset-0 bg-[#0f172a]/35 backdrop-blur-sm animate-fade-in"
+        class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
         @click="emit('close')"
       ></div>
 
       <div
-        class="relative bg-white w-full max-w-[360px] rounded-[18px] p-8 shadow-[0_20px_60px_-15px_rgba(15,23,42,0.3)]
-               flex flex-col items-center text-center border-4 border-white ring-4 ring-[#ffe4e6] animate-pop-in"
+        class="relative bg-[#fff8e1] w-full max-w-[400px] rounded-[24px] !p-4 shadow-[0_12px_35px_rgba(0,0,0,0.25)]
+               flex flex-col items-center text-center border-[6px] border-[#8d6e63] animate-pop-in"
       >
-        <div class="w-16 h-16 rounded-full bg-[#fff1f2] flex items-center justify-center mb-5 shadow-inner">
-          <span class="material-symbols-outlined text-[32px]" :class="iconBgClass">
+        <!-- 장식용 나사 -->
+        <div class="absolute top-4 left-4 w-3 h-3 rounded-full bg-[#bcaaa4] border border-[#5d4037]"></div>
+        <div class="absolute top-4 right-4 w-3 h-3 rounded-full bg-[#bcaaa4] border border-[#5d4037]"></div>
+        <div class="absolute bottom-4 left-4 w-3 h-3 rounded-full bg-[#bcaaa4] border border-[#5d4037]"></div>
+        <div class="absolute bottom-4 right-4 w-3 h-3 rounded-full bg-[#bcaaa4] border border-[#5d4037]"></div>
+
+        <div class="w-20 h-20 rounded-full bg-white border-4 border-[#d7ccc8] flex items-center justify-center mb-5 shadow-sm">
+          <span class="material-symbols-outlined text-[40px]" :class="iconClass">
             {{ icon || 'help' }}
           </span>
         </div>
 
-        <h3 class="text-2xl font-extrabold text-[#881337] mb-2 tracking-tight">
+        <h3 class="text-3xl text-[#5d4037] mb-3 tracking-wide drop-shadow-sm jua-font">
           {{ title }}
         </h3>
-        <p class="text-[#9f1239]/80 text-sm font-medium leading-relaxed mb-8">
+        <p class="text-[#8d6e63] text-lg font-medium leading-relaxed mb-8 break-keep px-2">
           {{ message }}
         </p>
 
-        <div class="flex gap-3 w-full">
+        <div class="flex gap-4 w-full">
           <button
             v-if="showCancelButton"
             @click="emit('close')"
-            class="flex-1 h-12 rounded-2xl font-bold text-[#881337] bg-white border-2 border-[#fecdd3] hover:bg-[#fff1f2] transition-colors"
+            class="cartoon-btn secondary flex-1"
           >
             {{ cancelText }}
           </button>
           <button
             @click="emit('confirm')"
-            class="h-12 rounded-2xl font-bold text-white shadow-lg transition-transform active:scale-95"
-            :class="[buttonClass, showCancelButton ? 'flex-1' : 'w-full']"
+            class="flex-1"
+            :class="confirmBtnClass"
           >
             {{ confirmLabel }}
           </button>
@@ -75,6 +81,56 @@ const cancelText = computed(() => props.cancelLabel || '취소');
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
+.font-jua { font-family: 'Jua', sans-serif; }
+.jua-font { font-family: 'Jua', sans-serif; }
+
+/* 카툰 버튼 스타일 */
+.cartoon-btn {
+  height: 54px;
+  border-radius: 16px;
+  font-size: 1.35rem;
+  color: white;
+  font-family: 'Jua', sans-serif;
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  top: 0;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.2);
+}
+
+.cartoon-btn:active { top: 5px; box-shadow: 0 0 0 rgba(0,0,0,0.2); }
+
+/* Primary (Green) */
+.cartoon-btn.primary {
+  background-color: #7cb342;
+  box-shadow: 0 5px 0 #558b2f;
+}
+.cartoon-btn.primary:hover { background-color: #8bc34a; }
+.cartoon-btn.primary:active { box-shadow: 0 0 0 #558b2f; }
+
+/* Danger (Red) */
+.cartoon-btn.danger {
+  background-color: #ef5350;
+  box-shadow: 0 5px 0 #c62828;
+}
+.cartoon-btn.danger:hover { background-color: #ff7043; } /* Hover시 살짝 오렌지빛 */
+.cartoon-btn.danger:active { box-shadow: 0 0 0 #c62828; }
+
+/* Secondary (Cancel/Gray) */
+.cartoon-btn.secondary {
+  background-color: #ffe0b2; 
+  color: #5d4037;
+  box-shadow: 0 5px 0 #ffcc80;
+}
+.cartoon-btn.secondary:hover { background-color: #ffcc80; }
+.cartoon-btn.secondary:active { box-shadow: 0 0 0 #ffcc80; }
+
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
@@ -91,11 +147,11 @@ const cancelText = computed(() => props.cancelLabel || '취소');
 @keyframes popIn {
   from {
     opacity: 0;
-    transform: scale(0.9) translateY(10px);
+    transform: scale(0.9) translateY(10px) rotate(-2deg);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1) translateY(0) rotate(0deg);
   }
 }
 </style>
