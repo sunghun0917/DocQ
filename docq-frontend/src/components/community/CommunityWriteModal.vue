@@ -1,17 +1,48 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useUserStore } from '@/stores/userStore';
+import { getMyQuizzes, type MyQuizItem } from '@/services/api';
 
 const emit = defineEmits(['close', 'submit']);
+const userStore = useUserStore();
 
+const quizId = ref<number | null>(null);
 const title = ref('');
 const content = ref('');
+const myQuizzes = ref<MyQuizItem[]>([]);
+const isLoadingQuizzes = ref(false);
+
+// 내가 만든 퀴즈 목록 가져오기
+const fetchMyQuizzes = async () => {
+  if (userStore.isGuest || !userStore.userId) {
+    return;
+  }
+  isLoadingQuizzes.value = true;
+  try {
+    const res = await getMyQuizzes(userStore.userId);
+    myQuizzes.value = res.quizzes;
+  } catch (error) {
+    console.error('내 퀴즈 목록 조회 실패:', error);
+    alert('퀴즈 목록을 불러오는데 실패했습니다.');
+  } finally {
+    isLoadingQuizzes.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchMyQuizzes();
+});
 
 const handleSubmit = () => {
+  if (!quizId.value || quizId.value <= 0) {
+    alert('퀴즈를 선택해주세요!');
+    return;
+  }
   if (!title.value.trim() || !content.value.trim()) {
     alert('제목과 내용을 모두 입력해주세요!');
     return;
   }
-  emit('submit', { title: title.value, content: content.value });
+  emit('submit', { quizId: quizId.value, title: title.value, content: content.value });
 };
 </script>
 
@@ -30,6 +61,24 @@ const handleSubmit = () => {
 
       <!-- 입력 폼 -->
       <div class="flex flex-col gap-4">
+        <div>
+          <label class="block font-bold text-[#8d6e63] mb-1 ml-1 text-sm">퀴즈 선택</label>
+          <select
+            v-model.number="quizId"
+            :disabled="isLoadingQuizzes || myQuizzes.length === 0"
+            class="w-full bg-white border-4 border-[#d7ccc8] rounded-xl px-4 py-3 font-bold text-[#5d4037] outline-none focus:border-[#7cb342] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option :value="null" disabled>
+              {{ isLoadingQuizzes ? '퀴즈 목록 불러오는 중...' : (myQuizzes.length === 0 ? '만든 퀴즈가 없습니다' : '퀴즈를 선택하세요') }}
+            </option>
+            <option v-for="quiz in myQuizzes" :key="quiz.quizId" :value="quiz.quizId">
+              {{ quiz.title }} (문제 {{ quiz.questionCount }}개)
+            </option>
+          </select>
+          <p v-if="!isLoadingQuizzes && myQuizzes.length === 0" class="text-xs text-[#bcaaa4] mt-1 ml-1">
+            PDF를 업로드하여 퀴즈를 먼저 만들어주세요.
+          </p>
+        </div>
         <div>
           <label class="block font-bold text-[#8d6e63] mb-1 ml-1 text-sm">제목</label>
           <input 

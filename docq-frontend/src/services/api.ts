@@ -23,6 +23,114 @@ import type {
     GuestMeResponse
 } from '@/types/docq-api'
 
+// ==================== Community / Boards Types ====================
+
+export type BoardAuthor = {
+    userId: number
+    nickname: string
+}
+
+export type BoardListItem = {
+    boardId: number
+    title: string
+    content: string
+    author: BoardAuthor
+    quizId: number | null
+    questionCount: number
+    likeCount: number
+    commentCount: number
+    storedCount: number
+    likedByMe: boolean
+    storedByMe: boolean
+    createdAt: string
+}
+
+export type BoardListResponse = {
+    page: number
+    size: number
+    total: number
+    items: BoardListItem[]
+}
+
+export type BoardDetailQuiz = {
+    quizId: number
+    quizCount: number
+    quizList: string[] // question만
+}
+
+export type BoardDetailResponse = {
+    boardId: number
+    title: string
+    content: string
+    author: BoardAuthor
+    quiz: BoardDetailQuiz | null
+    likeCount: number
+    commentCount: number
+    likedByMe: boolean
+    storedByMe: boolean
+    createdAt: string
+}
+
+export type CreateBoardRequest = {
+    quizId: number
+    title: string
+    content: string
+}
+
+export type CreateBoardResponse = {
+    boardId: number
+}
+
+export type LikeResponse = {
+    boardId: number
+    liked: boolean
+    likeCount: number
+}
+
+export type StoreQuizResponse = {
+    quizId: number
+    stored: boolean
+}
+
+export type MyQuizItem = {
+    quizId: number
+    title: string
+    questionCount: number
+}
+
+export type MyQuizListResponse = {
+    quizzes: MyQuizItem[]
+}
+
+// ==================== Comments Types ====================
+
+export type CommentAuthor = {
+    userId: number
+    nickname: string
+}
+
+export type CommentItem = {
+    commentId: number
+    author: CommentAuthor
+    content: string
+    createdAt: string
+}
+
+export type CommentListResponse = {
+    page: number
+    size: number
+    total: number
+    items: CommentItem[]
+}
+
+export type CreateCommentRequest = {
+    content: string
+}
+
+export type CreateCommentResponse = {
+    commentId: number
+}
+
 // Axios 인스턴스 생성
 const apiClient: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -141,15 +249,17 @@ export const verifyJoinRoom = async (data: JoinRoomRequest): Promise<JoinRoomRes
  * PDF 업로드 및 퀴즈 생성
  * POST /api/game/{roomId}/quiz/generate
  */
-export const generateQuiz = async (roomId: string, file: File): Promise<QuizGenerateResponse> => {
+export const generateQuiz = async (roomId: string, file: File, userId?: string): Promise<QuizGenerateResponse> => {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await apiClient.post(`/game/${roomId}/quiz/generate`, formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data'
-        }
-    })
+    const headers: Record<string, any> = { 'Content-Type': 'multipart/form-data' }
+    if (userId) {
+        const n = Number(userId)
+        if (!Number.isNaN(n)) headers['X-User-Id'] = n
+    }
+
+    const response = await apiClient.post(`/game/${roomId}/quiz/generate`, formData, { headers })
     return response.data
 }
 
@@ -204,6 +314,138 @@ export const getMyInfo = async (): Promise<MemberMeResponse | GuestMeResponse> =
     return response.data
 }
 
+// ==================== Community / Boards API ====================
+
+const buildUserIdHeader = (userId?: string) => {
+    if (!userId) return {}
+    const n = Number(userId)
+    if (Number.isNaN(n)) return {}
+    return { 'X-User-Id': n }
+}
+
+/**
+ * 게시판 목록 조회
+ * GET /boards?page={page}&size={size}
+ */
+export const getBoards = async (page = 1, size = 8, userId?: string): Promise<BoardListResponse> => {
+    const response = await apiClient.get<BoardListResponse>('/boards', {
+        params: { page, size },
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 게시글 상세 조회
+ * GET /boards/{boardId}
+ */
+export const getBoardDetail = async (boardId: number, userId?: string): Promise<BoardDetailResponse> => {
+    const response = await apiClient.get<BoardDetailResponse>(`/boards/${boardId}`, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 게시글 작성 (회원 전용: X-User-Id 목업)
+ * POST /boards
+ */
+export const createBoard = async (data: CreateBoardRequest, userId: string): Promise<CreateBoardResponse> => {
+    const response = await apiClient.post<CreateBoardResponse>('/boards', data, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 좋아요
+ * POST /boards/{boardId}/likes
+ */
+export const likeBoard = async (boardId: number, userId: string): Promise<LikeResponse> => {
+    const response = await apiClient.post<LikeResponse>(`/boards/${boardId}/likes`, null, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 좋아요 취소
+ * DELETE /boards/{boardId}/likes
+ */
+export const unlikeBoard = async (boardId: number, userId: string): Promise<LikeResponse> => {
+    const response = await apiClient.delete<LikeResponse>(`/boards/${boardId}/likes`, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 퀴즈 저장
+ * POST /quizzes/{quizId}/store
+ */
+export const storeQuiz = async (quizId: number, userId: string): Promise<StoreQuizResponse> => {
+    const response = await apiClient.post<StoreQuizResponse>(`/quizzes/${quizId}/store`, null, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 퀴즈 저장 취소 (언저장)
+ * DELETE /quizzes/{quizId}/store
+ */
+export const unstoreQuiz = async (quizId: number, userId: string): Promise<StoreQuizResponse> => {
+    const response = await apiClient.delete<StoreQuizResponse>(`/quizzes/${quizId}/store`, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 내가 만든 퀴즈 목록 조회
+ * GET /quizzes/my
+ */
+export const getMyQuizzes = async (userId: string): Promise<MyQuizListResponse> => {
+    const response = await apiClient.get<MyQuizListResponse>('/quizzes/my', {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+// ==================== Comments API ====================
+
+/**
+ * 댓글 목록 조회
+ * GET /boards/{boardId}/comments?page={page}&size={size}
+ */
+export const getComments = async (boardId: number, page = 1, size = 20): Promise<CommentListResponse> => {
+    const response = await apiClient.get<CommentListResponse>(`/boards/${boardId}/comments`, {
+        params: { page, size }
+    })
+    return response.data
+}
+
+/**
+ * 댓글 작성
+ * POST /boards/{boardId}/comments
+ */
+export const createComment = async (boardId: number, data: CreateCommentRequest, userId: string): Promise<CreateCommentResponse> => {
+    const response = await apiClient.post<CreateCommentResponse>(`/boards/${boardId}/comments`, data, {
+        headers: buildUserIdHeader(userId)
+    })
+    return response.data
+}
+
+/**
+ * 댓글 삭제
+ * DELETE /boards/{boardId}/comments/{commentId}
+ */
+export const deleteComment = async (boardId: number, commentId: number, userId: string): Promise<void> => {
+    await apiClient.delete(`/boards/${boardId}/comments/${commentId}`, {
+        headers: buildUserIdHeader(userId)
+    })
+}
+
 // ==================== 에러 처리 헬퍼 ====================
 
 /**
@@ -246,6 +488,17 @@ export default {
     login,
     logout,
     getMyInfo,
+    getBoards,
+    getBoardDetail,
+    createBoard,
+    likeBoard,
+    unlikeBoard,
+    storeQuiz,
+    unstoreQuiz,
+    getMyQuizzes,
+    getComments,
+    createComment,
+    deleteComment,
     getErrorMessage,
     getErrorCode
 }

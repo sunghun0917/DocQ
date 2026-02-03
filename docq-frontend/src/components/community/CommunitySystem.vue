@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import CommunityWriteModal from './CommunityWriteModal.vue';
 import CommunityDetailModal from './CommunityDetailModal.vue';
+import { createBoard, getBoardDetail, getBoards, likeBoard, unlikeBoard, storeQuiz, unstoreQuiz, getErrorCode, getErrorMessage, type BoardDetailResponse, type BoardListItem } from '@/services/api';
 
 const emit = defineEmits(['close']);
 const userStore = useUserStore();
@@ -14,29 +15,33 @@ const isDetailModalOpen = ref(false);
 const selectedQuiz = ref<any>(null);
 const currentSort = ref('newest');
 const currentPage = ref(1);
-const itemsPerPage = 8;
+const itemsPerPage = 8; // 서버 size와 맞춤
 const isThrottled = ref(false);
 const slideDirection = ref('next');
 
-// --- [API 명세 반영] 퀴즈 데이터 구조 ---
-const quizData = ref(Array.from({ length: 50 }).map((_, i) => ({
-  boardId: 50 - i, // id -> boardId
-  title: `재미있는 상식 퀴즈 ${50 - i}탄`,
-  content: "자료구조와 알고리즘 핵심 요약집입니다.",
-  // author를 객체로 변경 (API 명세 준수)
-  author: {
-    userId: i,
-    nickname: i % 3 === 0 ? (userStore.username || '개발왕') : '퀴즈마스터'
-  },
-  createdAt: "2026-02-01T13:10:00", // ISO String
-  likeCount: Math.floor(Math.random() * 300), // likes -> likeCount
-  commentCount: Math.floor(Math.random() * 50), // comments -> commentCount
-  saves: Math.floor(Math.random() * 100), // UI 표시용 (명세엔 없지만 UI 유지를 위해 둠)
-  questionCount: 10 + (i % 5),
-  // likedByMe, storedByMe는 상세조회에서 가져오지만 목록용 더미로 둠
-  likedByMe: false, 
-  storedByMe: false 
-})));
+// --- 서버에서 가져오는 게시글 목록 ---
+const boardItems = ref<(BoardListItem & { saves?: number })[]>([]);
+const total = ref(0);
+const isLoading = ref(false);
+
+const fetchBoards = async () => {
+  isLoading.value = true;
+  try {
+    const userId = userStore.isGuest ? undefined : userStore.userId;
+    const res = await getBoards(currentPage.value, itemsPerPage, userId);
+    total.value = res.total;
+    // 서버에서 받은 storedCount를 saves로 매핑, questionCount는 서버 응답 그대로 사용
+    boardItems.value = res.items.map((it) => ({
+      ...it,
+      saves: it.storedCount ?? 0, // 서버의 storedCount를 saves로 사용
+      questionCount: it.questionCount ?? 0, // 서버의 questionCount 사용 (없으면 0)
+    }));
+  } catch (error) {
+    console.error('게시판 목록 조회 실패:', error);
+  } finally {
+    isLoading.value = false;
+  }
+};
 
 // --- 정렬 옵션 (게스트 분기 처리) ---
 const sortOptions = computed(() => {
@@ -63,7 +68,7 @@ watch(() => userStore.isGuest, (newVal) => {
 
 // --- 필터링 로직 (API 필드명 적용) ---
 const filteredQuizzes = computed(() => {
-  let result = quizData.value.filter(q =>
+  let result = boardItems.value.filter(q =>
     q.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
     q.author.nickname.toLowerCase().includes(searchQuery.value.toLowerCase()) // author.nickname 접근
   );
@@ -84,11 +89,10 @@ const filteredQuizzes = computed(() => {
   return result;
 });
 
-const totalPages = computed(() => Math.ceil(filteredQuizzes.value.length / itemsPerPage));
-const paginatedQuizzes = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage;
-  return filteredQuizzes.value.slice(start, start + itemsPerPage);
-});
+// 서버 페이지네이션: total/size로 페이지 수 계산
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / itemsPerPage)));
+// 이미 한 페이지 단위로 받아오므로 그대로 표시 (검색/정렬은 현재 페이지 내에서만 적용)
+const paginatedQuizzes = computed(() => filteredQuizzes.value);
 
 const visiblePages = computed(() => {
   const total = totalPages.value;
@@ -101,26 +105,59 @@ const visiblePages = computed(() => {
 });
 
 watch([searchQuery, currentSort], () => { currentPage.value = 1; });
+watch(currentPage, () => { fetchBoards(); });
 
 // --- 핸들러 ---
 const toggleLike = (quiz: any) => {
   if (userStore.isGuest) return alert("로그인 후 이용 가능합니다.");
   // API: POST /boards/{boardId}/likes
-  quiz.likedByMe = !quiz.likedByMe;
-  quiz.likeCount += quiz.likedByMe ? 1 : -1;
+  const userId = userStore.userId;
+  if (!userId) return alert("로그인 후 이용 가능합니다.");
+  const boardId = quiz.boardId;
+  const action = quiz.likedByMe ? unlikeBoard : likeBoard;
+  action(boardId, userId).then((res) => {
+    quiz.likedByMe = res.liked;
+    quiz.likeCount = res.likeCount;
+  });
 };
 
 const toggleSave = (quiz: any) => {
-  if (userStore.isGuest) return alert("로그인 필요");
-  // API: POST /quizzes/{quizId}/store (Store 액션 활용)
-  if (userStore.toggleSaveQuiz) {
-    userStore.toggleSaveQuiz(quiz.boardId);
-    if (userStore.isQuizSaved(quiz.boardId)) {
-      quiz.saves++;
-    } else {
-      quiz.saves--;
-    }
+  if (userStore.isGuest) {
+    alert('로그인 후 이용 가능합니다.');
+    return;
   }
+  const userId = userStore.userId;
+  if (!userId) {
+    alert('로그인 후 이용 가능합니다.');
+    return;
+  }
+  if (!quiz.quizId) {
+    alert('저장할 수 없는 게시글입니다.');
+    return;
+  }
+
+  // 토글: 저장되어 있으면 언저장, 없으면 저장
+  const wasStored = !!quiz.storedByMe;
+  const action = wasStored ? unstoreQuiz : storeQuiz;
+  
+  action(quiz.quizId, userId)
+    .then((res) => {
+      // 서버 기준으로 내가 저장한 상태 반영
+      quiz.storedByMe = res.stored;
+
+      // 저장 개수 업데이트
+      if (res.stored && !wasStored) {
+        // 저장: +1
+        quiz.saves = (quiz.saves ?? 0) + 1;
+      } else if (!res.stored && wasStored) {
+        // 언저장: -1 (최소 0)
+        quiz.saves = Math.max(0, (quiz.saves ?? 0) - 1);
+      }
+    })
+    .catch((error) => {
+      console.error('퀴즈 저장/언저장 실패:', error);
+      alert(wasStored ? '퀴즈 저장 취소에 실패했습니다.' : '퀴즈 저장에 실패했습니다.');
+    });
 };
 
 const filterByAuthor = (authorName: string) => {
@@ -129,8 +166,59 @@ const filterByAuthor = (authorName: string) => {
 };
 
 const openDetail = (quiz: any) => {
-  selectedQuiz.value = quiz;
-  isDetailModalOpen.value = true;
+  // 상세는 서버에서 다시 가져옴 (likedByMe/storedByMe/quiz questions 포함)
+  const userId = userStore.isGuest ? undefined : userStore.userId;
+  getBoardDetail(quiz.boardId, userId).then((detail: BoardDetailResponse) => {
+    selectedQuiz.value = detail;
+    isDetailModalOpen.value = true;
+  });
+};
+
+// 상세 모달에서 좋아요/저장/댓글 변경 시 목록 동기화
+const handleDetailUpdate = (updateData: { boardId: number; likedByMe?: boolean; likeCount?: number; storedByMe?: boolean; quizId?: number; commentCount?: number }) => {
+  // 목록에서 해당 게시물 찾아서 업데이트
+  const index = boardItems.value.findIndex(item => item.boardId === updateData.boardId);
+  if (index !== -1) {
+    const item = boardItems.value[index];
+    const wasStored = item.storedByMe;
+    
+    if (updateData.likedByMe !== undefined) {
+      item.likedByMe = updateData.likedByMe;
+    }
+    if (updateData.likeCount !== undefined) {
+      item.likeCount = updateData.likeCount;
+    }
+    if (updateData.commentCount !== undefined) {
+      item.commentCount = updateData.commentCount;
+    }
+    if (updateData.storedByMe !== undefined) {
+      item.storedByMe = updateData.storedByMe;
+      // 저장 개수 업데이트: 이전 상태와 비교하여 변경
+      if (updateData.storedByMe && !wasStored) {
+        // 저장: +1
+        item.saves = (item.saves ?? 0) + 1;
+      } else if (!updateData.storedByMe && wasStored) {
+        // 언저장: -1 (최소 0)
+        item.saves = Math.max(0, (item.saves ?? 0) - 1);
+      }
+    }
+  }
+  
+  // 상세 모달의 데이터도 업데이트
+  if (selectedQuiz.value && selectedQuiz.value.boardId === updateData.boardId) {
+    if (updateData.likedByMe !== undefined) {
+      selectedQuiz.value.likedByMe = updateData.likedByMe;
+    }
+    if (updateData.likeCount !== undefined) {
+      selectedQuiz.value.likeCount = updateData.likeCount;
+    }
+    if (updateData.commentCount !== undefined) {
+      selectedQuiz.value.commentCount = updateData.commentCount;
+    }
+    if (updateData.storedByMe !== undefined) {
+      selectedQuiz.value.storedByMe = updateData.storedByMe;
+    }
+  }
 };
 
 // 휠/페이지네이션 등 기존 로직 유지
@@ -148,7 +236,10 @@ const changePage = (page: number) => {
   setTimeout(() => isThrottled.value = false, 600);
 };
 
-onMounted(() => { window.addEventListener('wheel', handleGlobalWheel); });
+onMounted(() => {
+  fetchBoards();
+  window.addEventListener('wheel', handleGlobalWheel);
+});
 onUnmounted(() => { window.removeEventListener('wheel', handleGlobalWheel); });
 
 const handleCreateClick = () => {
@@ -157,10 +248,27 @@ const handleCreateClick = () => {
 };
 
 const handlePostSubmit = (data: any) => {
-  // 실제 API 연동 시엔 POST /boards 호출 후 리로드
-  isWriteModalOpen.value = false;
-  currentPage.value = 1;
-  currentSort.value = 'newest';
+  // POST /boards 호출 후 목록 리로드
+  if (userStore.isGuest) return;
+  const userId = userStore.userId;
+  if (!userId) return;
+  createBoard(
+    { quizId: data.quizId, title: data.title, content: data.content },
+    userId
+  ).then(() => {
+    isWriteModalOpen.value = false;
+    currentPage.value = 1;
+    currentSort.value = 'newest';
+    fetchBoards();
+  }).catch((error) => {
+    const code = getErrorCode(error);
+    const message = getErrorMessage(error);
+    if (code === 'B004' || message.includes('중복된 퀴즈')) {
+      alert('중복된 퀴즈입니다.');
+    } else {
+      alert(message);
+    }
+  });
 };
 </script>
 
@@ -232,9 +340,9 @@ const handlePostSubmit = (data: any) => {
                 </div>
                 
                 <button @click.stop="toggleSave(quiz)" class="stat-item hover:text-green-600 transition-colors"
-                  :class="{ 'text-[#7cb342]': userStore.isQuizSaved ? userStore.isQuizSaved(quiz.boardId) : false }">
+                  :class="{ 'text-[#7cb342]': quiz.storedByMe }">
                   <span class="material-symbols-outlined icon">
-                    {{ (userStore.isQuizSaved && userStore.isQuizSaved(quiz.boardId)) ? 'bookmark' : 'bookmark_border' }}
+                    {{ quiz.storedByMe ? 'bookmark' : 'bookmark_border' }}
                   </span>
                   <span>{{ quiz.saves }}</span>
                 </button>
@@ -272,7 +380,7 @@ const handlePostSubmit = (data: any) => {
     </footer>
 
     <CommunityWriteModal v-if="isWriteModalOpen" @close="isWriteModalOpen = false" @submit="handlePostSubmit" />
-    <CommunityDetailModal v-if="isDetailModalOpen" :quiz="selectedQuiz" @close="isDetailModalOpen = false" />
+    <CommunityDetailModal v-if="isDetailModalOpen" :quiz="selectedQuiz" @close="isDetailModalOpen = false" @update="handleDetailUpdate" />
 
   </div>
 </template>
