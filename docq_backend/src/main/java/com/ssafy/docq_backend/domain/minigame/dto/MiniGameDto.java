@@ -58,4 +58,17 @@ public class MiniGameDto {
         private String roomId;
         private String playerId;
     }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ItemUsageRequest {
+        private String roomId;
+        private String playerId;
+        private String itemType;
+        private String targetPlayerId; // For SWAP, INTERFERENCE
+        private Integer targetPosition; // For BANANA
+    }
 }

@@ -172,6 +172,7 @@ public class GameDto {
         private long timeLimit; // ms
         private OffsetDateTime quizStartTime;
         private Long quizStartTimeMs;
+        private String quizStyle; // e.g. "MIRROR"
     }
 
     @Getter
