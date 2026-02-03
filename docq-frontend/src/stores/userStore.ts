@@ -132,14 +132,14 @@ export const useUserStore = defineStore('user', () => {
     }
 
     /**
-     * 5. 닉네임 중복 확인 (Mock)
+     * 닉네임 중복 확인
      */
     const checkNickname = async (nickname: string) => {
         try {
-            const { exists } = await checkNicknameAvailability(nickname)
+            const { exists, message } = await checkNicknameAvailability(nickname)
             return {
                 isAvailable: !exists,
-                message: !exists ? "사용 가능한 닉네임입니다." : "이미 사용 중인 닉네임입니다."
+                message: message
             }
         } catch (error) {
             console.error('Nickname check failed:', error)

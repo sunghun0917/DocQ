@@ -260,8 +260,45 @@ const handleAction = (action: string) => {
 };
 
 const closeEditNickname = () => { showEditNicknameModal.value = false; };
-const checkEditNicknameDuplicate = async () => { /* 중복체크 로직 생략 (기존 유지) */ };
-const saveNickname = async () => { /* 저장 로직 생략 (기존 유지) */ };
+const checkEditNicknameDuplicate = async () => {
+    if (!editNickname.value || editNickname.value.trim().length < 2) {
+        editCheckMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+        editCheckStatus.value = 'error';
+        return;
+    }
+    if (editNickname.value === nickname.value) {
+        editCheckMsg.value = "현재와 동일한 닉네임입니다.";
+        editCheckStatus.value = 'success';
+        isEditNicknameChecked.value = true;
+        return;
+    }
+    const { isAvailable, message } = await userStore.checkNickname(editNickname.value.trim());
+    editCheckMsg.value = message;
+    editCheckStatus.value = isAvailable ? 'success' : 'error';
+    isEditNicknameChecked.value = isAvailable;
+};
+
+const saveNickname = async () => {
+    if (editNickname.value === nickname.value) {
+        closeEditNickname();
+        return;
+    }
+    if (!isEditNicknameChecked.value) {
+        editCheckMsg.value = "닉네임 중복 확인을 해주세요!";
+        editCheckStatus.value = 'error';
+        triggerShake();
+        return;
+    }
+    const success = await userStore.updateUsername(editNickname.value.trim());
+    if (success) {
+        nickname.value = editNickname.value.trim();
+        closeEditNickname();
+    } else {
+        editCheckMsg.value = "저장에 실패했습니다.";
+        editCheckStatus.value = 'error';
+        triggerShake();
+    }
+};
 
 const clouds = ref<{ id: number; typeId: number; style: any }[]>([]);
 const generateClouds = () => {
@@ -448,7 +485,13 @@ onUnmounted(() => { stopRoulette(); });
           <div class="edit-nickname-input-group mb-4">
             <div class="input-row">
                 <div class="input-wrapper flex-grow">
-                    <input v-model="editNickname" type="text" placeholder="닉네임을 입력하세요" @keyup.enter="saveNickname" />
+                    <input 
+                        v-model="editNickname" 
+                        type="text" 
+                        placeholder="닉네임을 입력하세요" 
+                        @keyup.enter="saveNickname" 
+                        @input="isEditNicknameChecked = false; editCheckMsg = ''"
+                    />
                 </div>
                 <button class="cartoon-btn secondary small-btn" @click="checkEditNicknameDuplicate">확인</button>
             </div>
@@ -609,7 +652,7 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .edit-nickname-title { margin: 0 0 6px 0; font-size: 1.8rem; color: var(--text-brown); }
 .edit-nickname-desc { margin: 0 0 16px 0; color: var(--wood-dark); }
 .edit-nickname-input { border-bottom: 3px solid #d7ccc8; margin-bottom: 18px; }
-.edit-nickname-input input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.2rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
+.edit-nickname-input-group input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.2rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
 .edit-nickname-actions { display: flex; gap: 10px; }
 .edit-nickname-actions .cartoon-btn { flex: 1; }
 .input-row { display: flex; gap: 8px; align-items: center; }
