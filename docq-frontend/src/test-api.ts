@@ -34,12 +34,11 @@ export const testAPI = {
         }
     },
 
-    // 2. 방 생성 테스트
-    async testCreateRoom(playerId: string) {
+    // 2. 방 생성 테스트 (세션의 playerId로 호스트 지정)
+    async testCreateRoom() {
         console.log('🧪 [TEST] 방 생성 테스트')
         try {
             const result = await createRoom({
-                playerId: playerId,
                 capacity: 4,
                 title: '테스트 방',
                 isPrivate: false
@@ -153,7 +152,7 @@ export const testAPI = {
 
             // 2. 방 생성
             console.log('2️⃣ 방 생성...')
-            const room = await this.testCreateRoom(user.playerId)
+            const room = await this.testCreateRoom()
             console.log(`   roomId: ${room.roomId}`)
             console.log(`   inviteCode: ${room.inviteCode}\n`)
 
@@ -202,7 +201,7 @@ export const testAPI = {
 
             // 2. 방 생성
             console.log('2️⃣ 방 생성...')
-            const room = await this.testCreateRoom(user.playerId)
+            const room = await this.testCreateRoom()
             console.log(`   roomId: ${room.roomId}`)
             console.log(`   inviteCode: ${room.inviteCode}\n`)
 
