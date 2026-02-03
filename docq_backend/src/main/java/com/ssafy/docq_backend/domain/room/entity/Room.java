@@ -92,6 +92,11 @@ public class Room {
     @Builder.Default
     private Set<String> playedMiniGames = ConcurrentHashMap.newKeySet();
 
+    @Builder.Default
+    private AiStatus aiStatus = AiStatus.IDLE;
+
+    private String aiJobId;
+
     public void addPlayer(String userId) {
         players.add(userId);
         this.currentCount = players.size();
