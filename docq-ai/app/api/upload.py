@@ -4,6 +4,7 @@ import tempfile
 import uuid
 import fitz
 import logging
+import os
 
 from app.scheduler.scheduler import enqueue
 
@@ -16,7 +17,8 @@ MAX_PAGES = 50
 @router.post("/ai/upload/pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     logger.info("UPLOAD PDF REQUEST RECEIVED")
-
+    tmp_path = None
+    
     try:
         # 1. 파일 저장
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -28,6 +30,8 @@ async def upload_pdf(file: UploadFile = File(...)):
             page_count = doc.page_count
 
         if page_count > MAX_PAGES:
+
+            os.remove(tmp_path)
             return JSONResponse(
                 status_code=400,
                 content={
@@ -56,6 +60,11 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.exception("UPLOAD FAILED")
+
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            logger.info(f"TEMP FILE CLEANED UP: {tmp_path}")
+
         return JSONResponse(
             status_code=500,
             content={"detail": str(e)}
