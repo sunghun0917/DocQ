@@ -67,44 +67,22 @@ public class GameService {
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
     private static final long QUIZ_TIME_LIMIT_MS = 7000;
 
-    public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
-        log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
-
-        // [ADD] 퀴즈 생성 시작 알림 (프론트엔드 대기 화면 전환용)
-        Map<String, Object> startMsg = new HashMap<>();
-        startMsg.put("type", "QUIZ_GENERATING");
-        startMsg.put("fileName", pdfFile.getOriginalFilename());
-        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+    public void requestQuizGeneration(String roomId, MultipartFile pdfFile) {
 
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+                .orElseThrow();
 
-        // AI Client 호출
-        List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
-        log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
-
-        // Quiz 엔티티 로 변환 및 저장
-        // Quiz 엔티티 로 변환 및 저장
-        List<Quiz> quizzes = new ArrayList<>();
-        for (int i = 0; i < quizResponses.size(); i++) {
-            QuizDto.Response dto = quizResponses.get(i);
-            quizzes.add(Quiz.builder()
-                    .quizId((long) (i + 1)) // 1-based sequential ID
-                    .question(dto.getQuestion())
-                    .options(dto.getOptions())
-                    .answerIndex(dto.getAnswerIndex())
-                    .answerText(dto.getAnswerText())
-                    .build());
+        if (room.getAiStatus() == AiStatus.QUEUED ||
+                room.getAiStatus() == AiStatus.PROCESSING) {
+            throw new IllegalStateException("AI already running");
         }
 
-        room.setQuizList(quizzes);
+        AiDto.JobResponse job = aiClient.requestQuizJob(pdfFile);
 
-        // 완료 알림 브로드캐스트
-        Map<String, Object> message = new HashMap<>();
-        message.put("type", "QUIZ_GENERATED");
-        message.put("count", quizzes.size());
+        room.setAiJobId(job.getJobId());
+        room.setAiStatus(AiStatus.QUEUED);
 
-        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+        roomRepository.save(room);
     }
 
     public int setDefaultQuizzes(String roomId, String type) {
