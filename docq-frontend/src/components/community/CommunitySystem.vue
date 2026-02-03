@@ -27,8 +27,7 @@ const isLoading = ref(false);
 const fetchBoards = async () => {
   isLoading.value = true;
   try {
-    const userId = userStore.isGuest ? undefined : userStore.userId;
-    const res = await getBoards(currentPage.value, itemsPerPage, userId);
+    const res = await getBoards(currentPage.value, itemsPerPage);
     total.value = res.total;
     // 서버에서 받은 storedCount를 saves로 매핑, questionCount는 서버 응답 그대로 사용
     boardItems.value = res.items.map((it) => ({
@@ -82,9 +81,7 @@ const filteredQuizzes = computed(() => {
   } else if (currentSort.value === 'my_posts') {
     result = result.filter(q => q.author.nickname === userStore.username);
   } else if (currentSort.value === 'my_saves') {
-    if (userStore.savedQuizIds) {
-      result = result.filter(q => userStore.savedQuizIds.includes(q.boardId));
-    }
+    result = result.filter(q => q.storedByMe === true);
   }
   return result;
 });
@@ -110,12 +107,11 @@ watch(currentPage, () => { fetchBoards(); });
 // --- 핸들러 ---
 const toggleLike = (quiz: any) => {
   if (userStore.isGuest) return alert("로그인 후 이용 가능합니다.");
-  // API: POST /boards/{boardId}/likes
   const userId = userStore.userId;
   if (!userId) return alert("로그인 후 이용 가능합니다.");
   const boardId = quiz.boardId;
   const action = quiz.likedByMe ? unlikeBoard : likeBoard;
-  action(boardId, userId).then((res) => {
+  action(boardId).then((res) => {
     quiz.likedByMe = res.liked;
     quiz.likeCount = res.likeCount;
   });
@@ -140,7 +136,7 @@ const toggleSave = (quiz: any) => {
   const wasStored = !!quiz.storedByMe;
   const action = wasStored ? unstoreQuiz : storeQuiz;
   
-  action(quiz.quizId, userId)
+  action(quiz.quizId)
     .then((res) => {
       // 서버 기준으로 내가 저장한 상태 반영
       quiz.storedByMe = res.stored;
@@ -166,9 +162,7 @@ const filterByAuthor = (authorName: string) => {
 };
 
 const openDetail = (quiz: any) => {
-  // 상세는 서버에서 다시 가져옴 (likedByMe/storedByMe/quiz questions 포함)
-  const userId = userStore.isGuest ? undefined : userStore.userId;
-  getBoardDetail(quiz.boardId, userId).then((detail: BoardDetailResponse) => {
+  getBoardDetail(quiz.boardId).then((detail: BoardDetailResponse) => {
     selectedQuiz.value = detail;
     isDetailModalOpen.value = true;
   });
@@ -178,8 +172,8 @@ const openDetail = (quiz: any) => {
 const handleDetailUpdate = (updateData: { boardId: number; likedByMe?: boolean; likeCount?: number; storedByMe?: boolean; quizId?: number; commentCount?: number }) => {
   // 목록에서 해당 게시물 찾아서 업데이트
   const index = boardItems.value.findIndex(item => item.boardId === updateData.boardId);
-  if (index !== -1) {
-    const item = boardItems.value[index];
+  const item = index !== -1 ? boardItems.value[index] : undefined;
+  if (item !== undefined) {
     const wasStored = item.storedByMe;
     
     if (updateData.likedByMe !== undefined) {
@@ -248,14 +242,10 @@ const handleCreateClick = () => {
 };
 
 const handlePostSubmit = (data: any) => {
-  // POST /boards 호출 후 목록 리로드
   if (userStore.isGuest) return;
   const userId = userStore.userId;
   if (!userId) return;
-  createBoard(
-    { quizId: data.quizId, title: data.title, content: data.content },
-    userId
-  ).then(() => {
+  createBoard({ quizId: data.quizId, title: data.title, content: data.content }).then(() => {
     isWriteModalOpen.value = false;
     currentPage.value = 1;
     currentSort.value = 'newest';
