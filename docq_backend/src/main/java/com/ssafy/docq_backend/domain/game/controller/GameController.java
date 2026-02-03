@@ -3,8 +3,10 @@ package com.ssafy.docq_backend.domain.game.controller;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.game.dto.QuizDto;
 import com.ssafy.docq_backend.domain.game.service.GameService;
+import com.ssafy.docq_backend.global.security.CustomUserDetails;
 import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -66,10 +68,10 @@ public class GameController {
     public ResponseEntity<?> generateQuiz(
             @PathVariable String roomId,
             @RequestParam("file") MultipartFile file,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId
+            @AuthenticationPrincipal CustomUserDetails user
     ) {
         try {
-            // TODO: playerId 검증 (방장인지 등)
+            Long userId = user != null ? user.getUserId() : null;
             gameService.generateQuizFromPdf(roomId, file, userId);
             return ResponseEntity.ok(Map.of(
                     "message", "Quiz generation started",

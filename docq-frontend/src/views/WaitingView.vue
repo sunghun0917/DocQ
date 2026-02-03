@@ -145,8 +145,7 @@ const handleUploadPdf = async () => {
   processingText.value = `[${selectedFile.value.name}] 분석 중...`
 
   try {
-    const userId = userStore.isGuest ? undefined : userStore.userId
-    await generateQuiz(roomId.value, selectedFile.value, userId)
+    await generateQuiz(roomId.value, selectedFile.value)
   } catch (error) {
     toastMessage.value = '퀴즈 생성 실패: ' + getErrorMessage(error);
     toastType.value = 'error';

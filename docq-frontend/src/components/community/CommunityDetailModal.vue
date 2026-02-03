@@ -72,7 +72,7 @@ const toggleLike = () => {
   if (!userId) return;
   const boardId = props.quiz.boardId;
   const action = isLiked.value ? unlikeBoard : likeBoard;
-  action(boardId, userId).then((res) => {
+  action(boardId).then((res) => {
     isLiked.value = res.liked;
     likeCount.value = res.likeCount;
     // 부모 컴포넌트에 변경사항 전달 (목록 동기화)
@@ -106,7 +106,7 @@ const handleSaveClick = () => {
   const wasStored = isSaved.value;
   const action = wasStored ? unstoreQuiz : storeQuiz;
 
-  action(quizId, userId)
+  action(quizId)
     .then((res) => {
       isSaved.value = res.stored;
       // 부모 컴포넌트에 변경사항 전달 (목록 동기화)
@@ -152,7 +152,7 @@ const handleCommentSubmit = async () => {
   commentInput.value = '';
 
   try {
-    await createComment(props.quiz.boardId, { content }, userId);
+    await createComment(props.quiz.boardId, { content });
     // 댓글 목록 새로고침
     commentPage.value = 1;
     await fetchComments();
@@ -176,7 +176,7 @@ const handleDeleteComment = async (commentId: number) => {
   if (!confirm('댓글을 삭제하시겠습니까?')) return;
 
   try {
-    await deleteComment(props.quiz.boardId, commentId, userId);
+    await deleteComment(props.quiz.boardId, commentId);
     // 댓글 목록 새로고침
     await fetchComments();
     // 부모 컴포넌트에 댓글 수 업데이트 알림

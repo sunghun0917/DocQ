@@ -19,7 +19,7 @@ const fetchMyQuizzes = async () => {
   }
   isLoadingQuizzes.value = true;
   try {
-    const res = await getMyQuizzes(userStore.userId);
+    const res = await getMyQuizzes();
     myQuizzes.value = res.quizzes;
   } catch (error) {
     console.error('내 퀴즈 목록 조회 실패:', error);

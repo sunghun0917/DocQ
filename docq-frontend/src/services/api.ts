@@ -249,17 +249,12 @@ export const verifyJoinRoom = async (data: JoinRoomRequest): Promise<JoinRoomRes
  * PDF 업로드 및 퀴즈 생성
  * POST /api/game/{roomId}/quiz/generate
  */
-export const generateQuiz = async (roomId: string, file: File, userId?: string): Promise<QuizGenerateResponse> => {
+export const generateQuiz = async (roomId: string, file: File): Promise<QuizGenerateResponse> => {
     const formData = new FormData()
     formData.append('file', file)
-
-    const headers: Record<string, any> = { 'Content-Type': 'multipart/form-data' }
-    if (userId) {
-        const n = Number(userId)
-        if (!Number.isNaN(n)) headers['X-User-Id'] = n
-    }
-
-    const response = await apiClient.post(`/game/${roomId}/quiz/generate`, formData, { headers })
+    const response = await apiClient.post(`/game/${roomId}/quiz/generate`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })
     return response.data
 }
 
@@ -315,23 +310,14 @@ export const getMyInfo = async (): Promise<MemberMeResponse | GuestMeResponse> =
 }
 
 // ==================== Community / Boards API ====================
-
-const buildUserIdHeader = (userId?: string) => {
-    if (!userId) return {}
-    const n = Number(userId)
-    if (Number.isNaN(n)) return {}
-    return { 'X-User-Id': n }
-}
+// 인증: 쿠키/세션 기반. apiClient에 withCredentials 적용됨.
 
 /**
  * 게시판 목록 조회
  * GET /boards?page={page}&size={size}
  */
-export const getBoards = async (page = 1, size = 8, userId?: string): Promise<BoardListResponse> => {
-    const response = await apiClient.get<BoardListResponse>('/boards', {
-        params: { page, size },
-        headers: buildUserIdHeader(userId)
-    })
+export const getBoards = async (page = 1, size = 8): Promise<BoardListResponse> => {
+    const response = await apiClient.get<BoardListResponse>('/boards', { params: { page, size } })
     return response.data
 }
 
@@ -339,21 +325,17 @@ export const getBoards = async (page = 1, size = 8, userId?: string): Promise<Bo
  * 게시글 상세 조회
  * GET /boards/{boardId}
  */
-export const getBoardDetail = async (boardId: number, userId?: string): Promise<BoardDetailResponse> => {
-    const response = await apiClient.get<BoardDetailResponse>(`/boards/${boardId}`, {
-        headers: buildUserIdHeader(userId)
-    })
+export const getBoardDetail = async (boardId: number): Promise<BoardDetailResponse> => {
+    const response = await apiClient.get<BoardDetailResponse>(`/boards/${boardId}`)
     return response.data
 }
 
 /**
- * 게시글 작성 (회원 전용: X-User-Id 목업)
+ * 게시글 작성 (회원 전용, 세션 인증)
  * POST /boards
  */
-export const createBoard = async (data: CreateBoardRequest, userId: string): Promise<CreateBoardResponse> => {
-    const response = await apiClient.post<CreateBoardResponse>('/boards', data, {
-        headers: buildUserIdHeader(userId)
-    })
+export const createBoard = async (data: CreateBoardRequest): Promise<CreateBoardResponse> => {
+    const response = await apiClient.post<CreateBoardResponse>('/boards', data)
     return response.data
 }
 
@@ -361,10 +343,8 @@ export const createBoard = async (data: CreateBoardRequest, userId: string): Pro
  * 좋아요
  * POST /boards/{boardId}/likes
  */
-export const likeBoard = async (boardId: number, userId: string): Promise<LikeResponse> => {
-    const response = await apiClient.post<LikeResponse>(`/boards/${boardId}/likes`, null, {
-        headers: buildUserIdHeader(userId)
-    })
+export const likeBoard = async (boardId: number): Promise<LikeResponse> => {
+    const response = await apiClient.post<LikeResponse>(`/boards/${boardId}/likes`, null)
     return response.data
 }
 
@@ -372,10 +352,8 @@ export const likeBoard = async (boardId: number, userId: string): Promise<LikeRe
  * 좋아요 취소
  * DELETE /boards/{boardId}/likes
  */
-export const unlikeBoard = async (boardId: number, userId: string): Promise<LikeResponse> => {
-    const response = await apiClient.delete<LikeResponse>(`/boards/${boardId}/likes`, {
-        headers: buildUserIdHeader(userId)
-    })
+export const unlikeBoard = async (boardId: number): Promise<LikeResponse> => {
+    const response = await apiClient.delete<LikeResponse>(`/boards/${boardId}/likes`)
     return response.data
 }
 
@@ -383,10 +361,8 @@ export const unlikeBoard = async (boardId: number, userId: string): Promise<Like
  * 퀴즈 저장
  * POST /quizzes/{quizId}/store
  */
-export const storeQuiz = async (quizId: number, userId: string): Promise<StoreQuizResponse> => {
-    const response = await apiClient.post<StoreQuizResponse>(`/quizzes/${quizId}/store`, null, {
-        headers: buildUserIdHeader(userId)
-    })
+export const storeQuiz = async (quizId: number): Promise<StoreQuizResponse> => {
+    const response = await apiClient.post<StoreQuizResponse>(`/quizzes/${quizId}/store`, null)
     return response.data
 }
 
@@ -394,10 +370,8 @@ export const storeQuiz = async (quizId: number, userId: string): Promise<StoreQu
  * 퀴즈 저장 취소 (언저장)
  * DELETE /quizzes/{quizId}/store
  */
-export const unstoreQuiz = async (quizId: number, userId: string): Promise<StoreQuizResponse> => {
-    const response = await apiClient.delete<StoreQuizResponse>(`/quizzes/${quizId}/store`, {
-        headers: buildUserIdHeader(userId)
-    })
+export const unstoreQuiz = async (quizId: number): Promise<StoreQuizResponse> => {
+    const response = await apiClient.delete<StoreQuizResponse>(`/quizzes/${quizId}/store`)
     return response.data
 }
 
@@ -405,10 +379,8 @@ export const unstoreQuiz = async (quizId: number, userId: string): Promise<Store
  * 내가 만든 퀴즈 목록 조회
  * GET /quizzes/my
  */
-export const getMyQuizzes = async (userId: string): Promise<MyQuizListResponse> => {
-    const response = await apiClient.get<MyQuizListResponse>('/quizzes/my', {
-        headers: buildUserIdHeader(userId)
-    })
+export const getMyQuizzes = async (): Promise<MyQuizListResponse> => {
+    const response = await apiClient.get<MyQuizListResponse>('/quizzes/my')
     return response.data
 }
 
@@ -429,10 +401,8 @@ export const getComments = async (boardId: number, page = 1, size = 20): Promise
  * 댓글 작성
  * POST /boards/{boardId}/comments
  */
-export const createComment = async (boardId: number, data: CreateCommentRequest, userId: string): Promise<CreateCommentResponse> => {
-    const response = await apiClient.post<CreateCommentResponse>(`/boards/${boardId}/comments`, data, {
-        headers: buildUserIdHeader(userId)
-    })
+export const createComment = async (boardId: number, data: CreateCommentRequest): Promise<CreateCommentResponse> => {
+    const response = await apiClient.post<CreateCommentResponse>(`/boards/${boardId}/comments`, data)
     return response.data
 }
 
@@ -440,10 +410,8 @@ export const createComment = async (boardId: number, data: CreateCommentRequest,
  * 댓글 삭제
  * DELETE /boards/{boardId}/comments/{commentId}
  */
-export const deleteComment = async (boardId: number, commentId: number, userId: string): Promise<void> => {
-    await apiClient.delete(`/boards/${boardId}/comments/${commentId}`, {
-        headers: buildUserIdHeader(userId)
-    })
+export const deleteComment = async (boardId: number, commentId: number): Promise<void> => {
+    await apiClient.delete(`/boards/${boardId}/comments/${commentId}`)
 }
 
 // ==================== 에러 처리 헬퍼 ====================
