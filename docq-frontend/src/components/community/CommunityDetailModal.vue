@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import { likeBoard, unlikeBoard, storeQuiz, unstoreQuiz, getComments, createComment, deleteComment, type CommentItem } from '@/services/api';
+import ConfirmModal from '@/components/common/ConfirmModal.vue';
 
 const props = defineProps<{ quiz: any }>();
 const emit = defineEmits(['close', 'update']);
@@ -200,13 +201,6 @@ const handleDeleteQuiz = () => {
         alert("게시글이 삭제되었습니다.");
         emit('close');
         // 상위 컴포넌트에서 목록 리로드 필요
-    });
-};
-
-const handleDeleteComment = (commentId: number) => {
-    openConfirm('댓글 삭제', '정말 이 댓글을 삭제하시겠습니까?', '삭제', 'delete', 'danger', () => {
-        // TODO: API Call -> DELETE /comments/{commentId}
-        comments.value = comments.value.filter(c => c.id !== commentId);
     });
 };
 
