@@ -5,7 +5,7 @@ import uuid
 import fitz
 import logging
 
-from scheduler.scheduler import enqueue
+from app.scheduler.scheduler import enqueue
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

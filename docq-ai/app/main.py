@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.upload import router as upload_router
+
+from app.api.upload.py import router as upload_router
 from scheduler.scheduler import start_scheduler
 
 app = FastAPI()
