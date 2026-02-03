@@ -3,8 +3,8 @@ import time
 import threading
 import logging
 
-from infra.redis import redis_client
-from workers.mineru_worker import run_gpu_job
+from app.infra.redis import redis_client
+from app.workers.mineru_worker import run_gpu_job
 
 logger = logging.getLogger(__name__)
 
