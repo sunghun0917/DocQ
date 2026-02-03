@@ -1,5 +1,6 @@
 package com.ssafy.docq_backend.domain.room.controller;
 
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -8,6 +9,9 @@ import org.springframework.web.bind.annotation.*;
 
 import com.ssafy.docq_backend.domain.room.dto.RoomDto;
 import com.ssafy.docq_backend.domain.room.service.RoomService;
+import com.ssafy.docq_backend.global.exception.DocqException;
+import com.ssafy.docq_backend.global.exception.ErrorCode;
+import com.ssafy.docq_backend.global.session.SessionDto;
 
 @RestController
 @RequestMapping("/rooms")
@@ -18,8 +22,14 @@ public class RoomController {
 
     @PostMapping
     public ResponseEntity<RoomDto.RoomCreateResponse> createRoom(
-            @Valid @RequestBody RoomDto.RoomCreateRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(roomService.createRoom(request));
+            @Valid @RequestBody RoomDto.RoomCreateRequest request,
+            HttpSession session) {
+        SessionDto sessionDto = (SessionDto) session.getAttribute("user");
+        if (sessionDto == null) {
+            throw new DocqException(ErrorCode.UNAUTHORIZED);
+        }
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(roomService.createRoom(request, sessionDto.getPlayerId()));
     }
 
     @GetMapping("/{roomId}")
