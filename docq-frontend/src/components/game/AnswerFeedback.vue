@@ -31,24 +31,31 @@ const feedbackClass = computed(() => isCorrect.value ? 'correct' : 'wrong')
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
 .feedback-overlay {
   position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(5px);
   animation: fadeIn 0.3s ease-out;
+  font-family: 'Jua', sans-serif;
 }
 
 .correct {
-  background: rgba(46, 204, 113, 0.85); /* Green */
+  background: rgba(124, 179, 66, 0.9);
+  /* Leaf Green */
 }
 
 .wrong {
-  background: rgba(231, 76, 60, 0.85); /* Red */
+  background: rgba(239, 83, 80, 0.9);
+  /* Cartoon Red */
 }
 
 .content {
@@ -56,33 +63,50 @@ const feedbackClass = computed(() => isCorrect.value ? 'correct' : 'wrong')
   color: white;
   transform: scale(0.8);
   animation: popup 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+
+  background: rgba(255, 255, 255, 0.2);
+  padding: 40px 60px;
+  border-radius: 30px;
+  border: 8px solid white;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
 }
 
 .icon {
-  font-size: 8rem;
+  font-size: 6rem;
   margin-bottom: 20px;
-  filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.2));
 }
 
 .message {
-  font-size: 3rem;
-  font-weight: 900;
+  font-size: 4rem;
+  font-weight: 400;
+  /* Jua Default */
   text-transform: uppercase;
-  text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+  margin: 0;
+  line-height: 1.2;
 }
 
 .sub-message {
-  font-size: 1.2rem;
-  margin-top: 10px;
+  font-size: 1.5rem;
+  margin-top: 15px;
   opacity: 0.9;
+  font-weight: 400;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes popup {
-  to { transform: scale(1); }
+  to {
+    transform: scale(1);
+  }
 }
 </style>
