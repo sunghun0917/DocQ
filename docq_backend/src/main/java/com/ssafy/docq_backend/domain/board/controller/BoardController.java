@@ -20,14 +20,32 @@ public class BoardController {
     private final BoardService boardService;
 
     /**
-     * 게시판 목록 조회 (페이지네이션). 최초 진입 시 파라미터 없이 호출하면 page=1, size=20 적용.
+     * 게시글 상세 조회.
+     * 권한: 게스트 / 회원
+     * 회원인 경우 X-User-Id 헤더로 likedByMe, storedByMe 계산.
+     */
+    @GetMapping("/{boardId}")
+    public ResponseEntity<BoardDto.BoardDetailResponse> getBoard(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @PathVariable Long boardId
+    ) {
+        BoardDto.BoardDetailResponse response = boardService.getBoard(userId, boardId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 게시판 목록 조회 (페이지네이션).
+     * 권한: 게스트 / 회원
+     * 회원인 경우 X-User-Id 헤더로 likedByMe, storedByMe 계산.
+     * 최초 진입 시 파라미터 없이 호출하면 page=1, size=20 적용.
      */
     @GetMapping
     public ResponseEntity<BoardDto.BoardListResponse> getList(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestParam(required = false, defaultValue = "1") int page,
             @RequestParam(required = false, defaultValue = "20") int size
     ) {
-        BoardDto.BoardListResponse response = boardService.getList(page, size);
+        BoardDto.BoardListResponse response = boardService.getList(userId, page, size);
         return ResponseEntity.ok(response);
     }
 
