@@ -183,7 +183,7 @@ const confirmSignUp = async () => {
 .input-row { display: flex; gap: 8px; align-items: center; }
 .flex-grow { flex-grow: 1; }
 
-.check-msg { font-size: 1.2rem; margin-left: 4px; }
+.check-msg { font-size: 0.9rem; margin-left: 4px; }
 .check-msg.success { color: var(--leaf-dark); }
 .check-msg.error { color: #d32f2f; }
 
