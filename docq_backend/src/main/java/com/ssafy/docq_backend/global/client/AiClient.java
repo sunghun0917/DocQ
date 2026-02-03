@@ -49,7 +49,7 @@ public class AiClient {
             return response.getBody();
 
         } catch (Exception e) {
-            throw new DocqException(ErrorCode.AI_SERVER_UNAVAILABLE);
+            throw new DocqException(ErrorCode.AI_PROCESSING_ERROR);
         }
     }
 }

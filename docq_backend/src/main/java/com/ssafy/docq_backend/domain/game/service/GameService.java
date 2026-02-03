@@ -2,11 +2,13 @@ package com.ssafy.docq_backend.domain.game.service;
 
 import com.ssafy.docq_backend.domain.game.entity.PlayerState;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
+import com.ssafy.docq_backend.domain.room.entity.AiStatus;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
 import com.ssafy.docq_backend.domain.user.entity.User;
 import com.ssafy.docq_backend.domain.user.repository.UserRepository;
+import com.ssafy.docq_backend.global.client.dto.AiDto;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
