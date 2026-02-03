@@ -46,6 +46,14 @@ services:
     networks:
       - docq-network
 
+  ai-redis:
+    image: redis:7-alpine
+    container_name: ai-redis
+    restart: unless-stopped
+    # appendonly 없음 = 재시작 시 데이터 초기화
+    networks:
+      - docq-network
+  
   ai-service:
     build: ../../docq-ai
     restart: unless-stopped
@@ -54,6 +62,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - MINERU_API_URL=http://${EC2_HOST_IP}:18000/file_parse
+      - REDIS_HOST=ai-redis
+      - REDIS_PORT=6379
+      - BACKEND_CALLBACK_URL=http://backend:8080/ai/callback
+    depends_on:
+      - ai-redis
     networks:
       - docq-network
 
