@@ -553,7 +553,7 @@ onUnmounted(() => { stopRoulette(); });
 
 .logo-area { margin-bottom: 5px; }
 .game-title { font-size: 3.5rem; margin: 0; color: var(--text-brown); text-shadow: 3px 3px 0 #fff; line-height: 1; }
-.game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
+.game-subtitle { font-size: 1.1rem; color: var(--wood-dark); margin-top: 5px; opacity: 0.8; }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
 .input-row { display: flex; gap: 8px; align-items: stretch; }
@@ -597,11 +597,11 @@ onUnmounted(() => { stopRoulette(); });
 .panel-content.side-mode { display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(255, 248, 225, 0.5); border-width: 4px; height: 300px; margin-top: 75px; }
 .mini-content { text-align: center; display: flex; flex-direction: column; gap: 10px; }
 .side-icon { font-size: 4rem; color: var(--wood-dark); opacity: 0.8; }
-.side-label { font-size: 1.5rem; font-family: 'Nanum Pen Script', cursive; color: var(--wood-dark); }
+.side-label { font-size: 1.5rem; color: var(--wood-dark); }
 
 .content-header { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
 .icon-circle { width: 48px; height: 48px; background: var(--leaf-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid var(--leaf-dark); color: white; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2); }
-.index-number { font-size: 1.4rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; }
+.index-number { font-size: 1.4rem; color: var(--wood-dark); }
 h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text-brown); text-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
 .description { margin-top: 8px; font-size: 1rem; color: var(--wood-dark); line-height: 1.3; }
 
@@ -659,7 +659,7 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .flex-grow { flex-grow: 1; }
 .cartoon-btn.small-btn { width: auto; padding: 8px 12px; font-size: 1rem; white-space: nowrap; }
 .edit-nickname-input-group { display: flex; flex-direction: column; gap: 4px; text-align: left; }
-.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.check-msg { font-size: 1.2rem; margin-left: 4px; }
 .check-msg.success { color: var(--leaf-dark); }
 .check-msg.error { color: #d32f2f; }
 

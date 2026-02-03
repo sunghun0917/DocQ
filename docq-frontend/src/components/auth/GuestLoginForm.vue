@@ -115,7 +115,7 @@ const checkNickname = async () => {
   white-space: nowrap;
 }
 
-.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.check-msg { font-size: 1.2rem; margin-left: 4px; }
 .check-msg.success { color: var(--leaf-dark); }
 .check-msg.error { color: #d32f2f; }
 
