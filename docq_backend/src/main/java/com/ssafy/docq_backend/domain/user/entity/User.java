@@ -9,11 +9,11 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-import com.ssafy.docq_backend.Board;
-import com.ssafy.docq_backend.Comment;
-import com.ssafy.docq_backend.Like;
-import com.ssafy.docq_backend.Quiz;
-import com.ssafy.docq_backend.StoredQuizz;
+import com.ssafy.docq_backend.domain.storedquiz.entity.StoredQuiz;
+import com.ssafy.docq_backend.domain.board.entity.Board;
+import com.ssafy.docq_backend.domain.comment.entity.Comment;
+import com.ssafy.docq_backend.domain.like.entity.Like;
+import com.ssafy.docq_backend.domain.quiz.entity.Quiz;
 
 @Getter
 @Setter
@@ -64,6 +64,6 @@ public class User {
 
     @Builder.Default
     @OneToMany(mappedBy = "user")
-    private Set<StoredQuizz> storedQuizzes = new LinkedHashSet<>();
+    private Set<StoredQuiz> storedQuizzes = new LinkedHashSet<>();
 
 }

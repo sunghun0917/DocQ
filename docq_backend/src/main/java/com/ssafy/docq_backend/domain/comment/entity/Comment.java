@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend;
+package com.ssafy.docq_backend.domain.comment.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -8,6 +8,7 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.ssafy.docq_backend.domain.board.entity.Board;
 import com.ssafy.docq_backend.domain.user.entity.User;
 
 import java.time.Instant;
@@ -15,8 +16,8 @@ import java.time.Instant;
 @Getter
 @Setter
 @Entity
-@Table(name = "likes")
-public class Like {
+@Table(name = "comments")
+public class Comment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -33,6 +34,11 @@ public class Like {
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "board_id", nullable = false)
     private Board board;
+
+    @NotNull
+    @Lob
+    @Column(name = "content", nullable = false)
+    private String content;
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP")

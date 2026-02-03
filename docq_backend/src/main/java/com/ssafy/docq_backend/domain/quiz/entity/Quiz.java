@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend;
+package com.ssafy.docq_backend.domain.quiz.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +14,9 @@ import com.ssafy.docq_backend.domain.user.entity.User;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+
+import com.ssafy.docq_backend.domain.board.entity.Board;
+import com.ssafy.docq_backend.domain.storedquiz.entity.StoredQuiz;
 
 @Getter
 @Setter
@@ -39,6 +42,6 @@ public class Quiz {
     private Set<Board> boards = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "quiz")
-    private Set<StoredQuizz> storedQuizzes = new LinkedHashSet<>();
+    private Set<StoredQuiz> storedQuizzes = new LinkedHashSet<>();
 
 }

@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend;
+package com.ssafy.docq_backend.domain.storedquiz.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -7,13 +7,14 @@ import lombok.Setter;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.ssafy.docq_backend.domain.quiz.entity.Quiz;
 import com.ssafy.docq_backend.domain.user.entity.User;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "stored_quizzes")
-public class StoredQuizz {
+public class StoredQuiz {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
