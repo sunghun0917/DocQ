@@ -419,6 +419,9 @@ watchEffect(() => {
     return
   }
 
+  // [수정] 시스템 알림이 떠 있다면(예: 퀴즈 결과 알림) 사라질 때까지 대기
+  if (systemNotice.value) return
+
   if (isBoardMoving.value || isMiniGameStarting.value || catchEffect.value || pendingCatchEffect.value) return
   isMiniGameStarting.value = true
   showMiniGameStartNotice.value = true
@@ -442,22 +445,39 @@ const handleMiniGameClose = () => {
   gameStore.clearMiniGame()
 }
 
-watch(
+  watch(
   () => miniGame.value.phase,
   async (phase) => {
     if (phase !== 'result') return
     const token = ++miniGameNoticeToken
     isMiniGameWinnerNoticeActive.value = true
+
+    // [수정] 무승부 체크
+    const resultType = miniGame.value.result?.type
     const name = winnerName.value
     const rewardBuff = miniGame.value.result?.rewardBuff
-    const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
-    await showSystemNotice(noticeText, 2000)
-    if (token !== miniGameNoticeToken) return
-    isMiniGameWinnerNoticeActive.value = false
 
-    if (!rewardBuff || rewardBuff === 'NONE') {
+    if (resultType === 'DRAW') {
+      
+      // 2. 그 다음 알림 띄우기
+      await showSystemNotice('미니게임 결과는 무승부입니다.', 2000)
+      // 1. 무승부면 모달을 즉시 내리고 게임 진행 (ACK 전송)
       wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
       gameStore.clearMiniGame()
+    } else {
+      // 승자가 있는 경우 (기존 로직 유지: 알림 후 모달 닫기 등)
+      const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
+      
+      // 알림 먼저 표시 (2초 대기)
+      await showSystemNotice(noticeText, 2000)
+      if (token !== miniGameNoticeToken) return
+      isMiniGameWinnerNoticeActive.value = false
+
+      // 알림 끝난 후 모달 닫기 (버프 없으면)
+      if (!rewardBuff || rewardBuff === 'NONE') {
+        wsStore.sendAck('MINIGAME_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+        gameStore.clearMiniGame()
+      }
     }
   }
 )
@@ -989,7 +1009,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2300;
+  z-index: 10000;
   background: rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }

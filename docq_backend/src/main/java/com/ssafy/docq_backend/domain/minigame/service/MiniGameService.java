@@ -120,9 +120,15 @@ public class MiniGameService {
 
         String winnerPlayerId = null;
         String rewardBuff = "NONE";
+        String resultType = "RESULT";
 
-        // 2. 보상 적용
-        if (!rankings.isEmpty()) {
+        // 2. 승자 결정 및 보상 처리
+        // 무승부 체크 (1, 2등 동점 시)
+        if (rankings.size() >= 2 && rankings.get(0).getValue() == rankings.get(1).getValue()) {
+            resultType = "DRAW";
+            log.info("MiniGame Draw in Room {} - No rewards distributed", roomId);
+        } else if (!rankings.isEmpty()) {
+            // 승자 존재
             MiniGameDto.RankInfo winner = rankings.get(0);
             winnerPlayerId = winner.getPlayerId();
 
@@ -141,8 +147,8 @@ public class MiniGameService {
 
         // 3. 결과 브로드캐스트
         MiniGameDto.ResultResponse response = MiniGameDto.ResultResponse.builder()
-                .type("RESULT")
-                .gameType("MINIGAME_END") // 종료 시에는 구체적인 타입보다는 종료되었음을 알림 (Room에 저장을 안하므로)
+                .type(resultType)
+                .gameType("MINIGAME_END") // 종료 시에는 구체적인 타입보다는 종료되었음을 알림
                 .winnerPlayerId(winnerPlayerId)
                 .rewardBuff(rewardBuff)
                 .rankings(rankings)

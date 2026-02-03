@@ -10,6 +10,7 @@ const props = defineProps<{
   timeLimitMs?: number;
   description?: string;
   result?: {
+    type?: string;
     winnerPlayerId?: string | null;
     rewardBuff?: string | null;
     rankings?: Array<{ playerId: string; nickname: string; value: number; rank: number }>;
@@ -63,6 +64,7 @@ const showMiniTimer = computed(() =>
 );
 
 const winnerId = computed(() => {
+  if (props.result?.type === 'DRAW') return null;
   if (props.result?.winnerPlayerId) return props.result.winnerPlayerId;
   const top = props.result?.rankings?.[0];
   return top?.playerId ?? null;
