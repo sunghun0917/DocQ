@@ -303,8 +303,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 return
             }
 
-            if (data?.type === 'RESULT') {
+            if (data?.type === 'RESULT' || data?.type === 'DRAW') {
                 gameStore.setMiniGameResult({
+                    type: data.type, // [ADD]
                     winnerPlayerId: data.winnerPlayerId,
                     rewardBuff: data.rewardBuff,
                     rankings: data.rankings || []

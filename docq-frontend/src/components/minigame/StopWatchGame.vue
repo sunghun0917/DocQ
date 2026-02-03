@@ -21,6 +21,13 @@ const startTimer = () => {
   const update = () => {
     if (!isRunning.value) return;
     time.value = (performance.now() - startTime) / 1000;
+
+    // [ADD] 10초가 지나면 자동 종료 (실패 처리 or 그냥 멈춤)
+    if (time.value >= 10.0) {
+      time.value = 10.0; // [FIX] 보정 먼저 수행 (계산에 10.00을 사용하기 위함)
+      stopTimer();
+      return;
+    }
     intervalId = requestAnimationFrame(update);
   };
 
@@ -36,9 +43,8 @@ const stopTimer = () => {
   isFinished.value = true;
   if (intervalId) cancelAnimationFrame(intervalId);
 
-  // [수정] 점수(100, 80...)가 아니라 '5.00초와의 오차(diff)'를 계산
-  // 예: 5.02초에 멈춤 -> 0.02 전달 (작을수록 1등)
-  const diff = Math.abs(5.00 - time.value);
+  // [수정] 7.77초와의 오차(diff)를 기본 점수(클수록 나쁨)로 전달
+  const diff = Math.abs(7.77 - time.value);
 
   // 부모에게 오차값 전달
   emit('end', diff);
@@ -66,15 +72,15 @@ onUnmounted(() => {
 
 <template>
   <div class="text-center w-full font-jua">
-    <h2 class="text-4xl font-black text-[#5d4037] mb-8 drop-shadow-sm">5.00초에 멈춰라! ⏱️</h2>
+    <h2 class="text-4xl font-black text-[#5d4037] mb-8 drop-shadow-sm">7.77초에 멈춰라! ⏱️</h2>
 
     <div class="text-9xl font-black mb-12 tabular-nums tracking-tighter transition-all duration-500" :class="[
-      // 1. 블러 효과 적용 조건: 게임 중이고(isRunning) 3초가 넘었을 때
-      (isRunning && time > 3.0) ? 'blur-xl select-none opacity-40 text-[#8d6e63]' : '',
+      // 1. 블러 효과 적용 조건: 게임 중이고 4초가 넘었을 때
+      (isRunning && time > 5.0) ? 'blur-xl select-none opacity-40 text-[#8d6e63]' : '',
 
       // 2. 게임 종료 후 색상 처리
       isFinished
-        ? (Math.abs(5.00 - time) < 0.1 ? 'text-[#2e7d32]' : 'text-[#d32f2f]')
+        ? (Math.abs(7.77 - time) < 0.1 ? 'text-[#2e7d32]' : 'text-[#d32f2f]')
         : 'text-[#5d4037]'
     ]">
       {{ isFinished ? time.toFixed(2) : displayTime(time) }}

@@ -57,6 +57,7 @@ export const useGameStore = defineStore('game', () => {
         timeLimitMs: number | null
         description: string | null
         result: null | {
+            type?: string
             winnerPlayerId?: string | null
             rewardBuff?: string | null
             rankings?: Array<{
@@ -371,6 +372,7 @@ export const useGameStore = defineStore('game', () => {
     }
 
     const setMiniGameResult = (result: {
+        type?: string
         winnerPlayerId?: string | null
         rewardBuff?: string | null
         rankings?: Array<{ playerId: string; nickname: string; value: number; rank: number }>
