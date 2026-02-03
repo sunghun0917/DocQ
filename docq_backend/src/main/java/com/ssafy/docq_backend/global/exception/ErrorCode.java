@@ -33,9 +33,11 @@ public enum ErrorCode {
     GHOST_OPTIONS_HIDDEN(HttpStatus.BAD_REQUEST, "G003", "고스트 보기 공개 전입니다."),
     TURN_SUBMISSION_CLOSED(HttpStatus.BAD_REQUEST, "G004", "턴 응답 시간이 종료되었습니다."),
 
-    /* B001 ~ B002 : 게시판 (Board) */
+    /* B001 ~ B004 : 게시판 (Board) */
     QUIZ_NOT_FOUND(HttpStatus.NOT_FOUND, "B001", "존재하지 않는 퀴즈입니다."),
     BOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "B002", "존재하지 않는 게시글입니다."),
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "B003", "존재하지 않는 댓글입니다."),
+    DUPLICATE_QUIZ(HttpStatus.CONFLICT, "B004", "중복된 퀴즈입니다."),
 
     /* D001 ~ D003 : 문서/AI (Document) */
     FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "D001", "파일 업로드 실패"),

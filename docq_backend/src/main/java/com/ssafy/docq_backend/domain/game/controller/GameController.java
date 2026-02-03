@@ -63,10 +63,14 @@ public class GameController {
 
     @ResponseBody
     @PostMapping("/game/{roomId}/quiz/generate")
-    public ResponseEntity<?> generateQuiz(@PathVariable String roomId, @RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> generateQuiz(
+            @PathVariable String roomId,
+            @RequestParam("file") MultipartFile file,
+            @RequestHeader(value = "X-User-Id", required = false) Long userId
+    ) {
         try {
             // TODO: playerId 검증 (방장인지 등)
-            gameService.generateQuizFromPdf(roomId, file);
+            gameService.generateQuizFromPdf(roomId, file, userId);
             return ResponseEntity.ok(Map.of(
                     "message", "Quiz generation started",
                     "roomId", roomId));

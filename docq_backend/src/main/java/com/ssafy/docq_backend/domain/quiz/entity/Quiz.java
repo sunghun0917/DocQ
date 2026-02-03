@@ -2,6 +2,7 @@ package com.ssafy.docq_backend.domain.quiz.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -12,6 +13,7 @@ import org.hibernate.type.SqlTypes;
 import com.ssafy.docq_backend.domain.user.entity.User;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -36,12 +38,15 @@ public class Quiz {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "quiz_list")
-    private Map<String, Object> quizList;
+    private List<Map<String, Object>> quizList;
 
     @OneToMany(mappedBy = "quiz")
     private Set<Board> boards = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "quiz")
     private Set<StoredQuiz> storedQuizzes = new LinkedHashSet<>();
+    @Size(max = 45)
+    @Column(name = "quiz_title", length = 45)
+    private String quizTitle;
 
 }
