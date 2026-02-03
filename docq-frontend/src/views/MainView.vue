@@ -260,8 +260,45 @@ const handleAction = (action: string) => {
 };
 
 const closeEditNickname = () => { showEditNicknameModal.value = false; };
-const checkEditNicknameDuplicate = async () => { /* 중복체크 로직 생략 (기존 유지) */ };
-const saveNickname = async () => { /* 저장 로직 생략 (기존 유지) */ };
+const checkEditNicknameDuplicate = async () => {
+    if (!editNickname.value || editNickname.value.trim().length < 2) {
+        editCheckMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+        editCheckStatus.value = 'error';
+        return;
+    }
+    if (editNickname.value === nickname.value) {
+        editCheckMsg.value = "현재와 동일한 닉네임입니다.";
+        editCheckStatus.value = 'success';
+        isEditNicknameChecked.value = true;
+        return;
+    }
+    const { isAvailable, message } = await userStore.checkNickname(editNickname.value.trim());
+    editCheckMsg.value = message;
+    editCheckStatus.value = isAvailable ? 'success' : 'error';
+    isEditNicknameChecked.value = isAvailable;
+};
+
+const saveNickname = async () => {
+    if (editNickname.value === nickname.value) {
+        closeEditNickname();
+        return;
+    }
+    if (!isEditNicknameChecked.value) {
+        editCheckMsg.value = "닉네임 중복 확인을 해주세요!";
+        editCheckStatus.value = 'error';
+        triggerShake();
+        return;
+    }
+    const success = await userStore.updateUsername(editNickname.value.trim());
+    if (success) {
+        nickname.value = editNickname.value.trim();
+        closeEditNickname();
+    } else {
+        editCheckMsg.value = "저장에 실패했습니다.";
+        editCheckStatus.value = 'error';
+        triggerShake();
+    }
+};
 
 const clouds = ref<{ id: number; typeId: number; style: any }[]>([]);
 const generateClouds = () => {
@@ -448,7 +485,13 @@ onUnmounted(() => { stopRoulette(); });
           <div class="edit-nickname-input-group mb-4">
             <div class="input-row">
                 <div class="input-wrapper flex-grow">
-                    <input v-model="editNickname" type="text" placeholder="닉네임을 입력하세요" @keyup.enter="saveNickname" />
+                    <input 
+                        v-model="editNickname" 
+                        type="text" 
+                        placeholder="닉네임을 입력하세요" 
+                        @keyup.enter="saveNickname" 
+                        @input="isEditNicknameChecked = false; editCheckMsg = ''"
+                    />
                 </div>
                 <button class="cartoon-btn secondary small-btn" @click="checkEditNicknameDuplicate">확인</button>
             </div>
@@ -510,7 +553,7 @@ onUnmounted(() => { stopRoulette(); });
 
 .logo-area { margin-bottom: 5px; }
 .game-title { font-size: 3.5rem; margin: 0; color: var(--text-brown); text-shadow: 3px 3px 0 #fff; line-height: 1; }
-.game-subtitle { font-size: 1.1rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; margin-top: 5px; opacity: 0.8; }
+.game-subtitle { font-size: 1.1rem; color: var(--wood-dark); margin-top: 5px; opacity: 0.8; }
 
 .input-area { display: flex; flex-direction: column; gap: 12px; }
 .input-row { display: flex; gap: 8px; align-items: stretch; }
@@ -554,11 +597,11 @@ onUnmounted(() => { stopRoulette(); });
 .panel-content.side-mode { display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(255, 248, 225, 0.5); border-width: 4px; height: 300px; margin-top: 75px; }
 .mini-content { text-align: center; display: flex; flex-direction: column; gap: 10px; }
 .side-icon { font-size: 4rem; color: var(--wood-dark); opacity: 0.8; }
-.side-label { font-size: 1.5rem; font-family: 'Nanum Pen Script', cursive; color: var(--wood-dark); }
+.side-label { font-size: 1.5rem; color: var(--wood-dark); }
 
 .content-header { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
 .icon-circle { width: 48px; height: 48px; background: var(--leaf-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid var(--leaf-dark); color: white; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2); }
-.index-number { font-size: 1.4rem; color: var(--wood-dark); font-family: 'Nanum Pen Script', cursive; }
+.index-number { font-size: 1.4rem; color: var(--wood-dark); }
 h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text-brown); text-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
 .description { margin-top: 8px; font-size: 1rem; color: var(--wood-dark); line-height: 1.3; }
 
@@ -609,14 +652,14 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .edit-nickname-title { margin: 0 0 6px 0; font-size: 1.8rem; color: var(--text-brown); }
 .edit-nickname-desc { margin: 0 0 16px 0; color: var(--wood-dark); }
 .edit-nickname-input { border-bottom: 3px solid #d7ccc8; margin-bottom: 18px; }
-.edit-nickname-input input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.2rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
+.edit-nickname-input-group input { width: 100%; border: none; background: transparent; padding: 10px; font-size: 1.2rem; text-align: center; color: var(--text-brown); font-family: var(--font-family); outline: none; }
 .edit-nickname-actions { display: flex; gap: 10px; }
 .edit-nickname-actions .cartoon-btn { flex: 1; }
 .input-row { display: flex; gap: 8px; align-items: center; }
 .flex-grow { flex-grow: 1; }
 .cartoon-btn.small-btn { width: auto; padding: 8px 12px; font-size: 1rem; white-space: nowrap; }
-.edit-nickname-input-group { display: flex; flex-direction: column; gap: 4px; text-align: left; }
-.check-msg { font-size: 1.2rem; margin-left: 4px; font-family: 'Nanum Pen Script', cursive; }
+.edit-nickname-input-group { display: flex; flex-direction: column; gap: 4px; }
+.check-msg { font-size: 0.9rem; margin-left: 4px; }
 .check-msg.success { color: var(--leaf-dark); }
 .check-msg.error { color: #d32f2f; }
 
