@@ -15,6 +15,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { useUserStore } from '@/stores/userStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useAudioStore } from '@/stores/audioStore'
 
 const router = useRouter()
 const roomStore = useRoomStore()
@@ -22,6 +23,7 @@ const gameStore = useGameStore()
 const wsStore = useWebSocketStore()
 const userStore = useUserStore()
 const uiStore = useUiStore()
+const audioStore = useAudioStore()
 
 const myPlayerId = computed(() => userStore.playerId)
 const currentQuiz = computed(() => gameStore.currentQuiz)
@@ -523,6 +525,7 @@ onMounted(() => {
   if (roomId.value) {
     wsStore.subscribeMiniGame(roomId.value)
   }
+  audioStore.playBgm('game');
 })
 
 onUnmounted(() => {
@@ -663,6 +666,13 @@ onUnmounted(() => {
       :confirmLabel="confirmConfig.confirmLabel" :icon="confirmConfig.icon" :variant="confirmConfig.variant"
       @close="closeConfirm" @confirm="handleConfirm" />
   </div>
+
+          <button @click="audioStore.toggleMute" 
+          class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
+    <span class="material-symbols-outlined !text-3xl text-[#5d4037]">
+      {{ audioStore.isMuted ? 'volume_off' : 'volume_up' }}
+    </span>
+  </button>
 </template>
 
 <style scoped>

@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'; // watch 추
 import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage, updateGuestNickname } from '@/services/api';
-
+import { useAudioStore } from '@/stores/audioStore';
 // 컴포넌트 임포트
 import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
 import AlertModal from '@/components/common/AlertModal.vue';
@@ -17,6 +17,8 @@ import CommunitySystem from '@/components/community/CommunitySystem.vue';
 
 gsap.registerPlugin(Observer);
 
+
+const audioStore = useAudioStore();
 // --- 1. 데이터 ---
 const menuItems = [
   { id: 'profile', label: '내 정보', description: '닉네임을 수정할 수 있어요.', icon: 'face' },
@@ -325,6 +327,21 @@ onMounted(() => {
     syncNicknameFromStore();
     generateClouds();
     startRoulette();
+    
+    // 자동 재생 시도
+    audioStore.playBgm('main');
+
+    // 브라우저 정책으로 차단되었을 경우를 대비해 클릭 시 재생 시도 (한 번 성공하면 리스너 제거)
+    const enableAudio = () => {
+        audioStore.playBgm('main');
+        // 오디오가 실제로 재생되기 시작했는지 확인 후 제거하는 것이 좋지만, 
+        // playBgm 내부에서 play()를 호출하므로 사용자 인터랙션으로 간주되어 재생될 것임.
+        window.removeEventListener('click', enableAudio);
+        window.removeEventListener('keydown', enableAudio);
+    };
+
+    window.addEventListener('click', enableAudio);
+    window.addEventListener('keydown', enableAudio);
 });
 onUnmounted(() => { stopRoulette(); });
 </script>
@@ -505,6 +522,12 @@ onUnmounted(() => { stopRoulette(); });
       </div>
     </transition>
   </div>
+  <button @click="audioStore.toggleMute" 
+          class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
+    <span class="material-symbols-outlined !text-3xl text-[#5d4037]">
+      {{ audioStore.isMuted ? 'volume_off' : 'volume_up' }}
+    </span>
+  </button>
 </template>
 
 <style scoped>

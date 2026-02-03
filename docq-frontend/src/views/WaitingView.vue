@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, watchEffect } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 // [중요] 3D 뷰어 직접 임포트
 import AvatarViewer from '@/components/common/AvatarViewer.vue';
-
+import { useAudioStore } from '@/stores/audioStore';
 // Stores & API
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
@@ -15,13 +15,13 @@ import AlertModal from '@/components/common/AlertModal.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
 
 // --- 1. 기본 설정 및 스토어 ---
+const audioStore = useAudioStore()
 const router = useRouter();
 const route = useRoute();
 const roomStore = useRoomStore()
 const userStore = useUserStore()
 const wsStore = useWebSocketStore()
 const uiStore = useUiStore()
-
 const roomId = computed(() => String(route.params.roomId || ''))
 const roomInfo = computed(() => roomStore.roomInfo)
 const users = computed(() => roomStore.users)
@@ -324,6 +324,7 @@ onMounted(async () => {
 
   wsStore.subscribeMiniGame(roomId.value);
   wsStore.joinGame(roomId.value, userStore.playerId, userStore.username)
+  audioStore.playBgm('main');
 })
 
 // 유저 ID를 키로, 메시지 내용을 값으로 저장하는 상태
@@ -607,6 +608,12 @@ const quickMessages = [
       </div>
     </transition>
   </div>
+      <button @click="audioStore.toggleMute" 
+          class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
+    <span class="material-symbols-outlined !text-3xl text-[#5d4037]">
+      {{ audioStore.isMuted ? 'volume_off' : 'volume_up' }}
+    </span>
+  </button>
 </template>
 
 <style scoped>
