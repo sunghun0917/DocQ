@@ -189,7 +189,58 @@ const handleDeleteComment = async (commentId: number) => {
   }
 };
 
+// --- 삭제 로직 ---
+const isMyQuiz = computed(() => {
+    return userStore.username && props.quiz.author.nickname === userStore.username;
+});
+
+const handleDeleteQuiz = () => {
+    openConfirm('게시글 삭제', '정말 이 게시글을 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.', '삭제', 'delete_forever', 'danger', () => {
+        // TODO: API Call -> DELETE /boards/{boardId}
+        alert("게시글이 삭제되었습니다.");
+        emit('close');
+        // 상위 컴포넌트에서 목록 리로드 필요
+    });
+};
+
+const handleDeleteComment = (commentId: number) => {
+    openConfirm('댓글 삭제', '정말 이 댓글을 삭제하시겠습니까?', '삭제', 'delete', 'danger', () => {
+        // TODO: API Call -> DELETE /comments/{commentId}
+        comments.value = comments.value.filter(c => c.id !== commentId);
+    });
+};
+
 const close = () => emit('close');
+
+// --- Confirm Modal State ---
+const confirmState = ref({
+  isOpen: false,
+  title: '',
+  message: '',
+  confirmLabel: '확인',
+  icon: 'help',
+  variant: 'primary' as 'primary' | 'danger',
+  pendingAction: null as (() => void) | null
+});
+
+const openConfirm = (title: string, message: string, confirmLabel: string, icon: string, variant: 'primary' | 'danger', action: () => void) => {
+  confirmState.value = {
+    isOpen: true,
+    title,
+    message,
+    confirmLabel,
+    icon,
+    variant,
+    pendingAction: action
+  };
+};
+
+const handleConfirmAction = () => {
+  if (confirmState.value.pendingAction) {
+    confirmState.value.pendingAction();
+  }
+  confirmState.value.isOpen = false;
+};
 </script>
 
 <template>
@@ -201,10 +252,16 @@ const close = () => emit('close');
         
         <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
            
-           <div class="border-b border-[#d7ccc8]/50 pb-2 mb-3">
-              <h2 class="text-2xl font-black text-[#3e2723] leading-tight mb-2 break-all">
-                 {{ quiz.title }}
-              </h2>
+           <div class="border-b border-[#d7ccc8]/50 pb-2 mb-3 relative">
+              <div class="flex justify-between items-start mb-2">
+                  <h2 class="text-2xl font-black text-[#3e2723] leading-tight break-all pr-8">
+                     {{ quiz.title }}
+                  </h2>
+                  <button v-if="isMyQuiz" @click="handleDeleteQuiz" class="text-[#bdbdbd] hover:text-[#ef5350] transition-colors p-1 absolute top-0 right-0">
+                      <span class="material-symbols-outlined">delete</span>
+                  </button>
+              </div>
+
               <div class="flex justify-between items-center">
                  <div class="flex items-center gap-1.5">
                     <div class="w-7 h-7 rounded-full bg-[#7cb342] border border-[#558b2f] flex items-center justify-center text-white font-black text-lg shadow-sm">
@@ -333,6 +390,18 @@ const close = () => emit('close');
       </div>
 
     </div>
+
+    <!-- Confirm Modal -->
+    <ConfirmModal
+      :isOpen="confirmState.isOpen"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirmLabel="confirmState.confirmLabel"
+      :icon="confirmState.icon"
+      :variant="confirmState.variant"
+      @close="confirmState.isOpen = false"
+      @confirm="handleConfirmAction"
+    />
   </div>
 </template>
 

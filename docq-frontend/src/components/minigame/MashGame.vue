@@ -20,7 +20,7 @@ const startGame = () => {
   }
   startTime = performance.now(); // [핵심] 시작 시간 기록
   window.addEventListener('keydown', handleKeydown);
-  
+
   timer = setInterval(() => {
     timeLeft.value--;
     if (timeLeft.value <= 0) {
@@ -33,9 +33,9 @@ const startGame = () => {
 const handleKeydown = (e: KeyboardEvent) => {
   if (isEnded.value || e.repeat) return;
 
-  if ((e.key === 'ArrowLeft' && lastKey.value !== 'left') || 
-      (e.key === 'ArrowRight' && lastKey.value !== 'right')) {
-    
+  if ((e.key === 'ArrowLeft' && lastKey.value !== 'left') ||
+    (e.key === 'ArrowRight' && lastKey.value !== 'right')) {
+
     progress.value = Math.min(100, progress.value + 5); // [팁] 테스트를 위해 증가량 살짝 높임 (2->5)
     lastKey.value = e.key === 'ArrowLeft' ? 'left' : 'right';
 
@@ -51,7 +51,7 @@ const endGame = (success: boolean) => {
   if (success) {
     // [핵심] 성공 시 '걸린 시간'을 계산 및 저장
     elapsedTime.value = (performance.now() - startTime) / 1000;
-    emit('end', elapsedTime.value); 
+    emit('end', elapsedTime.value);
   } else {
     // [핵심] 실패 시 아주 큰 숫자(999초)를 보내서 패배 처리
     emit('end', 999);
@@ -73,25 +73,41 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="text-center w-full h-full flex flex-col justify-center gap-8">
-    <h2 class="text-3xl font-black text-[#2d3436] mb-8">좌우로 마구 연타해!! 🔥</h2>
-    
-    <div class="text-6xl font-black mb-4" :class="{'text-red-500': timeLeft <= 3}">
+  <div class="text-center w-full h-full flex flex-col justify-center gap-8 font-jua">
+    <h2 class="text-4xl font-black text-[#5d4037] mb-8 drop-shadow-sm">좌우로 마구 연타해!!</h2>
+
+    <div class="text-7xl font-black mb-4 transition-colors"
+      :class="{ 'text-[#ef5350]': timeLeft <= 3, 'text-[#5d4037]': timeLeft > 3 }">
       {{ isEnded && progress >= 100 ? elapsedTime.toFixed(2) + 's' : timeLeft }}
     </div>
 
-    <div class="w-full h-16 bg-[#dfe6e9] rounded-full overflow-hidden border-4 border-[#b2bec3] relative mb-8">
-      <div 
-        class="h-full bg-[#ff7675] transition-all duration-75 flex items-center justify-end pr-4"
-        :style="{ width: `${progress}%` }"
-      >
-        <span class="text-white font-bold">{{ progress }}%</span>
+    <!-- 미니게임용 카툰 프로그레스 바 -->
+    <div
+      class="w-full h-16 bg-[#d7ccc8] rounded-full overflow-hidden border-4 border-[#8d6e63] relative mb-8 shadow-inner">
+      <div
+        class="h-full bg-[#7cb342] transition-all duration-75 flex items-center justify-end pr-4 shadow-[inset_0_-4px_0_rgba(0,0,0,0.1)]"
+        :style="{ width: `${progress}%` }">
+        <span class="text-white font-bold text-xl drop-shadow-md">{{ progress }}%</span>
       </div>
     </div>
-    
-    <div class="flex justify-center gap-8 text-4xl text-[#636e72]">
-      <div :class="{ 'text-[#ff7675] scale-125': lastKey === 'left' }" class="transition-transform">⬅️</div>
-      <div :class="{ 'text-[#ff7675] scale-125': lastKey === 'right' }" class="transition-transform">➡️</div>
+
+    <div class="flex justify-center gap-12 text-5xl text-[#8d6e63]">
+      <div class="transition-transform p-4 rounded-xl border-4 border-transparent"
+        :class="{ 'text-[#ff7043] scale-125 border-[#ff7043] bg-[#fff8e1] shadow-cartoon': lastKey === 'left' }">⬅️
+      </div>
+      <div class="transition-transform p-4 rounded-xl border-4 border-transparent"
+        :class="{ 'text-[#ff7043] scale-125 border-[#ff7043] bg-[#fff8e1] shadow-cartoon': lastKey === 'right' }">➡️
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.font-jua {
+  font-family: 'Jua', sans-serif;
+}
+
+.shadow-cartoon {
+  box-shadow: 4px 4px 0 #bf360c;
+}
+</style>

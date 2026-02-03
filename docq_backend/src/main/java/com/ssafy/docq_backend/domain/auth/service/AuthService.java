@@ -54,11 +54,11 @@ public class AuthService {
         // 회원 플레이어 생성 (playerId 생성 및 저장)
         String playerId = UUID.randomUUID().toString();
         Player player = Player.member(playerId, user.getNickname(), user.getId());
-                
         playerRepository.save(player);
 
         // 세션 생성
-        SessionDto sessionDto = SessionDto.forMember(player.getPlayerId(), user.getId(), user.getLoginId(), user.getNickname());
+        SessionDto sessionDto = SessionDto.forMember(player.getPlayerId(), user.getId(), user.getLoginId(),
+                user.getNickname());
         session.setAttribute("user", sessionDto);
 
         return AuthDto.SignupResponse.builder()
@@ -82,11 +82,12 @@ public class AuthService {
         // 회원 플레이어 생성 (매 로그인마다 새 playerId 부여)
         String playerId = UUID.randomUUID().toString();
         Player player = Player.member(playerId, user.getNickname(), user.getId());
-                
+
         playerRepository.save(player);
 
         // 세션 생성
-        SessionDto sessionDto = SessionDto.forMember(player.getPlayerId(), user.getId(), user.getLoginId(), user.getNickname());
+        SessionDto sessionDto = SessionDto.forMember(player.getPlayerId(), user.getId(), user.getLoginId(),
+                user.getNickname());
         session.setAttribute("user", sessionDto);
 
         return AuthDto.LoginResponse.builder()
