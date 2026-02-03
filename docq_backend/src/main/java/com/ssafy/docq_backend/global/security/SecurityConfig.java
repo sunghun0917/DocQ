@@ -49,6 +49,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 1. Public Endpoints
                         .requestMatchers("/auth/login", "/auth/signup", "/guests/login").permitAll()
+                        .requestMatchers("/users/userId/exists", "/users/nickname/exists").permitAll()
                         .requestMatchers("/ws-docq/**", "/actuator/**", "/error").permitAll()
 
                         // 2. Shared Authenticated Routes (Game, Room, Guest Info)

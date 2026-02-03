@@ -103,9 +103,8 @@ export const useUserStore = defineStore('user', () => {
         isLoading.value = true
         try {
             await signUpApi({ loginId, password, nickname })
-            // 회원가입 전용 세션이 생성되므로 정보 복구
-            const success = await restoreUser()
-            return { success }
+            // 회원가입 성공 (로그인은 별도 호출)
+            return { success: true }
         } catch (error) {
             console.error('Signup failed:', error)
             return { success: false, error }
