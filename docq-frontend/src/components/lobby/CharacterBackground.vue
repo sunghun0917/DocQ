@@ -13,6 +13,13 @@ import dogPath from '/assets/character/character_dog.glb';
 import sheepPath from '/assets/character/character_sheep.glb';
 import pigPath from '/assets/character/character_pig.glb';
 
+const props = defineProps({
+  isRunning: {
+    type: Boolean,
+    default: false
+  }
+});
+
 const container = ref<HTMLElement | null>(null);
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
@@ -64,8 +71,11 @@ const initThree = () => {
 
   // 2. 반복문으로 캐릭터 로드
   const loader = new GLTFLoader();
+  
+  // 모델과 속도 정보를 저장할 배열
+  const loadedModels: { scene: THREE.Group; speed: number }[] = [];
 
-  characters.forEach((charData) => {
+  characters.forEach((charData, index) => {
     loader.load(charData.file, (gltf) => {
       const model = gltf.scene;
 
@@ -80,12 +90,26 @@ const initThree = () => {
       });
 
       // 위치 및 크기 설정
-      // y: -1.5 (바닥 고정), x: 설정값, z: 약간의 지그재그(선택)
-      model.position.set(charData.x,charData.y, 0); 
-      model.scale.set(charData.scale, charData.scale, charData.scale);
+      let currentScale = charData.scale;
+
+      if (props.isRunning) {
+         // [Running Mode] 왼쪽 밖에서 시작, 순차적 배치
+         const startX = -10 - (index * 4); 
+         model.position.set(startX, charData.y, 0); 
+         // 달리기 모드일 때 크기 확대 (약 1.25배)
+         currentScale = charData.scale * 2;
+      } else {
+         // [Standing Mode] 기존 고정 위치
+         model.position.set(charData.x, charData.y, 0); 
+      }
+      
+      model.scale.set(currentScale, currentScale, currentScale);
       model.rotation.y = Math.PI / 2; // 오른쪽 보기
 
       scene.add(model);
+      
+      // 애니메이션 루프에서 위치 업데이트를 위해 저장
+      loadedModels.push({ scene: model, speed: charData.speed });
 
       // 애니메이션 설정
       if (gltf.animations.length > 0) {
@@ -115,6 +139,18 @@ const initThree = () => {
     // [수정] 모든 믹서 업데이트
     mixers.forEach((mixer) => mixer.update(delta));
     
+    // [추가] 캐릭터 이동 로직 (isRunning이 true일 때만)
+    if (props.isRunning) {
+        loadedModels.forEach((item) => {
+            item.scene.position.x += item.speed * delta * 3.5; // 속도 증가
+            
+            // 화면 오른쪽 끝(약 8)을 넘어가면 다시 왼쪽 끝으로 이동
+            if (item.scene.position.x > 8) {
+                item.scene.position.x = -12;
+            }
+        });
+    }
+
     renderer.render(scene, camera);
   };
   

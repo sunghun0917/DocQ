@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, watchEffect } from 'vue';
+import { ref, computed, watch, onMounted, watchEffect, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 // [중요] 3D 뷰어 직접 임포트
 import AvatarViewer from '@/components/common/AvatarViewer.vue';
@@ -9,7 +9,14 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { useUiStore } from '@/stores/uiStore'
+import CharacterBackground from '@/components/lobby/CharacterBackground.vue';
+
 import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, getMyQuizzes, getStoredQuizzes, setQuizFromDb, type MyQuizItem } from '@/services/api'
+// ... (existing code)
+
+// ...
+
+
 import type { QuizResponse } from '@/types/docq-api'
 import AlertModal from '@/components/common/AlertModal.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
@@ -126,6 +133,46 @@ const isMyQuizModalOpen = ref(false);
 const activeMyQuizTab = ref<'created' | 'saved'>('created');
 const myQuizzes = ref<MyQuizItem[]>([]);
 
+// Progressive Loading Messages (10s intervals)
+const elapsedTime = ref(0);
+const isPdfMode = ref(false); // PDF 모드 여부
+let loadingTimer: number | null = null;
+
+const loadingMessages = [
+  "AI가 PDF를 열심히 읽고 있어요...",
+  "중요한 내용을 쏙쏙 골라내는 중!",
+  "어떤 문제가 나올지 궁금하지 않나요?",
+  "동물 친구들도 같이 기다리고 있어요",
+  "조금만 더 기다려주세요, 꼼꼼히 확인 중이에요"
+];
+
+const currentLoadingMessage = computed(() => {
+  // PDF 모드가 아니면(기본/저장 퀴즈) 단순 메시지 반환
+  if (!isPdfMode.value) return "퀴즈를 준비하고 있어요!";
+
+  if (elapsedTime.value < 10) return loadingMessages[0];
+  if (elapsedTime.value < 15) return loadingMessages[1];
+  if (elapsedTime.value < 20) return loadingMessages[2];
+  if (elapsedTime.value < 30) return loadingMessages[3];
+  return loadingMessages[4]; // 40초 이후에는 마지막 멘트 고정
+});
+
+watch(isGenerating, (newVal) => {
+  if (newVal) {
+    elapsedTime.value = 0;
+    if (loadingTimer) clearInterval(loadingTimer);
+    loadingTimer = setInterval(() => {
+      elapsedTime.value++;
+    }, 1000) as unknown as number;
+  } else {
+    if (loadingTimer) {
+      clearInterval(loadingTimer);
+      loadingTimer = null;
+    }
+    elapsedTime.value = 0;
+  }
+});
+
 const handleOpenMyQuizModal = async () => {
     isMyQuizModalOpen.value = true;
     await fetchMyQuizzes();
@@ -206,7 +253,8 @@ const triggerFileInput = () => { fileInputRef.value?.click(); };
 const handleUploadPdf = async () => {
   if (!selectedFile.value || !roomId.value) return
   isGenerating.value = true
-  processingText.value = `[${selectedFile.value.name}] 분석 중...`
+  isPdfMode.value = true; // PDF 업로드 시 true
+  // processingText.value = `PDF 분석 중...`
 
   try {
     await generateQuiz(roomId.value, selectedFile.value)
@@ -259,8 +307,9 @@ watch(() => wsStore.quizGeneratedNotice, async (notice) => {
   }
   if (notice.type === 'QUIZ_GENERATING') {
     isGenerating.value = true;
+    isPdfMode.value = !!notice.fileName; // 파일 이름이 있으면 PDF 모드
     generatedQuizzes.value = [];
-    if (notice.fileName) { processingText.value = `[${notice.fileName}] 분석 중...`; }
+    if (notice.fileName) { /* processingText.value = 'PDF 분석 중...'; */ }
     else if (notice.quizType) {
       const found = basicQuizTypes.find(t => t.type === notice.quizType);
       processingText.value = `[${found ? found.label : notice.quizType}] 준비 중...`;
@@ -390,6 +439,10 @@ onMounted(async () => {
   wsStore.joinGame(roomId.value, userStore.playerId, userStore.username)
   audioStore.playBgm('main');
 })
+
+onUnmounted(() => {
+  if (loadingTimer) clearInterval(loadingTimer);
+});
 
 // 퀵메시지는 websocketStore.userMessages에서 WebSocket으로 수신 (다른 유저와 공유)
 const userMessages = computed(() => wsStore.userMessages);
@@ -568,15 +621,19 @@ const quickMessages = [
               </div>
 
               <div v-else
-                class="flex-[2] w-full rounded-2xl border-4 border-dashed flex flex-col  items-center justify-center cursor-pointer transition-all relative group bg-white hover:bg-gray-50 "
+                class="flex-[2] w-full rounded-2xl border-4 border-dashed flex flex-col  items-center justify-center cursor-pointer transition-all relative group bg-white hover:bg-gray-50 overflow-hidden"
                 :class="isDragging ? 'border-leaf-green bg-green-50' : 'border-wood-light'" @click="triggerFileInput"
                 @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
                 <input type="file" ref="fileInputRef" accept="application/pdf" class="hidden"
                   @change="handleFileChange" />
 
-                <div v-if="isGenerating" class="flex flex-col items-center gap-2">
-                  <span class="material-symbols-outlined animate-spin text-wood-dark text-4xl">sync</span>
-                  <span class="text-lg font-bold text-wood-dark">퀴즈 생성 중...</span>
+                <div v-if="isGenerating" class="flex flex-col items-center gap-1 w-full h-full p-2">
+                  <div class="w-full flex-1 relative bg-white/30 rounded-xl overflow-hidden shadow-inner cursor-default min-h-0" @click.stop>
+                    <CharacterBackground :isRunning="true" />
+                  </div>
+                  <p class="text-xl font-black text-wood-dark px-4 break-keep leading-tight animate-pulse transition-all duration-300 shrink-0 text-center">
+                    {{ currentLoadingMessage }}
+                  </p>
                 </div>
                 <div v-else class="flex flex-col items-center gap-2 group-hover:scale-105 transition-transform">
                   <span class="material-symbols-outlined text-wood-dark text-5xl opacity-40">cloud_upload</span>
@@ -600,10 +657,24 @@ const quickMessages = [
             <div v-else class="w-full h-full flex flex-col gap-3 !p-3">
 
               <div
-                class="flex-1 w-full rounded-2xl border-4 border-dashed border-wood-light bg-white/50 flex flex-col items-center justify-center text-center ">
-                <div v-if="generatedQuizzes.length === 0" class="flex flex-col items-center gap-3">
-                  <span class="material-symbols-outlined text-wood-light text-6xl animate-bounce">pending</span>
-                  <p class="text-wood-dark font-black text-lg px-4 break-keep leading-tight">{{ processingText }}</p>
+                class="flex-1 w-full rounded-2xl border-4 border-dashed border-wood-light bg-white/50 flex flex-col items-center justify-center text-center overflow-hidden">
+                <div v-if="generatedQuizzes.length === 0" class="flex flex-col items-center gap-4 transition-all duration-500 w-full h-full justify-center">
+                  <template v-if="isGenerating">
+                    <div class="w-full flex-1 relative bg-white/30 rounded-xl overflow-hidden shadow-inner mx-4 min-h-0">
+                       <CharacterBackground :isRunning="true" />
+                    </div>
+                    <div class="flex flex-col items-center gap-1 shrink-0">
+                      <p class="text-wood-dark font-black text-xl px-4 break-keep leading-tight animate-pulse transition-all duration-300">
+                        {{ currentLoadingMessage }}
+                      </p>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="flex flex-col items-center gap-4 opacity-60">
+                      <span class="material-symbols-outlined text-8xl text-wood-dark animate-bounce">hourglass_top</span>
+                      <p class="text-2xl font-black text-wood-dark">{{ processingText }}</p>
+                    </div>
+                  </template>
                 </div>
                 <div v-else class="flex flex-col items-center text-leaf-dark gap-2">
                   <span class="material-symbols-outlined text-6xl">check_circle</span>
@@ -755,6 +826,15 @@ const quickMessages = [
 
 .font-jua {
   font-family: 'Jua', sans-serif;
+}
+
+/* 동물 달리기 애니메이션 */
+@keyframes runAcross {
+  0% { left: -50px; transform: scaleX(1); }
+  100% { left: 100%; transform: scaleX(1); }
+}
+.animate-run-across {
+  animation: runAcross 3s linear infinite;
 }
 
 .cartoon-theme {
