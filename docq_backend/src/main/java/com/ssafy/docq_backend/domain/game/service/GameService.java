@@ -61,9 +61,12 @@ public class GameService {
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
     private static final long TURN_PREP_DELAY_MS = 500;
+    private static final long ITEM_USAGE_NOTICE_DELAY_MS = 2000; // 아이템 사용 알림 표시 시간 보장
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
     private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
+    /** SWAP_POSITION: 즉시 교환 애니메이션 후 다음 퀴즈까지 짧은 delay (알림 1.5초 + 버퍼) */
+    private static final long SWAP_RESUME_DELAY_MS = 3500;
     private static final long ROULETTE_FALLBACK_MS = 7000;
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
@@ -777,6 +780,18 @@ public class GameService {
     }
 
     private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
+        // PLUS_THREE: 첫 ACK에서는 이동만 적용하고 ACK 완료 처리하지 않음.
+        // 이동 애니메이션 후 두 번째 BUFF_ROULETTE_COMPLETE에서 완료 처리 → RESUME_AFTER_MINIGAME 스케줄.
+        if (resolution.ackType == GameDto.AckType.MINIGAME_COMPLETE) {
+            String pendingPlayerId = room.getPendingPlusThreePlayerId();
+            if (pendingPlayerId != null) {
+                room.setPendingPlusThreePlayerId(null);
+                roomRepository.save(room);
+                miniGameServiceProvider.getObject().applyPlusThreeMove(room, pendingPlayerId);
+                return;
+            }
+        }
+
         if (!ackStore.tryMarkAckComplete(room.getId(), resolution.ackType, resolution.keyId)) {
             return;
         }
@@ -802,19 +817,13 @@ public class GameService {
                 }
             }
             case MINIGAME_COMPLETE -> {
-                // PLUS_THREE 대기 중인 이동이 있으면 먼저 적용
-                String pendingPlayerId = room.getPendingPlusThreePlayerId();
-                if (pendingPlayerId != null) {
-                    room.setPendingPlusThreePlayerId(null);
-                    roomRepository.save(room);
-                    miniGameServiceProvider.getObject().applyPlusThreeMove(room, pendingPlayerId);
-                    // 이동 완료 후 게임 재개는 프론트엔드 ACK(BUFF_ROULETTE_COMPLETE) 후 처리됨
-                    return;
-                }
                 ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                         .round(roundOverride != null ? roundOverride : room.getRound())
                         .build();
-                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, 0);
+                // 아이템 사용 알림 표시 시간 보장 (아이템 사용 후 재개 시)
+                // useItem()에서 scheduleResumeAfterMiniGame() 호출 시에도 fallback이 있지만,
+                // ACK로 즉시 재개되는 경우를 대비해 최소 지연 시간 추가
+                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, ITEM_USAGE_NOTICE_DELAY_MS);
             }
             case BUFF_ROULETTE_COMPLETE -> {
                 // handled via MINIGAME_COMPLETE normalization
@@ -1583,6 +1592,18 @@ public class GameService {
     }
 
     public void scheduleResumeAfterMiniGame(String roomId) {
+        scheduleResumeAfterMiniGame(roomId, MINIGAME_RESUME_FALLBACK_MS);
+    }
+
+    /** SWAP_POSITION 시 짧은 delay로 다음 퀴즈 예약 (즉시 교환 애니메이션 후 ~3초 뒤 퀴즈). */
+    public void scheduleResumeAfterMiniGameForSwap(String roomId) {
+        scheduleResumeAfterMiniGame(roomId, SWAP_RESUME_DELAY_MS);
+    }
+
+    /**
+     * SWAP_POSITION 등 즉시 이동인 경우 짧은 delay로 다음 퀴즈 시작 예약.
+     */
+    public void scheduleResumeAfterMiniGame(String roomId, long delayMs) {
         try {
             Room room = roomRepository.findById(roomId)
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
@@ -1590,7 +1611,7 @@ public class GameService {
             ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                     .round(room.getRound())
                     .build();
-            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, MINIGAME_RESUME_FALLBACK_MS);
+            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, delayMs);
             ackStore.clearAck(roomId, GameDto.AckType.MINIGAME_COMPLETE, roundKeyId);
             ackStore.clearAck(roomId, GameDto.AckType.BUFF_ROULETTE_COMPLETE, roundKeyId);
         } catch (Exception e) {

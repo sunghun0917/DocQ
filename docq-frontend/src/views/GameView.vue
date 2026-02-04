@@ -275,7 +275,7 @@ watch(
         noticeText = `승자는 고스트 ${winnerName}입니다.`
       }
     }
-    await showSystemNotice(noticeText, 3500)
+    await showSystemNotice(noticeText, 2500)
     if (token !== resultNoticeToken) return
     gameStore.unlockMove()
     wsStore.sendAck('RESULT_DISPLAYED', result.quizId, gameStore.gameState.round ?? undefined)
@@ -511,20 +511,24 @@ const handleBuffRouletteDone = async (payload: { buffCode: string; requiresInter
   const winnerId = miniGame.value.result?.winnerPlayerId
   const isWinner = winnerId === myPlayerId.value
 
-  if (payload.requiresInteraction && isWinner) {
-    // 승자만 타겟 선택 모달 표시
+  // PLUS_THREE는 타겟 선택 없이 즉시 적용 → 모달 분기 제외
+  if (payload.requiresInteraction && isWinner && buffCode !== 'PLUS_THREE') {
+    // 승자만 타겟 선택 모달 표시 (바나나/위치스왑/퀴즈방해)
     currentItemToUse.value = buffCode
     showItemUsageModal.value = true
   } else if (payload.requiresInteraction && !isWinner) {
-    // 다른 플레이어는 대기 상태 표시
+    // 다른 플레이어는 대기 상태 표시 후, ACK 일관성을 위해 결과 확인 ACK 전송
     if (name && itemLabel) {
       itemWaitingState.value = {
         playerName: name,
         itemType: buffCode
       }
     }
-    // 미니게임 상태는 정리 (대기 상태는 별도 관리)
     gameStore.clearMiniGame()
+    // 전원 ACK 필요: 비승자도 버프 결과 확인 후 ACK 전송 (2초 후)
+    setTimeout(() => {
+      wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    }, 3000)
   } else {
     // 즉시 적용되는 아이템 (+3칸, 꽝)
     if (buffCode !== 'BOOM' && name && itemLabel) {
@@ -549,24 +553,31 @@ const handleBuffRouletteDone = async (payload: { buffCode: string; requiresInter
 const handleItemUse = async (data: { targetPlayerId?: string; targetPosition?: number }) => {
   const name = winnerName.value
   const itemLabel = currentItemToUse.value ? getBuffLabelForNotice(currentItemToUse.value) : ''
+  const itemType = currentItemToUse.value
 
-  if (roomId.value && myPlayerId.value && currentItemToUse.value) {
+  if (roomId.value && myPlayerId.value && itemType) {
     wsStore.useItem(
       roomId.value,
       myPlayerId.value,
-      currentItemToUse.value,
+      itemType,
       data.targetPlayerId,
       data.targetPosition
     )
 
-    if (name && itemLabel) {
+    // 자리바꾸기(SWAP)는 GameBoard에서 "000님과 자리를 바꿉니다" 알림만 표시
+    if (name && itemLabel && itemType !== 'SWAP_POSITION') {
       await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
     }
 
     showItemUsageModal.value = false
     currentItemToUse.value = null
-    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
     gameStore.clearMiniGame()
+    
+    // SWAP_POSITION은 이동 완료 후 GameBoard에서 ACK 전송하므로 여기서는 보내지 않음
+    // 다른 아이템(BANANA, QUIZ_INTERFERENCE)은 즉시 적용되므로 ACK 전송
+    if (itemType !== 'SWAP_POSITION') {
+      wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    }
   }
 }
 
@@ -635,18 +646,24 @@ onMounted(() => {
   window.addEventListener('item-used', handleItemUsedEvent as EventListener)
 })
 
-// 아이템 사용 완료 이벤트 핸들러
+// 아이템 사용 완료 이벤트 핸들러 (다른 플레이어의 아이템 사용 알림)
 const handleItemUsedEvent = (e: CustomEvent) => {
-  const { playerName, itemType } = e.detail
+  const { playerId, playerName, itemType } = e.detail
   // 대기 상태 해제
   itemWaitingState.value = null
+
+  // 자리바꾸기(SWAP)인 경우: 아무에게도 "아이템을 사용했습니다" 알림 표시 안 함
+  const isSwap = itemType && String(itemType).toUpperCase() === 'SWAP_POSITION'
+  if (isSwap) return
+
+  
 
   if (playerName && itemType) {
     const itemLabel = getBuffLabelForNotice(itemType)
     showSystemNotice(`${playerName}님이 ${itemLabel} 아이템을 사용했습니다!`, 2000)
   }
-  // 아이템 사용 완료 ACK (모든 플레이어가 빠르게 재개)
-  wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+  // ACK는 아이템 사용자(handleItemUse) 또는 이동 완료 시(GameBoard)에서 전송하므로 여기서는 전송하지 않음
+  // 비승자는 handleBuffRouletteDone에서 이미 ACK를 전송함
 }
 
 // 게임 페이즈 감시: 퀴즈 시작 시 열려있는 모달 강제 종료

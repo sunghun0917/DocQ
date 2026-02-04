@@ -208,7 +208,26 @@ public class MiniGameService {
                         int pos2 = room.getPlayerStates().get(p2).getPosition();
                         room.getPlayerStates().get(p1).setPosition(pos2);
                         room.getPlayerStates().get(p2).setPosition(pos1);
-                        // 위치 변경 알림 필요 (GameState Broadcast)
+                        roomRepository.save(room);
+
+                        // MoveInfo 1회 전송 (아이템 사용자 기준, targetPlayerId로 상대 포함 → 프론트에서 두 플레이어 위치 동시 갱신)
+                        GameDto.MoveAction swapAction = GameDto.MoveAction.builder()
+                                .type("SWAP_POSITION")
+                                .before(pos1)
+                                .after(pos2)
+                                .targetPlayerId(p2)
+                                .build();
+                        GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                                .playerId(p1)
+                                .startPosition(pos1)
+                                .endPosition(pos2)
+                                .moveProcess(Collections.singletonList(swapAction))
+                                .build();
+
+                        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/move", moveInfo);
+                        gameService.broadcastGameState(room);
+                        // SWAP은 즉시 교환이므로 다음 퀴즈까지 짧은 delay만 사용
+                        gameService.scheduleResumeAfterMiniGameForSwap(roomId);
                     }
                 }
                 break;
@@ -241,7 +260,10 @@ public class MiniGameService {
 
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/notice", itemUsedNotice);
 
-        gameService.scheduleResumeAfterMiniGame(roomId);
+        // SWAP_POSITION은 위 case에서 이미 scheduleResumeAfterMiniGameForSwap 호출
+        if (!"SWAP_POSITION".equals(request.getItemType())) {
+            gameService.scheduleResumeAfterMiniGame(roomId);
+        }
     }
 
     private List<MiniGameDto.RankInfo> calculateRankings(Room room) {
