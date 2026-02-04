@@ -108,7 +108,7 @@ const createRoom = async () => {
             v-model="roomName"
             type="text" 
             placeholder="예: 다 드루와" 
-            class="w-full h-14 px-6 rounded-2xl border-4 border-[#d7ccc8] bg-white 
+            class="w-full h-14 !px-6 rounded-2xl border-4 border-[#d7ccc8] bg-white 
                    focus:border-[#7cb342] focus:bg-[#f1f8e9] outline-none 
                    font-bold text-xl text-[#5d4037] placeholder:text-[#d7ccc8] transition-all"
           />

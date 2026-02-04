@@ -57,7 +57,8 @@ watchEffect(() => {
 
 // --- 3. 화면 표시용 유저 리스트 ---
 const displayUsers = computed(() => {
-  const max = maxUsers.value || 4;
+  // 사용자가 요청한 대로, 방 인원수가 2명 등이어도 시각적으로는 4칸(2x2) 그리드를 유지
+  const max = 4; // 항상 4칸
   const slots = [];
 
   for (let i = 0; i < max; i++) {
@@ -66,13 +67,29 @@ const displayUsers = computed(() => {
       slots.push({
         ...u,
         isEmpty: false,
+        isLocked: false,
         avatarIndex: getAvatarIndex(u.avatar)
       });
+    } else if (i >= (maxUsers.value || 4)) {
+      // 최대 인원 초과 슬롯 -> 잠금 처리
+      slots.push({
+        playerId: `locked-${i}`,
+        nickname: 'LOCKED',
+        isEmpty: true,
+        isLocked: true,
+        isReady: false,
+        isHost: false,
+        isMe: false,
+        avatar: '',
+        avatarIndex: -1
+      });
     } else {
+      // 빈 슬롯 (입장 대기)
       slots.push({
         playerId: `empty-${i}`,
         nickname: 'WAITING',
         isEmpty: true,
+        isLocked: false, /* [ADD] */
         isReady: false,
         isHost: false,
         isMe: false,
@@ -437,15 +454,23 @@ const quickMessages = [
 
         <main
           class="flex-[2] bg-white/40 rounded-[28px] border-4 border-wood-border !p-4 shadow-inner relative flex flex-col">
-          <div class="grid grid-cols-2 gap-6 w-full h-full">
+          <div class="grid grid-cols-2 grid-rows-2 gap-6 w-full h-full">
             <div v-for="user in displayUsers" :key="user.playerId"
               class="user-slot relative w-full h-full rounded-[28px] border-4 transition-all duration-300 min-h-0 box-border"
               :class="[
+                user.isLocked ? 'bg-[#d7ccc8]/20 border-[#d7ccc8] opacity-60' : /* 잠금 스타일 */
                 user.isEmpty ? 'border-dashed border-wood-light bg-white/20' : 'bg-white shadow-md',
                 user.isMe ? 'border-green-500 bg-green-50' :
-                  (user.isHost ? 'border-yellow-400 bg-yellow-50' : 'border-[#5d4037]')
+                  (user.isHost ? 'border-yellow-400 bg-yellow-50' : (!user.isEmpty && !user.isLocked ? 'border-[#5d4037]' : ''))
               ]">
 
+              <!-- [ADD] 잠금 아이콘 -->
+              <div v-if="user.isLocked" class="flex flex-col items-center justify-center w-full h-full text-[#a1887f]">
+                 <span class="material-symbols-outlined text-5xl">lock</span>
+              </div>
+
+              <!-- 기존 사용자 표시 (잠기지 않은 경우만) -->
+              <template v-else>
               <transition name="pop">
                 <div v-if="userMessages[user.playerId]" class="absolute -top-12 -right-7 z-50">
                   <div class="speech-bubble">
@@ -463,8 +488,8 @@ const quickMessages = [
               <div v-else class="w-full h-full relative overflow-hidden rounded-xl group">
 
                 <div class="absolute inset-0 z-0 text-center">
-                  <AvatarViewer v-if="user.avatarIndex !== -1" :avatarIndex="user.avatarIndex" :scale="2.2"
-                    :cameraY="0.6" :action="user.isReady ? 'win' : 'idle'" />
+                  <AvatarViewer v-if="user.avatarIndex !== -1" :avatarIndex="user.avatarIndex" :scale="2"
+                    :cameraY="1" :action="user.isReady ? 'win' : 'idle'" />
                   <div v-else class="w-full h-full flex items-center justify-center text-6xl">
                     {{ user.avatar || '👤' }}
                   </div>
@@ -496,6 +521,7 @@ const quickMessages = [
                   </div>
                 </div>
               </div>
+              </template>
             </div>
           </div>
         </main>
