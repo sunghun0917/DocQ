@@ -9,7 +9,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { useUiStore } from '@/stores/uiStore'
-import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes } from '@/services/api'
+import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, getMyQuizzes, type MyQuizItem } from '@/services/api'
 import type { QuizResponse } from '@/types/docq-api'
 import AlertModal from '@/components/common/AlertModal.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
@@ -104,6 +104,42 @@ const basicQuizTypes = [
   { type: 'sports', label: '스포츠', icon: 'sports_soccer', color: 'bg-green-100 text-green-700' },
   { type: 'mixed', label: '랜덤', icon: 'shuffle', color: 'bg-purple-100 text-purple-700' },
 ];
+
+const isMyQuizModalOpen = ref(false);
+const activeMyQuizTab = ref<'created' | 'saved'>('created');
+const myQuizzes = ref<MyQuizItem[]>([]);
+
+const handleOpenMyQuizModal = async () => {
+    isMyQuizModalOpen.value = true;
+    await fetchMyQuizzes();
+}
+
+const fetchMyQuizzes = async () => {
+    try {
+        // TODO: "저장한 퀴즈" API가 나오면 분기 처리
+        // 현재는 둘 다 getMyQuizzes 호출
+        const res = await getMyQuizzes();
+        myQuizzes.value = res.quizzes;
+    } catch (error) {
+        console.error("Failed to fetch my quizzes", error);
+        toastMessage.value = '퀴즈 목록을 불러오지 못했습니다.';
+        toastType.value = 'error';
+        isToastOpen.value = true;
+    }
+}
+
+watch(activeMyQuizTab, () => {
+    fetchMyQuizzes();
+});
+
+const handleSelectMyQuiz = async (quiz: MyQuizItem) => {
+    // TODO: 선택한 퀴즈를 게임방에 로드하는 API 연동 필요
+    console.log("Selected Quiz:", quiz);
+    toastMessage.value = `[${quiz.title}] 퀴즈를 선택했습니다. (기능 준비중)`;
+    toastType.value = 'success';
+    isToastOpen.value = true;
+    isMyQuizModalOpen.value = false;
+}
 
 // --- 5. 동작 함수들 ---
 
@@ -352,8 +388,8 @@ const quickMessages = [
       <div class="ground-front"></div>
     </div>
 
-    <div class="w-[1080px] h-[800px] wood-panel flex flex-col !p-2 relative z-10 box-border">
-      <header class="header shrink-0 h-16 mb-4 flex items-center justify-between relative px-2">
+    <div class="w-[1080px] h-[680px] wood-panel flex flex-col !p-2 relative z-10 box-border">
+      <header class="header shrink-0 h-16 mb-4 flex items-center justify-between relative !px-1">
         <div class="flex items-center gap-3 z-20">
           <div
             class="flex items-center justify-center gap-2 shrink-0 rounded-full border-2 border-[#5d4037] bg-white/60 shadow-[0_3px_0_rgba(93,64,55,0.2)]"
@@ -386,13 +422,13 @@ const quickMessages = [
         </div>
       </header>
 
-      <div class="flex gap-6 flex-[12] min-h-0 px-2">
+      <div class="flex gap-2 flex-[12] min-h-0 px-2">
 
         <main
-          class="flex-[2] bg-white/40 rounded-[32px] border-4 border-wood-border !p-2 shadow-inner relative flex flex-col">
-          <div class="grid grid-cols-2 gap-4 w-full h-full">
+          class="flex-[2] bg-white/40 rounded-[28px] border-4 border-wood-border !p-4 shadow-inner relative flex flex-col">
+          <div class="grid grid-cols-2 gap-6 w-full h-full">
             <div v-for="user in displayUsers" :key="user.playerId"
-              class="user-slot relative w-full h-full rounded-2xl border-4 transition-all duration-300 min-h-0 box-border"
+              class="user-slot relative w-full h-full rounded-[28px] border-4 transition-all duration-300 min-h-0 box-border"
               :class="[
                 user.isEmpty ? 'border-dashed border-wood-light bg-white/20' : 'bg-white shadow-md',
                 user.isMe ? 'border-green-500 bg-green-50' :
@@ -456,15 +492,15 @@ const quickMessages = [
         <aside class="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
 
           <div
-            class="h-28 bg-white/70 !p-2 py-3 rounded-[32px] border-4 border-wood-border flex flex-col items-center shadow-sm shrink-0">
+            class="h-28 bg-white/70 !p-2 py-3 rounded-[28px] border-4 border-wood-border flex flex-col items-center shadow-sm shrink-0">
             <h3 class="text-lg font-black mb-2 text-wood-dark flex items-center gap-2">
-              <span class="material-symbols-outlined text-leaf-green">face</span> 캐릭터 선택
+               캐릭터 선택
             </h3>
             <div class="w-full flex-1 flex items-center justify-center gap-3">
               <button v-for="char in characters" :key="char" @click="selectCharacter(char)"
                 :disabled="isCharacterTaken(char) || (myUser?.isReady && !myUser?.isHost)"
                 class="h-14 w-14 rounded-xl text-3xl flex items-center justify-center border-4 bg-white transition-all relative"
-                :class="selectedChar === char ? 'border-leaf-green bg-green-100 shadow-md -translate-y-1' : 'border-wood-light hover:border-leaf-green'">
+                :class="selectedChar === char ? 'border-[#7cb342] bg-green-100 shadow-md -translate-y-1' : 'border-wood-light hover:border-[#7cb342]'">
                 {{ char }}
                 <div v-if="isCharacterTaken(char)"
                   class="absolute inset-0 bg-gray-500/30 rounded-xl flex items-center justify-center">
@@ -475,7 +511,7 @@ const quickMessages = [
           </div>
 
           <div
-            class="flex-1 bg-white/70 p-4 rounded-[32px] border-4 border-wood-border flex flex-col gap-3 shadow-sm min-h-0">
+            class="flex-1 bg-white/70 !p-1.5 rounded-[28px] border-4 border-wood-border flex flex-col gap-3 shadow-sm min-h-0">
 
             <div v-if="isHost" class="w-full h-full flex flex-col gap-3 !p-3">
 
@@ -513,9 +549,8 @@ const quickMessages = [
               </div>
 
               <div v-if="generatedQuizzes.length === 0" class="flex gap-3 w-full h-14 shrink-0">
-                <button @click="triggerFileInput" class="cartoon-btn secondary h-full text-lg flex-1">파일 선택</button>
-                <button @click="isBasicQuizModalOpen = true" class="cartoon-btn primary h-full text-lg flex-1">퀴즈
-                  선택</button>
+                <button @click="handleOpenMyQuizModal" class="cartoon-btn color-purple h-full text-lg flex-1">마이 퀴즈</button>
+                <button @click="isBasicQuizModalOpen = true" class="cartoon-btn color-brown h-full text-lg flex-1">기본 퀴즈</button>
               </div>
 
               <button @click="handleStartGame"
@@ -554,15 +589,15 @@ const quickMessages = [
       </div>
 
       <!-- 🗨️ 퀵메시지 매크로 바 (스크롤 제거 및 디자인 최적화) -->
-      <footer class="mt-auto !py-4 px-4 pb-4 shrink-0 relative z-50">
+      <footer class="mt-auto !py-2 px-4 pb-4 shrink-0 relative z-50">
         <div
-          class="w-full bg-white/40 backdrop-blur-md !p-5 rounded-[32px] border-4 border-wood-border flex gap-5 items-center justify-center shadow-lg">
+          class="w-full bg-white/40 backdrop-blur-md !p-2 rounded-[28px] border-4 border-wood-border flex gap-5 items-center justify-center shadow-lg">
           <span class="material-symbols-outlined text-wood-dark font-black text-4xl mr-2"
-            style="font-size: 70px;">chat</span>
+            style="font-size: 48px;">chat</span>
           <div class="flex flex-wrap gap-3 justify-center items-center">
             <button v-for="msg in quickMessages" :key="msg.label"
               @click="wsStore.sendQuickMessage(roomId, userStore.playerId, msg.content)"
-              class="bg-white hover:bg-green-50 !px-6 !py-4 rounded-[24px] border-4 border-wood-border text-2xl font-black text-wood-dark shadow-[0_2px_0_#5d4037] active:translate-y-[8px] active:shadow-none transition-all whitespace-nowrap">
+              class="bg-white hover:bg-green-50 !px-7.5 !py-2 rounded-[24px] border-4 border-wood-border text-2xl font-black text-wood-dark shadow-[0_2px_0_#5d4037] active:translate-y-[8px] active:shadow-none transition-all whitespace-nowrap">
               {{ msg.label }}
             </button>
           </div>
@@ -598,16 +633,92 @@ const quickMessages = [
       </div>
     </transition>
   </div>
-      <button @click="audioStore.toggleMute" 
-          class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
-    <span class="material-symbols-outlined !text-3xl text-[#5d4037]">
-      {{ audioStore.isMuted ? 'volume_off' : 'volume_up' }}
-    </span>
-  </button>
+
+  <transition name="intro-fade">
+    <div v-if="isMyQuizModalOpen"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-jua"
+      @click.self="isMyQuizModalOpen = false">
+      
+      <div
+        class="w-[500px] bg-[#fff8e1] border-[6px] border-[#5d4037] rounded-[30px] !p-4 shadow-2xl flex flex-col gap-5 max-h-[80vh]">
+        
+        <h2 class="text-3xl font-black text-center text-[#5d4037] drop-shadow-sm mt-1">마이 퀴즈</h2>
+        
+        <div class="flex gap-2 p-1.5 bg-[#d7ccc8]/40 rounded-2xl shrink-0 border-2 border-[#d7ccc8]/20">
+            <button 
+              class="flex-1 py-3 rounded-xl text-xl font-bold transition-all duration-200"
+              :class="activeMyQuizTab === 'created' 
+                ? 'bg-white shadow-[0_3px_0_#bcaaa4] text-[#558b2f] -translate-y-0.5' 
+                : 'text-[#8d6e63] hover:bg-white/40'"
+              @click="activeMyQuizTab = 'created'">
+              내가 만든 퀴즈
+            </button>
+            <button 
+              class="flex-1 py-3 rounded-xl text-xl font-bold transition-all duration-200"
+              :class="activeMyQuizTab === 'saved' 
+                ? 'bg-white shadow-[0_3px_0_#bcaaa4] text-[#558b2f] -translate-y-0.5' 
+                : 'text-[#8d6e63] hover:bg-white/40'"
+              @click="activeMyQuizTab = 'saved'">
+              저장한 퀴즈
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3 min-h-[300px] pr-2">
+          
+          <div v-if="myQuizzes.length === 0" class="flex flex-col items-center justify-center h-full text-[#bcaaa4] opacity-80 gap-3">
+              <div class="w-24 h-24 rounded-full bg-[#d7ccc8]/30 flex items-center justify-center mb-2">
+                <span class="material-symbols-outlined text-6xl text-[#8d6e63]">quiz</span>
+              </div>
+              <span class="text-2xl font-bold">아직 퀴즈가 없어요!</span>
+          </div>
+          
+          <button v-for="quiz in myQuizzes" :key="quiz.quizId" @click="handleSelectMyQuiz(quiz)"
+            class="group !px-4 !py-2 rounded-2xl border-4 border-[#5d4037] bg-white hover:bg-[#f1f8e9] hover:border-[#7cb342] transition-all flex items-center justify-between text-left active:scale-[0.98] active:border-[#558b2f] shrink-0 shadow-sm relative overflow-hidden w-full">
+            
+            <div class="w-full flex items-center justify-between gap-4 relative z-10 overflow-hidden">
+              
+              <div class="flex items-center gap-4 overflow-hidden flex-1">
+
+                
+                <div class="min-w-0 flex-1">
+                  <p class="text-2xl font-black text-[#5d4037] truncate group-hover:text-[#33691e] transition-colors leading-tight">
+                    {{ quiz.title }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="shrink-0 flex items-center gap-3">
+                <p class="text-lg font-bold text-[#8d6e63] group-hover:text-[#558b2f] transition-colors flex items-center gap-1 bg-[#d7ccc8]/20 px-3 py-1 rounded-lg">
+                  {{ quiz.questionCount }}문제
+                </p>
+              </div>
+
+            </div>
+          </button>
+        </div>
+
+        <button @click="isMyQuizModalOpen = false"
+          class="cartoon-btn secondary h-16 mt-2 text-2xl font-black shrink-0 w-full shadow-[0_4px_0_#8d6e63] active:shadow-none active:translate-y-[4px] border-4 border-[#5d4037] rounded-2xl bg-[#d7ccc8] text-[#5d4037] hover:bg-[#bcaaa4] transition-all">
+          닫기
+        </button>
+      </div>
+    </div>
+  </transition>
+
+        <button @click="audioStore.toggleMute"
+        class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
+        <span class="material-symbols-outlined !text-3xl text-[#5d4037]">
+          {{ audioStore.isMuted ? 'volume_off' : 'volume_up' }}
+        </span>
+      </button>
 </template>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Jua&family=Nanum+Pen+Script&display=swap');
+
+.font-jua {
+  font-family: 'Jua', sans-serif;
+}
 
 .cartoon-theme {
   --text-brown: #5d4037;
@@ -719,6 +830,16 @@ const quickMessages = [
   box-shadow: 0 6px 0 #d84315;
 }
 
+.cartoon-btn.color-purple {
+  background: #d657c1;
+  box-shadow: 0 6px 0 #b63fb6;
+}
+
+.cartoon-btn.color-brown {
+  background: #8d6e63;
+  box-shadow: 0 6px 0 #5d4037;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -731,6 +852,7 @@ const quickMessages = [
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 
 .cloud {
   position: absolute;
