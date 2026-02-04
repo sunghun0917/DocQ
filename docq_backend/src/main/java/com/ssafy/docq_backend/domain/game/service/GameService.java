@@ -502,7 +502,7 @@ public class GameService {
         log.info("Turn Order determined: {}", players);
     }
 
-    private void broadcastGameState(Room room) {
+    public void broadcastGameState(Room room) {
         List<GameDto.PlayerInfo> playerInfos = room.getPlayers().stream()
                 .map(userId -> {
                     Player p = playerRepository.findById(userId).orElse(null);
@@ -710,6 +710,15 @@ public class GameService {
                 }
             }
             case MINIGAME_COMPLETE -> {
+                // PLUS_THREE 대기 중인 이동이 있으면 먼저 적용
+                String pendingPlayerId = room.getPendingPlusThreePlayerId();
+                if (pendingPlayerId != null) {
+                    room.setPendingPlusThreePlayerId(null);
+                    roomRepository.save(room);
+                    miniGameServiceProvider.getObject().applyPlusThreeMove(room, pendingPlayerId);
+                    // 이동 완료 후 게임 재개는 프론트엔드 ACK(BUFF_ROULETTE_COMPLETE) 후 처리됨
+                    return;
+                }
                 ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                         .round(roundOverride != null ? roundOverride : room.getRound())
                         .build();

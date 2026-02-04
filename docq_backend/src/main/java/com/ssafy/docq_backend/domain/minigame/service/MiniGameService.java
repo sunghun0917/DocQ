@@ -1,6 +1,7 @@
 package com.ssafy.docq_backend.domain.minigame.service;
 
 import com.ssafy.docq_backend.domain.game.service.GameService;
+import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.minigame.dto.BuffType;
 import com.ssafy.docq_backend.domain.minigame.dto.MiniGameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
@@ -12,6 +13,7 @@ import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ssafy.docq_backend.domain.game.entity.PlayerState;
 import com.ssafy.docq_backend.domain.minigame.dto.MiniGameType;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -138,10 +140,9 @@ public class MiniGameService {
                     selectedBuff == BuffType.QUIZ_INTERFERENCE) {
                 requiresInteraction = true;
             } else if (selectedBuff == BuffType.PLUS_THREE) {
-                // 즉시 적용 (PLUS_THREE는 PlayerState에 저장해서 다음 턴에 적용)
-                if (room.getPlayerStates().containsKey(winnerPlayerId)) {
-                    room.getPlayerStates().get(winnerPlayerId).setHasBuff(rewardBuff);
-                }
+                // ACK 기반 처리: 버프 룰렛 완료 후 이동 적용
+                requiresInteraction = true;
+                room.setPendingPlusThreePlayerId(winnerPlayerId);
             }
             // BOOM은 아무 효과 없음
         }
@@ -267,5 +268,42 @@ public class MiniGameService {
                     }
                     return list;
                 }));
+    }
+
+    public void applyPlusThreeMove(Room room, String playerId) {
+        if (room == null || playerId == null) {
+            return;
+        }
+        if (room.getPlayerStates() == null || !room.getPlayerStates().containsKey(playerId)) {
+            return;
+        }
+
+        PlayerState ps = room.getPlayerStates().get(playerId);
+        int before = ps.getPosition();
+        int after = before + 3;
+        int maxPosition = 30;
+        if (after >= maxPosition) {
+            after = maxPosition;
+        }
+
+        ps.setPosition(after);
+
+        GameDto.MoveAction action = GameDto.MoveAction.builder()
+                .type("BUFF")
+                .buffType("PLUS_THREE")
+                .before(before)
+                .after(after)
+                .build();
+
+        GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                .playerId(playerId)
+                .startPosition(before)
+                .endPosition(after)
+                .moveProcess(Collections.singletonList(action))
+                .build();
+
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/move", moveInfo);
+        roomRepository.save(room);
+        gameService.broadcastGameState(room);
     }
 }

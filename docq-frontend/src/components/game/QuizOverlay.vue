@@ -10,8 +10,13 @@ const userStore = useUserStore()
 
 const quiz = computed(() => gameStore.currentQuiz)
 const myPlayerId = computed(() => userStore.playerId)
-// MIRROR 효과 (문제 방해하기)
+// MIRROR 효과 (문제 방해하기) - 턴 플레이어에게만 적용
+const myPlayerState = computed(() => {
+  if (!myPlayerId.value) return null
+  return gameStore.gameState.players.find(p => p.playerId === myPlayerId.value) || null
+})
 const isMirrorMode = computed(() => quiz.value?.quizStyle === 'MIRROR')
+const shouldMirror = computed(() => isMyTurn.value && isMirrorMode.value)
 // currentTurnPlayerId = 게임 참여자 ID (playerId)
 const isMyTurn = computed(() => gameStore.gameState.currentTurnPlayerId === myPlayerId.value)
 
@@ -33,7 +38,7 @@ const canAnswer = computed(() => {
 
 // 타이머 (Progress Bar Width%)
 const timePercentage = computed(() => {
-  const limit = quiz.value?.timeLimit ?? 1
+  const limit = quiz.value?.timeLimit ?? 1 
   const ratio = limit > 0 ? (gameStore.timeRemaining / limit) * 100 : 0
   return Math.min(100, Math.max(0, ratio))
 })
@@ -65,6 +70,7 @@ const handleAnswer = (index: number) => {
 watch(quiz, () => {
   localSelectedAnswer.value = null
 })
+
 </script>
 
 <template>
@@ -100,7 +106,7 @@ watch(quiz, () => {
       <div class="header-badge">
         <span class="round-badge">Round {{ gameStore.gameState.round || 1 }}</span>
       </div>
-      <h2 class="question-text" :class="{ 'mirror-text': isMirrorMode }">{{ quiz.question }}</h2>
+      <h2 class="question-text" :class="{ 'mirror-text': shouldMirror }">{{ quiz.question }}</h2>
       <div class="timer-text-display">남은 시간: {{ gameStore.timeRemaining.toFixed(1) }}s</div>
     </div>
 
@@ -111,7 +117,7 @@ watch(quiz, () => {
         'disabled': hasSubmitted,
         'correct-answer': showCorrectAnswer && correctAnswerIndex === idx
       }" @click="handleAnswer(idx)" :disabled="hasSubmitted || !canAnswer">
-        <span class="option-text" :class="{ 'mirror-text': isMirrorMode }">{{ option }}</span>
+        <span class="option-text" :class="{ 'mirror-text': shouldMirror }">{{ option }}</span>
         <span v-if="showCorrectAnswer && correctAnswerIndex === idx" class="correct-badge">✓ 정답</span>
       </button>
     </div>

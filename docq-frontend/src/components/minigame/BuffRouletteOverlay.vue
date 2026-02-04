@@ -20,11 +20,11 @@ const isVisible = ref(true);
 const showResult = ref(false);
 
 const labels = [
-  { code: 'BOOM', label: '꽝', emoji: '💥' },                  // 1번 위치
-  { code: 'BANANA', label: '바나나', emoji: '🍌' },            // 2번 위치
-  { code: 'SWAP_POSITION', label: '자리 바꾸기', emoji: '🔄' }, // 3번 위치
-  { code: 'QUIZ_INTERFERENCE', label: '방해하기', emoji: '🔀' }, // 4번 위치
-  { code: 'PLUS_THREE', label: '+3칸', emoji: '➕3️⃣' }       // 5번 위치
+  { code: 'BOOM', label: '꽝', emoji: '💥' },                   // 0번: 폭탄 → 폭탄 ✓
+  { code: 'BANANA', label: '바나나', emoji: '🍌' },            // 1번: 이전 +3 위치 → 바나나
+  { code: 'SWAP_POSITION', label: '자리 바꾸기', emoji: '�' }, // 2번: 이전 방해하기 위치 → 자리바꾸기
+  { code: 'QUIZ_INTERFERENCE', label: '방해하기', emoji: '�' }, // 3번: 이전 자리바꾸기 위치 → 방해하기
+  { code: 'PLUS_THREE', label: '+3칸', emoji: '➕3️⃣' }        // 4번: 이전 바나나 위치 → +3
 ];
 
 // Note: 3D 모델의 아이템 배치 순서를 확인해야 정확한 각도 계산 가능
@@ -66,11 +66,16 @@ const spin = () => {
   // 랜덤 회전 수 (5바퀴 고정, 일반 룰렛과 동일)
   const totalSpins = 360 * 5;
 
-  // 타겟 각도 (이전 코드 참고하여 조정)
-  // 인덱스별 중심 각도: 0->0, 1->72, 2->144...
-  // 멈춰야 할 각도 = -(index * 72) + 오프셋
-  const landingOffset = 40; // 착지 오프셋 (도 단위)
-  const targetFinalAngle = -(targetIndex.value * sectionAngle) + landingOffset;
+  // 각 아이템별 개별 오프셋 (테스트 결과 기반)
+  const offsetByCode: Record<string, number> = {
+    'BANANA': 120,
+    'BOOM': -40,
+    'SWAP_POSITION': -120,
+    'QUIZ_INTERFERENCE': 30,
+    'PLUS_THREE': 180
+  };
+  const landingOffset = offsetByCode[props.buffCode] ?? 0;
+  const targetFinalAngle = landingOffset; // 공식 계산 대신 직접 오프셋 사용
 
   // 현재 각도에서 0도로 돌아가기 위한 추가 회전 (일반 룰렛과 동일)
   const currentDegrees = ((rotation.value % 360) + 360) % 360;

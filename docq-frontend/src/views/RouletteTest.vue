@@ -22,7 +22,14 @@ const landingOffset = ref(60)
 
 const normalLabels = [-1, 1, 2, 3, 4, 5, 6, 7]
 const ghostLabels = [-1, 1, 2, 3]
-const itemLabels = [-1, 1, 2, 3, 4] // 5 items
+const itemOptions = [
+    { code: 'BOOM', label: '꽝' },
+    { code: 'BANANA', label: '바나나' },
+    { code: 'SWAP_POSITION', label: '자리 바꾸기' },
+    { code: 'QUIZ_INTERFERENCE', label: '방해하기' },
+    { code: 'PLUS_THREE', label: '+3칸' }
+]
+const itemLabels = itemOptions.map((_, idx) => idx) // 5 items (index-based)
 
 
 
@@ -35,7 +42,7 @@ const currentLabels = computed(() => {
 const targetValue = ref(1)
 
 watch(testMode, (mode) => {
-    targetValue.value = 1
+    targetValue.value = mode === 'item' ? 0 : 1
     rotation.value = 0
     if (mode === 'ghost') {
         landingOffset.value = 45
@@ -58,7 +65,23 @@ const spinToTarget = () => {
 
     const totalSpins = 360 * 3
     const currentDegrees = ((rotation.value % 360) + 360) % 360
-    const targetFinalAngle = -(targetIndex * sectionAngle) + landingOffset.value
+    
+    // 아이템 모드일 때는 개별 오프셋 사용
+    let targetFinalAngle: number
+    if (testMode.value === 'item') {
+        const itemOffsets: Record<string, number> = {
+            'BANANA': 120,
+            'BOOM': -40,
+            'SWAP_POSITION': -120,
+            'QUIZ_INTERFERENCE': 30,
+            'PLUS_THREE': 180
+        }
+        const selectedCode = itemOptions[targetValue.value]?.code ?? 'BOOM'
+        targetFinalAngle = itemOffsets[selectedCode] ?? 0
+    } else {
+        targetFinalAngle = -(targetIndex * sectionAngle) + landingOffset.value
+    }
+    
     const extra = (360 - currentDegrees) % 360
     const targetRotationValue = rotation.value + totalSpins + extra + targetFinalAngle
 
@@ -101,9 +124,16 @@ const currentComponent = computed(() => {
             <div class="control-group highlight">
                 <h3>1. 회전 & 영점 보정</h3>
                 <div class="input-item">목표: <select v-model.number="targetValue">
-                        <option v-for="n in currentLabels" :key="n" :value="n">{{ n }}</option>
+                        <option v-for="n in currentLabels" :key="n" :value="n">
+                            {{ testMode === 'item' ? (itemOptions[n]?.label ?? n) : n }}
+                        </option>
                     </select></div>
                 <div class="input-item">보정(°): <input type="number" v-model.number="landingOffset"></div>
+                <div v-if="testMode === 'item'" class="hint">
+                    현재 보정값(°)을
+                    <code>docq-frontend/src/components/minigame/BuffRouletteOverlay.vue</code>
+                    의 <code>landingOffset</code>에 반영하세요.
+                </div>
                 <button @click="spinToTarget" :disabled="isSpinning">테스트 회전</button>
             </div>
 
@@ -221,6 +251,13 @@ h4 {
     margin-bottom: 6px;
     font-family: monospace;
     font-size: 0.8rem;
+}
+
+.hint {
+    font-size: 0.75rem;
+    color: #cbd5f5;
+    line-height: 1.4;
+    margin: 4px 0 8px;
 }
 
 input[type="number"],

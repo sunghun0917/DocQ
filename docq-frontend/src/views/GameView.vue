@@ -189,6 +189,8 @@ function getBuffLabelForNotice(buffCode?: string): string {
       return '2배 이동'
     case 'PLUS_THREE':
       return '+3칸 이동'
+    case 'BOOM':
+      return '꽝'
     default:
       return buffCode || '아이템'
   }
@@ -503,10 +505,20 @@ const handleBuffRouletteDone = async (payload: { buffCode: string; requiresInter
     gameStore.clearMiniGame()
   } else {
     // 즉시 적용되는 아이템 (+3칸, 꽝)
-    if (name && itemLabel) {
-      await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+    if (buffCode !== 'BOOM' && name && itemLabel) {
+      const message = buffCode === 'PLUS_THREE'
+        ? `${name}님이 +3칸 이동합니다.`
+        : `${name}님이 ${itemLabel}을(를) 획득했습니다.`
+      await showSystemNotice(message, 2000)
     }
-    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    if (buffCode === 'PLUS_THREE') {
+      // 버프 룰렛 완료 ACK 먼저 전송 → 백엔드에서 이동 메시지 전송
+      wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+      // 이동 애니메이션 완료 후 게임 재개 ACK 전송 (GameBoard에서 처리)
+      gameStore.setPendingPlusThreeAck(true)
+    } else {
+      wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    }
     gameStore.clearMiniGame()
   }
 }
@@ -531,6 +543,7 @@ const handleItemUse = async (data: { targetPlayerId?: string; targetPosition?: n
 
     showItemUsageModal.value = false
     currentItemToUse.value = null
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
     gameStore.clearMiniGame()
   }
 }
@@ -609,6 +622,8 @@ const handleItemUsedEvent = (e: CustomEvent) => {
     const itemLabel = getBuffLabelForNotice(itemType)
     showSystemNotice(`${playerName}님이 ${itemLabel} 아이템을 사용했습니다!`, 2000)
   }
+  // 아이템 사용 완료 ACK (모든 플레이어가 빠르게 재개)
+  wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
 }
 
 // 게임 페이즈 감시: 퀴즈 시작 시 열려있는 모달 강제 종료
