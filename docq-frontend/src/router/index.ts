@@ -11,6 +11,8 @@ const routes = [
   { path: '/test/roulette', component: () => import('@/views/RouletteTest.vue') },
   // [TEST] 미니게임 통합 테스트 페이지
   { path: '/test/minigame', component: () => import('@/views/MiniGameTest.vue') },
+  // [TEST] 바나나 맵 렌더링 테스트
+  { path: '/test/banana', component: () => import('@/views/BananaMapTest.vue') },
 ]
 
 const router = createRouter({
