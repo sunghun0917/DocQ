@@ -13,6 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class StoredQuizService {
@@ -98,6 +101,47 @@ public class StoredQuizService {
         return QuizApiDto.StoreQuizResponse.builder()
                 .quizId(quizId)
                 .stored(false)
+                .build();
+    }
+
+    /**
+     * 내가 저장한 퀴즈 목록 조회.
+     */
+    @Transactional(readOnly = true)
+    public QuizApiDto.MyQuizListResponse getStoredQuizzes(Long userId) {
+        if (userId == null) {
+            throw new DocqException(ErrorCode.ACCESS_DENIED);
+        }
+
+        // 유저 존재 확인
+        if (!userRepository.existsById(userId)) {
+            throw new DocqException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        List<StoredQuiz> storedQuizzes = storedQuizRepository.findByUser_IdOrderByIdDesc(userId);
+
+        List<QuizApiDto.MyQuizItem> items = storedQuizzes.stream()
+                .map(stored -> {
+                    Quiz quiz = stored.getQuiz();
+                    int questionCount = 0;
+                    try {
+                        if (quiz.getQuizList() != null) {
+                            questionCount = quiz.getQuizList().size();
+                        }
+                    } catch (Exception e) {
+                        questionCount = 0;
+                    }
+
+                    return QuizApiDto.MyQuizItem.builder()
+                            .quizId(quiz.getId())
+                            .title(quiz.getQuizTitle() != null ? quiz.getQuizTitle() : "제목 없음")
+                            .questionCount(questionCount)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        return QuizApiDto.MyQuizListResponse.builder()
+                .quizzes(items)
                 .build();
     }
 }

@@ -27,8 +27,7 @@ public class QuizController {
     @PostMapping("/create")
     public ResponseEntity<QuizApiDto.CreateQuizResponse> create(
             @AuthenticationPrincipal CustomUserDetails user,
-            @Valid @RequestBody QuizApiDto.CreateQuizRequest request
-    ) {
+            @Valid @RequestBody QuizApiDto.CreateQuizRequest request) {
         Long userId = user != null ? user.getUserId() : null;
         QuizApiDto.CreateQuizResponse response = quizService.create(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -37,8 +36,7 @@ public class QuizController {
     @PostMapping("/{quizId}/store")
     public ResponseEntity<QuizApiDto.StoreQuizResponse> store(
             @AuthenticationPrincipal CustomUserDetails user,
-            @PathVariable Long quizId
-    ) {
+            @PathVariable Long quizId) {
         Long userId = user != null ? user.getUserId() : null;
         QuizApiDto.StoreQuizResponse response = storedQuizService.store(userId, quizId);
         return ResponseEntity.ok(response);
@@ -50,8 +48,7 @@ public class QuizController {
     @DeleteMapping("/{quizId}/store")
     public ResponseEntity<QuizApiDto.StoreQuizResponse> unstore(
             @AuthenticationPrincipal CustomUserDetails user,
-            @PathVariable Long quizId
-    ) {
+            @PathVariable Long quizId) {
         Long userId = user != null ? user.getUserId() : null;
         QuizApiDto.StoreQuizResponse response = storedQuizService.unstore(userId, quizId);
         return ResponseEntity.ok(response);
@@ -62,11 +59,20 @@ public class QuizController {
      */
     @GetMapping("/my")
     public ResponseEntity<QuizApiDto.MyQuizListResponse> getMyQuizzes(
-            @AuthenticationPrincipal CustomUserDetails user
-    ) {
+            @AuthenticationPrincipal CustomUserDetails user) {
         Long userId = user != null ? user.getUserId() : null;
         QuizApiDto.MyQuizListResponse response = quizService.getMyQuizzes(userId);
         return ResponseEntity.ok(response);
     }
-}
 
+    /**
+     * 내가 저장한 퀴즈 목록 조회. 회원 전용.
+     */
+    @GetMapping("/stored-quizz")
+    public ResponseEntity<QuizApiDto.MyQuizListResponse> getStoredQuizzes(
+            @AuthenticationPrincipal CustomUserDetails user) {
+        Long userId = user != null ? user.getUserId() : null;
+        QuizApiDto.MyQuizListResponse response = storedQuizService.getStoredQuizzes(userId);
+        return ResponseEntity.ok(response);
+    }
+}

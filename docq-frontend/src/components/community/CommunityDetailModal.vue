@@ -297,9 +297,14 @@ const handleConfirmAction = () => {
 
         <div class="p-4 border-t border-[#d7ccc8] bg-white shrink-0 z-10 shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
            <div class="flex flex-col gap-2.5 mb-3">
-              <h4 class="text-md font-black text-[#8d6e63] flex items-center gap-1.5">
-                 <span class="material-symbols-outlined text-base">quiz</span>
-                 퀴즈 미리보기 (회원전용)
+              <h4 class="text-md font-black text-[#8d6e63] flex items-center justify-between">
+                 <div class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-base">quiz</span>
+                    퀴즈 미리보기 (회원전용)
+                 </div>
+                 <span v-if="props.quiz?.quiz?.quizTitle" class="text-sm font-bold text-[#558b2f] bg-[#f1f8e9] px-2 py-0.5 rounded-full border border-[#dcedc8]">
+                   {{ props.quiz.quiz.quizTitle }}
+                 </span>
               </h4>
               
               <div class="flex flex-col gap-2 h-[150px] pr-1 overflow-y-auto custom-scrollbar">

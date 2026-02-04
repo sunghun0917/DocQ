@@ -203,6 +203,63 @@ public class GameService {
         return quizzes.size();
     }
 
+    public int setQuizFromDb(String roomId, Long quizId) {
+        // [ADD] 퀴즈 생성 시작 알림
+        Map<String, Object> startMsg = new HashMap<>();
+        startMsg.put("type", "QUIZ_GENERATING");
+        startMsg.put("quizId", quizId);
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        com.ssafy.docq_backend.domain.quiz.entity.Quiz dbQuiz = quizService.findById(quizId);
+        List<Map<String, Object>> quizList = dbQuiz.getQuizList();
+
+        if (quizList == null || quizList.isEmpty()) {
+            throw new DocqException(ErrorCode.QUIZ_NOT_FOUND); // Or Empty
+        }
+
+        // [MOD] 퀴즈 순서 섞기
+        List<Map<String, Object>> shuffledList = new ArrayList<>(quizList);
+        Collections.shuffle(shuffledList);
+
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < shuffledList.size(); i++) {
+            Map<String, Object> qMap = shuffledList.get(i);
+            String question = (String) qMap.get("question");
+            List<String> options = (List<String>) qMap.get("options");
+            int answerIndex = (int) qMap.getOrDefault("answerIndex", -1);
+            String answerText = (String) qMap.get("answerText"); // nullable
+
+            // answerText가 없으면 옵션에서 추출 (optionally)
+            if (answerText == null && answerIndex >= 0 && answerIndex < options.size()) {
+                answerText = options.get(answerIndex);
+            }
+
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1))
+                    .question(question)
+                    .options(options)
+                    .answerIndex(answerIndex)
+                    .answerText(answerText)
+                    .build());
+        }
+
+        room.setQuizList(quizzes);
+        roomRepository.save(room);
+
+        // Broadcast update
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+        // 제목도 같이 보내주면 좋을 수 있음
+        message.put("quizTitle", dbQuiz.getQuizTitle());
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+
+        return quizzes.size();
+    }
+
     public void resetQuiz(String roomId) {
         // [MOD] 퀴즈 리셋 알림 -> "대기 중" 상태로 전환
         Map<String, Object> resetMsg = new HashMap<>();

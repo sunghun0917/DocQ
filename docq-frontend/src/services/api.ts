@@ -56,6 +56,7 @@ export type BoardDetailQuiz = {
     quizId: number
     quizCount: number
     quizList: string[] // question만
+    quizTitle: string
 }
 
 export type BoardDetailResponse = {
@@ -280,6 +281,15 @@ export const getQuizzes = async (roomId: string): Promise<QuizResponse[]> => {
 }
 
 /**
+ * DB에 저장된 퀴즈 선택
+ * POST /game/{roomId}/quiz/{quizId}
+ */
+export const setQuizFromDb = async (roomId: string, quizId: number): Promise<{ count: number }> => {
+    const response = await apiClient.post<{ count: number }>(`/game/${roomId}/quiz/${quizId}`)
+    return response.data
+}
+
+/**
  * 기본 퀴즈 선택
  * POST /api/game/{roomId}/quiz/default?type=nonsense|common|mixed
  */
@@ -396,6 +406,15 @@ export const getMyQuizzes = async (): Promise<MyQuizListResponse> => {
     return response.data
 }
 
+/**
+ * 내가 저장한 퀴즈 목록 조회
+ * GET /quizzes/stored-quizz
+ */
+export const getStoredQuizzes = async (): Promise<MyQuizListResponse> => {
+    const response = await apiClient.get<MyQuizListResponse>('/quizzes/stored-quizz')
+    return response.data
+}
+
 // ==================== Comments API ====================
 
 /**
@@ -454,10 +473,12 @@ export default {
     createRoom,
     getRoomById,
     getRoomByInviteCode,
+    getRoomByInviteCode,
     verifyJoinRoom,
     generateQuiz,
     getQuizzes,
     setDefaultQuizzes,
+    setQuizFromDb,
     checkNicknameAvailability,
     checkUserIdAvailability,
     signUp,
@@ -472,6 +493,7 @@ export default {
     storeQuiz,
     unstoreQuiz,
     getMyQuizzes,
+    getStoredQuizzes,
     getComments,
     createComment,
     deleteComment,
