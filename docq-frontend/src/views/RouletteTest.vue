@@ -70,11 +70,11 @@ const spinToTarget = () => {
     let targetFinalAngle: number
     if (testMode.value === 'item') {
         const itemOffsets: Record<string, number> = {
-            'BANANA': 120,
+            'BANANA': 30,
             'BOOM': -40,
-            'SWAP_POSITION': -120,
-            'QUIZ_INTERFERENCE': 30,
-            'PLUS_THREE': 180
+            'SWAP_POSITION': 120,
+            'QUIZ_INTERFERENCE': 180,
+            'PLUS_THREE': -120
         }
         const selectedCode = itemOptions[targetValue.value]?.code ?? 'BOOM'
         targetFinalAngle = itemOffsets[selectedCode] ?? 0
