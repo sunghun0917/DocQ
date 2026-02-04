@@ -537,7 +537,7 @@ public class GameService {
         log.info("Turn Order determined: {}", players);
     }
 
-    private void broadcastGameState(Room room) {
+    public void broadcastGameState(Room room) {
         List<GameDto.PlayerInfo> playerInfos = room.getPlayers().stream()
                 .map(userId -> {
                     Player p = playerRepository.findById(userId).orElse(null);
@@ -745,6 +745,15 @@ public class GameService {
                 }
             }
             case MINIGAME_COMPLETE -> {
+                // PLUS_THREE 대기 중인 이동이 있으면 먼저 적용
+                String pendingPlayerId = room.getPendingPlusThreePlayerId();
+                if (pendingPlayerId != null) {
+                    room.setPendingPlusThreePlayerId(null);
+                    roomRepository.save(room);
+                    miniGameServiceProvider.getObject().applyPlusThreeMove(room, pendingPlayerId);
+                    // 이동 완료 후 게임 재개는 프론트엔드 ACK(BUFF_ROULETTE_COMPLETE) 후 처리됨
+                    return;
+                }
                 ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                         .round(roundOverride != null ? roundOverride : room.getRound())
                         .build();
@@ -900,9 +909,30 @@ public class GameService {
             // Broadcast Quiz
             messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quizForGhosts);
             if (room.getCurrentTurnPlayerId() != null) {
+                // 퀴즈 방해(DEBUFF_MIRROR) 체크
+                String turnPlayerId = room.getCurrentTurnPlayerId();
+                PlayerState turnPlayerState = room.getPlayerStates().get(turnPlayerId);
+                String quizStyle = null;
+
+                if (turnPlayerState != null && "DEBUFF_MIRROR".equals(turnPlayerState.getHasBuff())) {
+                    quizStyle = "MIRROR";
+                    turnPlayerState.setHasBuff(null); // 1회용 디버프 해제
+                    roomRepository.save(room);
+                }
+
+                GameDto.QuizMessage finalQuiz = GameDto.QuizMessage.builder()
+                        .quizId(quizId)
+                        .question(quizEntity.getQuestion())
+                        .options(quizEntity.getOptions())
+                        .timeLimit(QUIZ_TIME_LIMIT_MS)
+                        .quizStartTime(quizStartTime)
+                        .quizStartTimeMs(quizStartTimeMs)
+                        .quizStyle(quizStyle)
+                        .build();
+
                 messagingTemplate.convertAndSend(
                         "/queue/game/" + room.getCurrentTurnPlayerId() + "/quiz",
-                        quiz);
+                        finalQuiz);
             }
 
             // Schedule Quiz End
@@ -1183,14 +1213,28 @@ public class GameService {
                                 nextPos = TARGET_POSITION;
                                 finishPlanned = true;
                             }
-                        }
+                            actions.add(GameDto.MoveAction.builder()
+                                    .type("TILE_EFFECT")
+                                    .effectType(eventType)
+                                    .before(before)
+                                    .after(nextPos)
+                                    .build());
+                        } else if ("BANANA".equals(eventType)) {
+                            // 바나나 밟음: 뒤로 3칸
+                            nextPos -= 3;
+                            if (nextPos < START_POSITION)
+                                nextPos = START_POSITION;
 
-                        actions.add(GameDto.MoveAction.builder()
-                                .type("TILE_EFFECT")
-                                .effectType(eventType)
-                                .before(before)
-                                .after(nextPos)
-                                .build());
+                            actions.add(GameDto.MoveAction.builder()
+                                    .type("TILE_EFFECT")
+                                    .effectType("BANANA_SLIP")
+                                    .before(before)
+                                    .after(nextPos)
+                                    .build());
+
+                            // 밟은 바나나 제거 (1회용)
+                            room.getMapEvents().remove(before);
+                        }
                     }
                 }
 

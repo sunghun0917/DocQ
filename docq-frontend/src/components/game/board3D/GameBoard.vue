@@ -680,6 +680,11 @@ watch(() => gameStore.currentMove, async (move) => {
   gameStore.setMovementInProgress(false)
   emit('movement-change', false)
   wsStore.sendAck('MOVE_COMPLETE', gameStore.lastMoveQuizId ?? undefined, gameStore.gameState.round ?? undefined)
+  // 미니게임 +3칸 즉시 이동 후 재개 ACK
+  if (gameStore.pendingPlusThreeAck) {
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    gameStore.setPendingPlusThreeAck(false)
+  }
 })
 
 function sleep(ms: number) {

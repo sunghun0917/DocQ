@@ -92,6 +92,9 @@ public class Room {
     @Builder.Default
     private Set<String> playedMiniGames = ConcurrentHashMap.newKeySet();
 
+    // Pending PLUS_THREE move (player ID waiting for ACK to apply +3 move)
+    private String pendingPlusThreePlayerId;
+
     public void addPlayer(String playerId) {
         players.add(playerId);
         this.currentCount = players.size();

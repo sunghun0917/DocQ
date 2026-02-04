@@ -5,6 +5,7 @@ import { useRoomStore } from '@/stores/roomStore';
 import { useWebSocketStore } from '@/stores/websocketStore';
 import { TresCanvas } from "@tresjs/core";
 import GameRoulette3D from "@/components/game/board3D/GameRoulette3D.vue";
+import GameGhostRoulette3D from "@/components/game/board3D/GameGhostRoulette3D.vue";
 import gsap from 'gsap';
 
 const gameStore = useGameStore();
@@ -16,6 +17,7 @@ const rotation = ref(0);
 const isVisible = ref(false);
 const labelByIndex = ref<number[]>([-1, 1, 2, 3, 4, 5, 6, 7]);
 const displayResult = ref<number | null>(null);
+const isGhostMode = ref(false);
 
 // 3D 룰렛 최종 골든 세팅
 const initialRotation = ref({ x: 140, y: 0, z: 0 });
@@ -34,7 +36,10 @@ watch(() => gameStore.rouletteTargetId, (targetId) => {
   if (targetId) {
     const currentTurnPlayerId = gameStore.gameState.currentTurnPlayerId;
     const isTurnOwner = targetId === currentTurnPlayerId;
+    isGhostMode.value = !isTurnOwner;
     labelByIndex.value = isTurnOwner ? [-1, 1, 2, 3, 4, 5, 6, 7] : [-1, 1, 2, 3];
+    // 일반 룰렛은 60도, 고스트 룰렛은 120도 보정 적용
+    landingOffset.value = isTurnOwner ? 60 : 120;
   }
 }, { immediate: true });
 
@@ -113,9 +118,9 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
         <TresCanvas alpha :clear-alpha="0" shadows>
           <TresPerspectiveCamera :position="[0, 6, -10]" :look-at="[0, 0, 0]" />
 
-          <GameRoulette3D :rotation="rotation" :isSpinning="isSpinning" :spin-axis="spinAxis"
-            :initial-rotation="initialRotation" :arrow-offset="arrowOffset" :model-scale="modelScale"
-            :model-position="modelPosition" use-raw-model />
+          <component :is="isGhostMode ? GameGhostRoulette3D : GameRoulette3D" :rotation="rotation"
+            :isSpinning="isSpinning" :spin-axis="spinAxis" :initial-rotation="initialRotation"
+            :arrow-offset="arrowOffset" :model-scale="modelScale" :model-position="modelPosition" use-raw-model />
 
           <TresAmbientLight :intensity="1.5" />
           <TresDirectionalLight :position="[2, 5, 2]" :intensity="1.5" cast-shadow />

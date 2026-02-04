@@ -22,4 +22,13 @@ public class MiniGameController {
                 request.getResultValue());
         miniGameService.submitResult(request);
     }
+
+    // 클라이언트 전송 경로: /app/game/minigame/item
+    @MessageMapping("/game/minigame/item")
+    public void useItem(@Payload MiniGameDto.ItemUsageRequest request) {
+        log.info("Item Usage Request: Room={}, Player={}, Item={}, TargetP={}, TargetPos={}",
+                request.getRoomId(), request.getPlayerId(), request.getItemType(), request.getTargetPlayerId(),
+                request.getTargetPosition());
+        miniGameService.useItem(request);
+    }
 }

@@ -74,6 +74,8 @@ export const useGameStore = defineStore('game', () => {
         description: null,
         result: null
     })
+    /** +3칸 즉시 이동 후 미니게임 재개 ACK 대기 */
+    const pendingPlusThreeAck = ref(false)
 
     // Getters
     const totalQuizCount = computed(() => quizzes.value.length)
@@ -166,7 +168,8 @@ export const useGameStore = defineStore('game', () => {
             question: quizData.question,
             options,
             timeLimit: Math.max(1, Math.ceil(remainingMs / 1000)),
-            answer: -1
+            answer: -1,
+            quizStyle: quizData.quizStyle ?? null
         }
 
         currentQuizIndex.value = 0
@@ -183,14 +186,23 @@ export const useGameStore = defineStore('game', () => {
 
     const onQuizReceived = (quizData: QuizMessage) => {
         const incomingOptions = Array.isArray(quizData.options) ? quizData.options : []
+        const hasIncomingStyle = quizData.quizStyle !== undefined && quizData.quizStyle !== null
         if (movementInProgress.value) {
             if (pendingQuiz.value && pendingQuiz.value.quizId === quizData.quizId) {
+                let nextPending = pendingQuiz.value
                 if (incomingOptions.length > 0) {
-                    pendingQuiz.value = {
-                        ...pendingQuiz.value,
+                    nextPending = {
+                        ...nextPending,
                         options: incomingOptions
                     }
                 }
+                if (hasIncomingStyle) {
+                    nextPending = {
+                        ...nextPending,
+                        quizStyle: quizData.quizStyle
+                    }
+                }
+                pendingQuiz.value = nextPending
                 return
             }
             pendingQuiz.value = quizData
@@ -199,6 +211,9 @@ export const useGameStore = defineStore('game', () => {
         if (currentQuiz.value && currentQuiz.value.quizId === quizData.quizId) {
             if (incomingOptions.length > 0 && currentQuiz.value.options.length === 0) {
                 currentQuiz.value.options = incomingOptions
+            }
+            if (hasIncomingStyle) {
+                currentQuiz.value.quizStyle = quizData.quizStyle
             }
             return
         }
@@ -232,6 +247,7 @@ export const useGameStore = defineStore('game', () => {
     const clearTurnPlayerFeedback = () => {
         turnPlayerFeedback.value = null
     }
+
 
     const onRoundResultReceived = (resultData: RoundResult) => {
         stopTimer()
@@ -394,6 +410,10 @@ export const useGameStore = defineStore('game', () => {
         }
     }
 
+    const setPendingPlusThreeAck = (value: boolean) => {
+        pendingPlusThreeAck.value = value
+    }
+
     const clearQuiz = () => {
         stopTimer()
         currentQuiz.value = null
@@ -459,6 +479,8 @@ export const useGameStore = defineStore('game', () => {
         startMiniGame,
         setMiniGameResult,
         clearMiniGame,
-        clearQuiz
+        clearQuiz,
+        pendingPlusThreeAck,
+        setPendingPlusThreeAck
     }
 })

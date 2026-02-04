@@ -1,34 +1,87 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import { OrbitControls } from '@tresjs/cientos'
 import GameRoulette3D from '@/components/game/board3D/GameRoulette3D.vue'
+import GameGhostRoulette3D from '@/components/game/board3D/GameGhostRoulette3D.vue'
+import GameItemRoulette3D from '@/components/game/board3D/GameItemRoulette3D.vue'
 import gsap from 'gsap'
 
 const rotation = ref(0)
 const isSpinning = ref(false)
+const testMode = ref<'normal' | 'ghost' | 'item'>('normal')
 
-// [테스트 랩 모든 컨트롤러 데이터 - RouletteOverlay.vue와 동일한 '골든 세팅']
+// [테스트 랩 모든 컨트롤러 데이터]
 const initialRotation = ref({ x: 140, y: 0, z: 0 })
 const arrowOffset = ref({ x: 0, y: 0, z: 3.2 })
-const modelScale = ref(1.5)                         // 1.5로 조정
-const modelPosition = ref({ x: 0, y: -0.5, z: 0 })  // 위치 보정값 추가
-const cameraPosition = ref({ x: 0, y: 6, z: -10 })  // 카메라 위치 [0, 6, -10]
+const modelScale = ref(1.5)
+const modelPosition = ref({ x: 0, y: -0.5, z: 0 })
+const cameraPosition = ref({ x: 0, y: 6, z: -10 })
 const lookAt = ref({ x: 0, y: 0, z: 0 })
-const pivotOffset = ref({ x: 0, y: 0, z: 0 })
 const landingOffset = ref(60)
 
-const labels = ref([-1, 1, 2, 3, 4, 5, 6, 7])
+const normalLabels = [-1, 1, 2, 3, 4, 5, 6, 7]
+const ghostLabels = [-1, 1, 2, 3]
+const itemOptions = [
+    { code: 'BOOM', label: '꽝' },
+    { code: 'BANANA', label: '바나나' },
+    { code: 'SWAP_POSITION', label: '자리 바꾸기' },
+    { code: 'QUIZ_INTERFERENCE', label: '방해하기' },
+    { code: 'PLUS_THREE', label: '+3칸' }
+]
+const itemLabels = itemOptions.map((_, idx) => idx) // 5 items (index-based)
+
+
+
+
+const currentLabels = computed(() => {
+    if (testMode.value === 'ghost') return ghostLabels;
+    if (testMode.value === 'item') return itemLabels;
+    return normalLabels;
+})
 const targetValue = ref(1)
+
+watch(testMode, (mode) => {
+    targetValue.value = mode === 'item' ? 0 : 1
+    rotation.value = 0
+    if (mode === 'ghost') {
+        landingOffset.value = 45
+    } else if (mode === 'item') {
+        landingOffset.value = 40 // Item mode default offset
+    } else {
+        landingOffset.value = 60
+    }
+})
 
 const spinToTarget = () => {
     if (isSpinning.value) return
     isSpinning.value = true
-    const targetIndex = labels.value.indexOf(targetValue.value)
-    const sectionAngle = 360 / labels.value.length
+    const labels = currentLabels.value
+    const targetIndex = labels.indexOf(targetValue.value)
+
+    // For item roulette (5 sections)
+    // 360 / 5 = 72
+    const sectionAngle = 360 / labels.length
+
     const totalSpins = 360 * 3
     const currentDegrees = ((rotation.value % 360) + 360) % 360
-    const targetFinalAngle = -(targetIndex * sectionAngle) + landingOffset.value
+    
+    // 아이템 모드일 때는 개별 오프셋 사용
+    let targetFinalAngle: number
+    if (testMode.value === 'item') {
+        const itemOffsets: Record<string, number> = {
+            'BANANA': 120,
+            'BOOM': -40,
+            'SWAP_POSITION': -120,
+            'QUIZ_INTERFERENCE': 30,
+            'PLUS_THREE': 180
+        }
+        const selectedCode = itemOptions[targetValue.value]?.code ?? 'BOOM'
+        targetFinalAngle = itemOffsets[selectedCode] ?? 0
+    } else {
+        targetFinalAngle = -(targetIndex * sectionAngle) + landingOffset.value
+    }
+    
     const extra = (360 - currentDegrees) % 360
     const targetRotationValue = rotation.value + totalSpins + extra + targetFinalAngle
 
@@ -39,7 +92,18 @@ const spinToTarget = () => {
         onComplete: () => { isSpinning.value = false }
     })
 }
-const reset = () => { rotation.value = 0 }
+
+// Convert to radians for Item Roulette if needed. 
+// Assuming GameItemRoulette3D expects radians as props.
+const rotationRadian = computed(() => rotation.value * (Math.PI / 180))
+// 모든 룰렛 컴포넌트가 내부적으로 degToRad 변환을 하므로 degrees 그대로 전달
+const currentRotationProps = computed(() => rotation.value)
+
+const currentComponent = computed(() => {
+    if (testMode.value === 'ghost') return GameGhostRoulette3D;
+    if (testMode.value === 'item') return GameItemRoulette3D;
+    return GameRoulette3D;
+})
 </script>
 
 <template>
@@ -48,11 +112,28 @@ const reset = () => { rotation.value = 0 }
             <h2>3D 룰렛 통합 테스트 랩</h2>
 
             <div class="control-group highlight">
+                <h3>0. 모드 선택</h3>
+                <div class="input-item">
+                    모드:
+                    <label><input type="radio" v-model="testMode" value="normal"> 일반</label>
+                    <label><input type="radio" v-model="testMode" value="ghost"> 고스트</label>
+                    <label><input type="radio" v-model="testMode" value="item"> 아이템(5종)</label>
+                </div>
+            </div>
+
+            <div class="control-group highlight">
                 <h3>1. 회전 & 영점 보정</h3>
                 <div class="input-item">목표: <select v-model.number="targetValue">
-                        <option v-for="n in labels" :value="n">{{ n }}</option>
+                        <option v-for="n in currentLabels" :key="n" :value="n">
+                            {{ testMode === 'item' ? (itemOptions[n]?.label ?? n) : n }}
+                        </option>
                     </select></div>
                 <div class="input-item">보정(°): <input type="number" v-model.number="landingOffset"></div>
+                <div v-if="testMode === 'item'" class="hint">
+                    현재 보정값(°)을
+                    <code>docq-frontend/src/components/minigame/BuffRouletteOverlay.vue</code>
+                    의 <code>landingOffset</code>에 반영하세요.
+                </div>
                 <button @click="spinToTarget" :disabled="isSpinning">테스트 회전</button>
             </div>
 
@@ -103,9 +184,9 @@ const reset = () => { rotation.value = 0 }
                     :look-at="[lookAt.x, lookAt.y, lookAt.z]" />
                 <OrbitControls />
                 <Suspense>
-                    <GameRoulette3D :rotation="rotation" :isSpinning="isSpinning" :model-scale="modelScale"
-                        :model-position="modelPosition" :arrow-offset="arrowOffset" :initial-rotation="initialRotation"
-                        spin-axis="y" use-raw-model />
+                    <component :is="currentComponent" :rotation="currentRotationProps" :isSpinning="isSpinning"
+                        :model-scale="modelScale" :model-position="modelPosition" :arrow-offset="arrowOffset"
+                        :initial-rotation="initialRotation" spin-axis="y" use-raw-model />
                 </Suspense>
                 <TresGridHelper :args="[10, 10]" />
             </TresCanvas>
@@ -170,6 +251,13 @@ h4 {
     margin-bottom: 6px;
     font-family: monospace;
     font-size: 0.8rem;
+}
+
+.hint {
+    font-size: 0.75rem;
+    color: #cbd5f5;
+    line-height: 1.4;
+    margin: 4px 0 8px;
 }
 
 input[type="number"],
