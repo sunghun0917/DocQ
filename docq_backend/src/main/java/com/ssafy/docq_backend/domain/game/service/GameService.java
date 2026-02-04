@@ -110,16 +110,16 @@ public class GameService {
                                 dto.getOptions(),
                                 dto.getAnswerIndex(),
                                 dto.getAnswerText()
-                                
+
                         ))
                         .toList();
 
                 // PDF 파일명에서 확장자 제거하여 타이틀로 사용
                 String originalFilename = pdfFile.getOriginalFilename();
-                String quizTitle = originalFilename != null 
+                String quizTitle = originalFilename != null
                         ? originalFilename.replaceFirst("[.][^.]+$", "") // 확장자 제거
                         : "PDF 퀴즈";
-                
+
                 // 최대 길이 제한 (45자)
                 if (quizTitle.length() > 45) {
                     quizTitle = quizTitle.substring(0, 45);
@@ -127,7 +127,8 @@ public class GameService {
 
                 QuizApiDto.CreateQuizRequest createReq = new QuizApiDto.CreateQuizRequest(items, quizTitle);
                 QuizApiDto.CreateQuizResponse saved = quizService.create(userId, createReq);
-                log.info("Saved quizzes to 'quizzes' table as quizId={}, count={}, title={}", saved.getQuizId(), saved.getQuizCount(), quizTitle);
+                log.info("Saved quizzes to 'quizzes' table as quizId={}, count={}, title={}", saved.getQuizId(),
+                        saved.getQuizCount(), quizTitle);
             } catch (Exception e) {
                 log.warn("Failed to persist AI-generated quizzes for userId={}", userId, e);
             }
@@ -156,14 +157,14 @@ public class GameService {
         if ("common".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("common.json"));
         }
-        if ("nonsense".equals(type) || "mixed".equals(type)) {
-            loadedQuizzes.addAll(loadQuizzesFromJson("nonsense.json"));
-        }
         if ("movie".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("movie.json"));
         }
         if ("sports".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("sports.json"));
+        }
+        if ("history".equals(type) || "mixed".equals(type)) {
+            loadedQuizzes.addAll(loadQuizzesFromJson("history.json"));
         }
 
         if (loadedQuizzes.isEmpty()) {

@@ -98,7 +98,7 @@ const processingText = ref('방장님이 문서를 고르고 있어요')
 const isPdfUploadDisabled = ref(false)
 
 const basicQuizTypes = [
-  { type: 'nonsense', label: '넌센스', icon: 'sentiment_very_satisfied', color: 'bg-yellow-100 text-yellow-700' },
+  { type: 'history', label: '역사', icon: 'history_edu', color: 'bg-yellow-100 text-yellow-700' },
   { type: 'common', label: '상식', icon: 'school', color: 'bg-blue-100 text-blue-700' },
   { type: 'movie', label: '영화', icon: 'movie', color: 'bg-indigo-100 text-indigo-700' },
   { type: 'sports', label: '스포츠', icon: 'sports_soccer', color: 'bg-green-100 text-green-700' },
