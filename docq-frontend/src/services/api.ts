@@ -56,6 +56,7 @@ export type BoardDetailQuiz = {
     quizId: number
     quizCount: number
     quizList: string[] // question만
+    quizTitle: string
 }
 
 export type BoardDetailResponse = {

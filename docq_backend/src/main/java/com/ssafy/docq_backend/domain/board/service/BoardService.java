@@ -187,6 +187,7 @@ public class BoardService {
                     .quizId(quiz.getId())
                     .quizCount(quizCount)
                     .quizList(questions)
+                    .quizTitle(quiz.getQuizTitle() != null ? quiz.getQuizTitle() : "")
                     .build();
         }
 
@@ -222,7 +223,7 @@ public class BoardService {
                     long storedCount = 0;
                     int questionCount = 0;
                     Quiz quiz = board.getQuiz();
-                    
+
                     // 퀴즈 문제 개수 계산
                     if (quiz != null && quiz.getQuizList() != null) {
                         try {
@@ -233,7 +234,7 @@ public class BoardService {
                             questionCount = 0;
                         }
                     }
-                    
+
                     if (userId != null) {
                         likedByMe = likeRepository.existsByUser_IdAndBoard_Id(userId, board.getId());
                         if (quiz != null) {

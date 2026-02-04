@@ -113,5 +113,6 @@ public class BoardDto {
         private Long quizId;
         private int quizCount;
         private java.util.List<String> quizList; // question 문자열만
+        private String quizTitle;
     }
 }
