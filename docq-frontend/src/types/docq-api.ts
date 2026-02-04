@@ -161,6 +161,7 @@ export interface Quiz {
     answer?: number
     answerText?: string
     answerIndex?: number
+    quizStyle?: 'MIRROR' | null  // 문제 방해하기 효과
 }
 
 /**
@@ -187,6 +188,7 @@ export interface QuizMessage {
     timeLimit: number
     quizStartTime?: string
     quizStartTimeMs?: number
+    quizStyle?: 'MIRROR' | null  // 문제 방해하기 효과 (글자 반전)
     type?: 'QUIZ_GENERATING' | 'QUIZ_GENERATED' | 'QUIZ_RESET' // 알림용
     count?: number          // 알림용
 }

@@ -165,7 +165,8 @@ export const useGameStore = defineStore('game', () => {
             question: quizData.question,
             options,
             timeLimit: Math.max(1, Math.ceil(remainingMs / 1000)),
-            answer: -1
+            answer: -1,
+            quizStyle: quizData.quizStyle ?? null
         }
 
         currentQuizIndex.value = 0

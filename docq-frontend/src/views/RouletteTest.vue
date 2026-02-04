@@ -23,26 +23,9 @@ const landingOffset = ref(60)
 const normalLabels = [-1, 1, 2, 3, 4, 5, 6, 7]
 const ghostLabels = [-1, 1, 2, 3]
 const itemLabels = [-1, 1, 2, 3, 4] // 5 items
-const itemEmojiLabels = [
-    { value: -1, emoji: '➕3️⃣', label: '+3칸' },
-    { value: 1, emoji: '🍌', label: '바나나' },
-    { value: 2, emoji: '💥', label: '꽝' },
-    { value: 3, emoji: '🔄', label: '자리바꾸기' },
-    { value: 4, emoji: '🔀', label: '방해하기' }
-]
 
-// 이모지 위치 계산 (아이템 모드용)
-const getItemEmojiPosition = (index: number) => {
-    const radius = 180;
-    const centerX = 50; // %
-    const centerY = 55; // %
-    const angleOffset = -65;
-    const angle = (index * 72 + angleOffset) * (Math.PI / 180);
-    return {
-        left: `calc(${centerX}% + ${radius * Math.cos(angle)}px)`,
-        top: `calc(${centerY}% + ${radius * Math.sin(angle)}px)`
-    };
-}
+
+
 
 const currentLabels = computed(() => {
     if (testMode.value === 'ghost') return ghostLabels;
@@ -55,9 +38,9 @@ watch(testMode, (mode) => {
     targetValue.value = 1
     rotation.value = 0
     if (mode === 'ghost') {
-        landingOffset.value = 45 
+        landingOffset.value = 45
     } else if (mode === 'item') {
-        landingOffset.value = 0 // Start with 0 for 5-section
+        landingOffset.value = 40 // Item mode default offset
     } else {
         landingOffset.value = 60
     }
@@ -68,11 +51,11 @@ const spinToTarget = () => {
     isSpinning.value = true
     const labels = currentLabels.value
     const targetIndex = labels.indexOf(targetValue.value)
-    
+
     // For item roulette (5 sections)
     // 360 / 5 = 72
     const sectionAngle = 360 / labels.length
-    
+
     const totalSpins = 360 * 3
     const currentDegrees = ((rotation.value % 360) + 360) % 360
     const targetFinalAngle = -(targetIndex * sectionAngle) + landingOffset.value
@@ -108,7 +91,7 @@ const currentComponent = computed(() => {
             <div class="control-group highlight">
                 <h3>0. 모드 선택</h3>
                 <div class="input-item">
-                    모드: 
+                    모드:
                     <label><input type="radio" v-model="testMode" value="normal"> 일반</label>
                     <label><input type="radio" v-model="testMode" value="ghost"> 고스트</label>
                     <label><input type="radio" v-model="testMode" value="item"> 아이템(5종)</label>
@@ -166,33 +149,14 @@ const currentComponent = computed(() => {
         </div>
 
         <div class="canvas-container">
-            <!-- 이모지 오버레이 (아이템 모드에서만, 룰렛과 함께 회전) -->
-            <div v-if="testMode === 'item'" 
-                 class="emoji-overlay"
-                 :style="{ transform: `rotate(${currentRotationProps}deg)` }">
-                <div v-for="(item, idx) in itemEmojiLabels" :key="item.value" 
-                     class="emoji-label" 
-                     :style="getItemEmojiPosition(idx)">
-                    {{ item.emoji }}
-                </div>
-            </div>
-            
             <TresCanvas shadows alpha>
                 <TresPerspectiveCamera :position="[cameraPosition.x, cameraPosition.y, cameraPosition.z]"
                     :look-at="[lookAt.x, lookAt.y, lookAt.z]" />
                 <OrbitControls />
                 <Suspense>
-                    <component 
-                        :is="currentComponent"
-                        :rotation="currentRotationProps" 
-                        :isSpinning="isSpinning" 
-                        :model-scale="modelScale"
-                        :model-position="modelPosition" 
-                        :arrow-offset="arrowOffset" 
-                        :initial-rotation="initialRotation"
-                        spin-axis="y" 
-                        use-raw-model 
-                    />
+                    <component :is="currentComponent" :rotation="currentRotationProps" :isSpinning="isSpinning"
+                        :model-scale="modelScale" :model-position="modelPosition" :arrow-offset="arrowOffset"
+                        :initial-rotation="initialRotation" spin-axis="y" use-raw-model />
                 </Suspense>
                 <TresGridHelper :args="[10, 10]" />
             </TresCanvas>
@@ -290,24 +254,5 @@ button {
 button:disabled {
     background: #333;
     cursor: not-allowed;
-}
-
-.emoji-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 100;
-    transform-origin: center center;
-}
-
-.emoji-label {
-    position: absolute;
-    font-size: 2.5rem;
-    transform: translate(-50%, -50%);
-    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    z-index: 101;
 }
 </style>

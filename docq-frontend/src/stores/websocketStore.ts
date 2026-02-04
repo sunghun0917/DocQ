@@ -311,6 +311,24 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 })
             }
         })
+
+        // 아이템 사용 완료 알림 구독
+        wsService.value.subscribe(`/topic/game/${roomId}/notice`, (data: any) => {
+            console.log('📨 Game Notice:', data)
+
+            if (data?.type === 'ITEM_USED') {
+                // 아이템 사용 완료 이벤트 발행
+                window.dispatchEvent(new CustomEvent('item-used', {
+                    detail: {
+                        playerId: data.playerId,
+                        playerName: data.playerName,
+                        itemType: data.itemType,
+                        targetPlayerId: data.targetPlayerId,
+                        targetPosition: data.targetPosition
+                    }
+                }))
+            }
+        })
     }
 
     /**
@@ -490,6 +508,35 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 아이템 사용
+     * @param roomId - 방 ID
+     * @param playerId - 플레이어 ID
+     * @param itemType - 아이템 타입 (BANANA, SWAP_POSITION, QUIZ_INTERFERENCE 등)
+     * @param targetPlayerId - 타겟 플레이어 ID (SWAP_POSITION, QUIZ_INTERFERENCE용)
+     * @param targetPosition - 타겟 위치 (BANANA용)
+     */
+    const useItem = (
+        roomId: string,
+        playerId: string,
+        itemType: string,
+        targetPlayerId?: string,
+        targetPosition?: number
+    ) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/minigame/item', {
+            roomId,
+            playerId,
+            itemType,
+            targetPlayerId,
+            targetPosition
+        })
+    }
+
+    /**
      * ACK 전송
      */
     const sendAck = (ackType: 'RESULT_DISPLAYED' | 'ROULETTE_COMPLETE' | 'MOVE_COMPLETE' | 'MINIGAME_COMPLETE' | 'BUFF_ROULETTE_COMPLETE' | 'CAMERA_END', quizId?: number, round?: number) => {
@@ -564,6 +611,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         restartGame,
         submitMiniGameResult,
         resetQuiz, // [ADD]
+        useItem, // [ADD]
         sendAck,
         unsubscribe,
         cleanup,

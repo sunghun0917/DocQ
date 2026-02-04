@@ -7,6 +7,7 @@ import QuizOverlay from '@/components/game/QuizOverlay.vue';
 import RouletteOverlay from '@/components/game/RouletteOverlay.vue';
 import MiniGameModal from '@/components/minigame/MiniGameModal.vue';
 import BuffRouletteOverlay from '@/components/minigame/BuffRouletteOverlay.vue';
+import ItemUsageModal from '@/components/minigame/ItemUsageModal.vue';
 import CloudBackground from '@/components/ui/CloudBackground.vue';
 import CloudOverlay from '@/components/ui/CloudOverlay.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
@@ -61,6 +62,24 @@ const showBuffRoulette = computed(() =>
 const buffRouletteCode = computed(() => {
   if (!showBuffRoulette.value) return null
   return miniGame.value.result?.rewardBuff ?? null
+})
+
+// 아이템 사용 UI 상태
+const showItemUsageModal = ref(false)
+const currentItemToUse = ref<string | null>(null)
+// 다른 플레이어 대기 상태 (승자가 아닌 플레이어용)
+const itemWaitingState = ref<{ playerName: string; itemType: string } | null>(null)
+
+// 아이템 사용 가능한 타겟 플레이어 목록 (나를 제외한 다른 플레이어)
+const otherPlayers = computed(() => {
+  return players.value.filter(p => p.playerId !== myPlayerId.value).map(p => {
+    const user = roomStore.users.find(u => u.playerId === p.playerId)
+    return {
+      playerId: p.playerId,
+      nickname: p.nickname,
+      avatar: user?.avatar || '❓'
+    }
+  })
 })
 
 const AVATAR_REVERSE_MAP: Record<string, string> = {
@@ -460,14 +479,66 @@ watch(
   }
 )
 
-/** 버프 룰렛이 끝난 뒤(결과 확인 후) 획득 아이템 알림 */
-const handleBuffRouletteDone = async () => {
+/** 버프 룰렛이 끝난 뒤(결과 확인 후) 처리 */
+const handleBuffRouletteDone = async (payload: { buffCode: string; requiresInteraction: boolean }) => {
   const name = winnerName.value
-  const buffCode = buffRouletteCode.value
-  const itemLabel = buffCode ? getBuffLabelForNotice(buffCode) : ''
-  if (name && itemLabel) {
-    await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+  const buffCode = payload.buffCode
+  const itemLabel = getBuffLabelForNotice(buffCode)
+  const winnerId = miniGame.value.result?.winnerPlayerId
+  const isWinner = winnerId === myPlayerId.value
+
+  if (payload.requiresInteraction && isWinner) {
+    // 승자만 타겟 선택 모달 표시
+    currentItemToUse.value = buffCode
+    showItemUsageModal.value = true
+  } else if (payload.requiresInteraction && !isWinner) {
+    // 다른 플레이어는 대기 상태 표시
+    if (name && itemLabel) {
+      itemWaitingState.value = {
+        playerName: name,
+        itemType: buffCode
+      }
+    }
+    // 미니게임 상태는 정리 (대기 상태는 별도 관리)
+    gameStore.clearMiniGame()
+  } else {
+    // 즉시 적용되는 아이템 (+3칸, 꽝)
+    if (name && itemLabel) {
+      await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+    }
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    gameStore.clearMiniGame()
   }
+}
+
+/** 아이템 사용 */
+const handleItemUse = async (data: { targetPlayerId?: string; targetPosition?: number }) => {
+  const name = winnerName.value
+  const itemLabel = currentItemToUse.value ? getBuffLabelForNotice(currentItemToUse.value) : ''
+
+  if (roomId.value && myPlayerId.value && currentItemToUse.value) {
+    wsStore.useItem(
+      roomId.value,
+      myPlayerId.value,
+      currentItemToUse.value,
+      data.targetPlayerId,
+      data.targetPosition
+    )
+
+    if (name && itemLabel) {
+      await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
+    }
+
+    showItemUsageModal.value = false
+    currentItemToUse.value = null
+    gameStore.clearMiniGame()
+  }
+}
+
+/** 아이템 사용 취소 */
+const handleItemCancel = () => {
+  showItemUsageModal.value = false
+  currentItemToUse.value = null
   wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
   gameStore.clearMiniGame()
 }
@@ -523,10 +594,38 @@ onMounted(() => {
   if (roomId.value) {
     wsStore.subscribeMiniGame(roomId.value)
   }
+
+  // 아이템 사용 완료 알림 리스너
+  window.addEventListener('item-used', handleItemUsedEvent as EventListener)
 })
+
+// 아이템 사용 완료 이벤트 핸들러
+const handleItemUsedEvent = (e: CustomEvent) => {
+  const { playerName, itemType } = e.detail
+  // 대기 상태 해제
+  itemWaitingState.value = null
+
+  if (playerName && itemType) {
+    const itemLabel = getBuffLabelForNotice(itemType)
+    showSystemNotice(`${playerName}님이 ${itemLabel} 아이템을 사용했습니다!`, 2000)
+  }
+}
+
+// 게임 페이즈 감시: 퀴즈 시작 시 열려있는 모달 강제 종료
+watch(
+  () => gamePhase.value,
+  (phase) => {
+    if ((phase === 'QUIZ_TIME' || phase === 'STARTING') && showItemUsageModal.value) {
+      showItemUsageModal.value = false
+      currentItemToUse.value = null
+      itemWaitingState.value = null // 대기 상태도 해제
+    }
+  }
+)
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('item-used', handleItemUsedEvent as EventListener)
 })
 </script>
 
@@ -545,7 +644,7 @@ onUnmounted(() => {
       @close="handleMiniGameClose" />
 
     <QuizOverlay
-      v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isBoardMoving && !gameStore.movementInProgress && !isMiniGameActive && !showMiniGameStartNotice"
+      v-if="(gamePhase === 'QUIZ_TIME' || gamePhase === 'JUDGMENT') && currentQuiz && !gameStore.rouletteTargetId && !isBoardMoving && !gameStore.movementInProgress && !isMiniGameActive && !showMiniGameStartNotice && !showItemUsageModal && !itemWaitingState"
       @submit="submitAnswer" />
 
     <RouletteOverlay />
@@ -558,6 +657,19 @@ onUnmounted(() => {
 
     <BuffRouletteOverlay v-if="buffRouletteCode && !isMiniGameWinnerNoticeActive" :buff-code="buffRouletteCode"
       :winner-name="winnerName" @done="handleBuffRouletteDone" />
+
+    <ItemUsageModal v-if="showItemUsageModal && currentItemToUse" :item-type="currentItemToUse" :players="otherPlayers"
+      @use="handleItemUse" @cancel="handleItemCancel" />
+
+    <!-- 다른 플레이어 아이템 사용 대기 화면 -->
+    <div v-if="itemWaitingState" class="item-waiting-overlay">
+      <div class="item-waiting-card">
+        <div class="waiting-spinner"></div>
+        <p class="waiting-text">{{ itemWaitingState.playerName }}님이</p>
+        <p class="waiting-item">{{ getBuffLabelForNotice(itemWaitingState.itemType) }}</p>
+        <p class="waiting-text">아이템을 사용 중입니다...</p>
+      </div>
+    </div>
 
     <transition name="result-pop">
       <div v-if="systemNotice" class="system-notice">
@@ -1048,5 +1160,73 @@ onUnmounted(() => {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* 아이템 사용 대기 오버레이 */
+.item-waiting-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.item-waiting-card {
+  background: #fff8e1;
+  padding: 40px 60px;
+  border-radius: 24px;
+  border: 5px solid #8d6e63;
+  box-shadow: 0 12px 0 #5d4037, 0 20px 30px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: waitingPop 0.3s ease-out;
+}
+
+@keyframes waitingPop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.waiting-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #d7ccc8;
+  border-top-color: #ff6f00;
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.waiting-text {
+  font-family: 'Jua', sans-serif;
+  font-size: 1.4rem;
+  color: #5d4037;
+  margin: 4px 0;
+}
+
+.waiting-item {
+  font-family: 'Jua', sans-serif;
+  font-size: 1.8rem;
+  color: #ff6f00;
+  font-weight: bold;
+  margin: 8px 0;
 }
 </style>

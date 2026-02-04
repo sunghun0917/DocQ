@@ -219,6 +219,21 @@ public class MiniGameService {
         }
 
         roomRepository.save(room);
+
+        // 아이템 사용 완료 브로드캐스트
+        Player player = playerRepository.findById(request.getPlayerId()).orElse(null);
+        String nickname = player != null ? player.getNickname() : "알 수 없음";
+
+        Map<String, Object> itemUsedNotice = new HashMap<>();
+        itemUsedNotice.put("type", "ITEM_USED");
+        itemUsedNotice.put("playerId", request.getPlayerId());
+        itemUsedNotice.put("playerName", nickname);
+        itemUsedNotice.put("itemType", request.getItemType());
+        itemUsedNotice.put("targetPlayerId", request.getTargetPlayerId());
+        itemUsedNotice.put("targetPosition", request.getTargetPosition());
+
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/notice", itemUsedNotice);
+
         gameService.scheduleResumeAfterMiniGame(roomId);
     }
 
