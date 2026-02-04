@@ -123,6 +123,7 @@ public class MiniGameService {
         String winnerPlayerId = null;
         String rewardBuff = "NONE";
         String resultType = "RESULT";
+        boolean requiresInteraction = false;
 
         // 2. 승자 결정 및 보상 처리
         // 무승부 체크 (1, 2등 동점 시)
