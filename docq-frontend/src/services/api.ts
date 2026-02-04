@@ -473,7 +473,6 @@ export default {
     createRoom,
     getRoomById,
     getRoomByInviteCode,
-    getRoomByInviteCode,
     verifyJoinRoom,
     generateQuiz,
     getQuizzes,
