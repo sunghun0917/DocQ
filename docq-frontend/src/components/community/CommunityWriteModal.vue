@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import { getMyQuizzes, type MyQuizItem } from '@/services/api';
+import AlertModal from '@/components/common/AlertModal.vue'; // [추가]
 
 const emit = defineEmits(['close', 'submit']);
 const userStore = useUserStore();
@@ -17,6 +18,21 @@ const isLoadingQuizzes = ref(false);
 const isDropdownOpen = ref(false);
 const triggerRef = ref<HTMLElement | null>(null); // 버튼 위치 추적용
 const dropdownStyle = ref({}); // 드롭다운 위치 스타일
+
+// --- Alert Modal State (토스트 알림) ---
+const alertState = ref({
+  isOpen: false,
+  message: '',
+  type: 'success' as 'success' | 'error'
+});
+
+const openAlert = (message: string, type: 'success' | 'error' = 'error') => {
+  alertState.value = {
+    isOpen: true,
+    message,
+    type
+  };
+};
 
 // 선택된 퀴즈 정보
 const selectedQuiz = computed(() => 
@@ -85,11 +101,11 @@ const selectQuiz = (id: number) => {
 
 const handleSubmit = () => {
   if (!quizId.value) {
-    alert('공유할 퀴즈를 선택해주세요!');
+    openAlert('공유할 퀴즈를 선택해주세요!', 'error');
     return;
   }
   if (!title.value.trim() || !content.value.trim()) {
-    alert('제목과 내용을 모두 입력해주세요!');
+    openAlert('제목과 내용을 모두 입력해주세요!', 'error');
     return;
   }
   emit('submit', { quizId: quizId.value, title: title.value, content: content.value });
@@ -208,6 +224,13 @@ onUnmounted(() => {
       </div>
 
     </div>
+
+    <AlertModal
+      :isOpen="alertState.isOpen"
+      :message="alertState.message"
+      :type="alertState.type"
+      @close="alertState.isOpen = false"
+    />
   </div>
 </template>
 
