@@ -193,21 +193,22 @@ const handleDeleteComment = async (commentId: number) => {
   const userId = userStore.userId;
   if (!userId || !props.quiz?.boardId) return;
 
-  if (!confirm('댓글을 삭제하시겠습니까?')) return;
-
-  try {
-    await deleteComment(props.quiz.boardId, commentId);
-    // 댓글 목록 새로고침
-    await fetchComments();
-    // 부모 컴포넌트에 댓글 수 업데이트 알림
-    emit('update', {
-      boardId: props.quiz.boardId,
-      commentCount: commentTotal.value
-    });
-  } catch (error) {
-    console.error('댓글 삭제 실패:', error);
-    openAlert('댓글 삭제에 실패했습니다.', 'error');
-  }
+  openConfirm('댓글 삭제', '정말 이 댓글을 삭제하시겠습니까?', '삭제', 'delete', 'danger', async () => {
+    try {
+      await deleteComment(props.quiz.boardId, commentId);
+      // 댓글 목록 새로고침
+      await fetchComments();
+      // 부모 컴포넌트에 댓글 수 업데이트 알림
+      emit('update', {
+        boardId: props.quiz.boardId,
+        commentCount: commentTotal.value
+      });
+      openAlert('댓글이 삭제되었습니다.', 'success');
+    } catch (error) {
+      console.error('댓글 삭제 실패:', error);
+      openAlert('댓글 삭제에 실패했습니다.', 'error');
+    }
+  });
 };
 
 // --- 삭제 로직 ---
@@ -268,14 +269,14 @@ const handleConfirmAction = () => {
            
            <div class="border-b border-[#d7ccc8]/50 pb-2 mb-3 relative">
               <div class="flex justify-between items-start mb-2">
-                  <h2 class="text-2xl font-black text-[#3e2723] leading-tight break-all pr-8">
+                  <h2 class="text-3xl font-black text-[#3e2723] leading-tight break-all pr-8">
                      {{ quiz.title }}
                   </h2>
-                  <button v-if="isMyQuiz" @click="handleDeleteQuiz" class="text-[#bdbdbd] hover:text-[#ef5350] transition-colors p-1 absolute top-0 right-0">
+                  <button v-if="isMyQuiz" @click="handleDeleteQuiz" class="text-[#4d4d4d] hover:text-[#ef5350] transition-colors p-1 absolute top-3 right-0">
                       <span class="material-symbols-outlined">delete</span>
                   </button>
               </div>
-
+              <div class="h-3 w-full"></div>
               <div class="flex justify-between items-center">
                  <div class="flex items-center gap-1.5">
                     <div class="w-7 h-7 rounded-full bg-[#7cb342] border border-[#558b2f] flex items-center justify-center text-white font-black text-lg shadow-sm">
@@ -286,7 +287,7 @@ const handleConfirmAction = () => {
                  <span class="text-md font-bold text-[#bcaaa4]">{{ quiz.createdAt.split('T')[0] }}</span>
               </div>
            </div>
-
+           <div class="h-2 w-full"></div>
            <div class="mb-4">
               <p class="text-[#616161] font-medium leading-relaxed text-md whitespace-pre-wrap break-all">
                  {{ quiz.content }}
@@ -301,7 +302,7 @@ const handleConfirmAction = () => {
                  퀴즈 미리보기 (회원전용)
               </h4>
               
-              <div class="flex flex-col gap-2 h-[100px] pr-1 overflow-y-auto custom-scrollbar">
+              <div class="flex flex-col gap-2 h-[150px] pr-1 overflow-y-auto custom-scrollbar">
                  <div v-if="userStore.isGuest" class="h-full flex items-center justify-center text-gray-400 text-xs">
                    로그인 후 미리보기를 확인하세요.
                  </div>
@@ -364,7 +365,7 @@ const handleConfirmAction = () => {
                         삭제
                       </button>
                   </div>
-                  <p class="text-md text-[#616161] font-medium leading-relaxed bg-white p-1.5 rounded-lg rounded-tl-none border border-gray-100 shadow-sm break-all whitespace-pre-wrap">
+                  <p class="text-md text-[#616161] font-medium leading-relaxed bg-white p-1.5 !px-2 rounded-lg rounded-tl-none border border-gray-100 shadow-sm break-all whitespace-pre-wrap">
                     {{ comment.content }}
                   </p>
                </div>
@@ -387,13 +388,13 @@ const handleConfirmAction = () => {
                       type="text" 
                       :disabled="userStore.isGuest"
                       :placeholder="userStore.isGuest ? '로그인하고 댓글을 달아보세요' : '댓글을 남겨주세요...'" 
-                      class="flex-1 h-10 bg-[#f5f5f5] rounded-lg px-3 text-[15px] font-bold text-[#5d4037] outline-none border border-transparent transition-colors placeholder:text-gray-400" 
+                      class="flex-1 h-10 bg-[#f5f5f5] rounded-lg !px-3 text-[15px] font-bold text-[#5d4037] outline-none border border-transparent transition-colors placeholder:text-gray-400" 
                       :class="userStore.isGuest ? 'cursor-not-allowed opacity-70' : 'focus:border-[#7cb342]'"
                />
                
                <button @click="handleCommentSubmit" 
                        :disabled="userStore.isGuest"
-                       class="h-10 px-3 !p-2 rounded-lg font-black text-[12px] transition-all shrink-0"
+                       class="h-10 !px-3 !p-2 rounded-lg font-black text-[12px] transition-all shrink-0"
                        :class="userStore.isGuest 
                          ? 'bg-[#d7ccc8] text-white cursor-not-allowed' 
                          : 'bg-[#5d4037] text-white hover:bg-[#3e2723] active:scale-95'">
