@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import CommunityWriteModal from './CommunityWriteModal.vue';
 import CommunityDetailModal from './CommunityDetailModal.vue';
+import ConfirmModal from '@/components/common/ConfirmModal.vue';
+import AlertModal from '@/components/common/AlertModal.vue'; // [추가] AlertModal 임포트
 import { createBoard, getBoardDetail, getBoards, likeBoard, unlikeBoard, storeQuiz, unstoreQuiz, getErrorCode, getErrorMessage, type BoardDetailResponse, type BoardListItem } from '@/services/api';
 
 const emit = defineEmits(['close']);
@@ -15,9 +17,56 @@ const isDetailModalOpen = ref(false);
 const selectedQuiz = ref<any>(null);
 const currentSort = ref('newest');
 const currentPage = ref(1);
-const itemsPerPage = 8; // 서버 size와 맞춤
+const itemsPerPage = 8;
 const isThrottled = ref(false);
 const slideDirection = ref('next');
+
+// --- Alert Modal State (토스트 알림) ---
+const alertState = ref({
+  isOpen: false,
+  message: '',
+  type: 'success' as 'success' | 'error'
+});
+
+// alert() 대신 사용할 함수
+const openAlert = (message: string, type: 'success' | 'error' = 'success') => {
+  alertState.value = {
+    isOpen: true,
+    message,
+    type
+  };
+};
+
+// --- Confirm Modal State ---
+const confirmState = ref({
+  isOpen: false,
+  title: '',
+  message: '',
+  confirmLabel: '확인',
+  icon: 'help',
+  variant: 'primary' as 'primary' | 'danger',
+  pendingAction: null as (() => void) | null
+});
+
+const openConfirm = (title: string, message: string, confirmLabel: string, icon: string, variant: 'primary' | 'danger', action: () => void) => {
+  confirmState.value = {
+    isOpen: true,
+    title,
+    message,
+    confirmLabel,
+    icon,
+    variant,
+    pendingAction: action
+  };
+};
+
+const handleConfirmAction = () => {
+  if (confirmState.value.pendingAction) {
+    confirmState.value.pendingAction();
+  }
+  confirmState.value.isOpen = false;
+};
+
 
 // --- 서버에서 가져오는 게시글 목록 ---
 const boardItems = ref<(BoardListItem & { saves?: number })[]>([]);
@@ -29,11 +78,10 @@ const fetchBoards = async () => {
   try {
     const res = await getBoards(currentPage.value, itemsPerPage);
     total.value = res.total;
-    // 서버에서 받은 storedCount를 saves로 매핑, questionCount는 서버 응답 그대로 사용
     boardItems.value = res.items.map((it) => ({
       ...it,
-      saves: it.storedCount ?? 0, // 서버의 storedCount를 saves로 사용
-      questionCount: it.questionCount ?? 0, // 서버의 questionCount 사용 (없으면 0)
+      saves: it.storedCount ?? 0,
+      questionCount: it.questionCount ?? 0,
     }));
   } catch (error) {
     console.error('게시판 목록 조회 실패:', error);
@@ -42,7 +90,7 @@ const fetchBoards = async () => {
   }
 };
 
-// --- 정렬 옵션 (게스트 분기 처리) ---
+// --- 정렬 옵션 ---
 const sortOptions = computed(() => {
   const options = [
     { id: 'newest', label: '최신순', icon: 'schedule' },
@@ -65,11 +113,11 @@ watch(() => userStore.isGuest, (newVal) => {
   }
 });
 
-// --- 필터링 로직 (API 필드명 적용) ---
+// --- 필터링 로직 ---
 const filteredQuizzes = computed(() => {
   let result = boardItems.value.filter(q =>
     q.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-    q.author.nickname.toLowerCase().includes(searchQuery.value.toLowerCase()) // author.nickname 접근
+    q.author.nickname.toLowerCase().includes(searchQuery.value.toLowerCase())
   );
 
   if (currentSort.value === 'newest') {
@@ -86,9 +134,7 @@ const filteredQuizzes = computed(() => {
   return result;
 });
 
-// 서버 페이지네이션: total/size로 페이지 수 계산
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / itemsPerPage)));
-// 이미 한 페이지 단위로 받아오므로 그대로 표시 (검색/정렬은 현재 페이지 내에서만 적용)
 const paginatedQuizzes = computed(() => filteredQuizzes.value);
 
 const visiblePages = computed(() => {
@@ -106,9 +152,10 @@ watch(currentPage, () => { fetchBoards(); });
 
 // --- 핸들러 ---
 const toggleLike = (quiz: any) => {
-  if (userStore.isGuest) return alert("로그인 후 이용 가능합니다.");
+  if (userStore.isGuest) return openAlert("로그인 후 이용 가능합니다.", 'error');
   const userId = userStore.userId;
-  if (!userId) return alert("로그인 후 이용 가능합니다.");
+  if (!userId) return openAlert("로그인 후 이용 가능합니다.", 'error');
+  
   const boardId = quiz.boardId;
   const action = quiz.likedByMe ? unlikeBoard : likeBoard;
   action(boardId).then((res) => {
@@ -118,41 +165,29 @@ const toggleLike = (quiz: any) => {
 };
 
 const toggleSave = (quiz: any) => {
-  if (userStore.isGuest) {
-    alert('로그인 후 이용 가능합니다.');
-    return;
-  }
+  if (userStore.isGuest) return openAlert('로그인 후 이용 가능합니다.', 'error');
   const userId = userStore.userId;
-  if (!userId) {
-    alert('로그인 후 이용 가능합니다.');
-    return;
-  }
-  if (!quiz.quizId) {
-    alert('저장할 수 없는 게시글입니다.');
-    return;
-  }
+  if (!userId) return openAlert('로그인 후 이용 가능합니다.', 'error');
+  if (!quiz.quizId) return openAlert('저장할 수 없는 게시글입니다.', 'error');
 
-  // 토글: 저장되어 있으면 언저장, 없으면 저장
   const wasStored = !!quiz.storedByMe;
   const action = wasStored ? unstoreQuiz : storeQuiz;
   
   action(quiz.quizId)
     .then((res) => {
-      // 서버 기준으로 내가 저장한 상태 반영
       quiz.storedByMe = res.stored;
 
-      // 저장 개수 업데이트
       if (res.stored && !wasStored) {
-        // 저장: +1
         quiz.saves = (quiz.saves ?? 0) + 1;
+        openAlert('퀴즈가 저장되었습니다.', 'success'); // 저장 성공 알림
       } else if (!res.stored && wasStored) {
-        // 언저장: -1 (최소 0)
         quiz.saves = Math.max(0, (quiz.saves ?? 0) - 1);
+        openAlert('저장이 취소되었습니다.', 'success'); // 취소 성공 알림
       }
     })
     .catch((error) => {
       console.error('퀴즈 저장/언저장 실패:', error);
-      alert(wasStored ? '퀴즈 저장 취소에 실패했습니다.' : '퀴즈 저장에 실패했습니다.');
+      openAlert('요청 처리에 실패했습니다.', 'error');
     });
 };
 
@@ -168,54 +203,27 @@ const openDetail = (quiz: any) => {
   });
 };
 
-// 상세 모달에서 좋아요/저장/댓글 변경 시 목록 동기화
-const handleDetailUpdate = (updateData: { boardId: number; likedByMe?: boolean; likeCount?: number; storedByMe?: boolean; quizId?: number; commentCount?: number }) => {
-  // 목록에서 해당 게시물 찾아서 업데이트
+const handleDetailUpdate = (updateData: any) => {
   const index = boardItems.value.findIndex(item => item.boardId === updateData.boardId);
   const item = index !== -1 ? boardItems.value[index] : undefined;
   if (item !== undefined) {
     const wasStored = item.storedByMe;
     
-    if (updateData.likedByMe !== undefined) {
-      item.likedByMe = updateData.likedByMe;
-    }
-    if (updateData.likeCount !== undefined) {
-      item.likeCount = updateData.likeCount;
-    }
-    if (updateData.commentCount !== undefined) {
-      item.commentCount = updateData.commentCount;
-    }
+    if (updateData.likedByMe !== undefined) item.likedByMe = updateData.likedByMe;
+    if (updateData.likeCount !== undefined) item.likeCount = updateData.likeCount;
+    if (updateData.commentCount !== undefined) item.commentCount = updateData.commentCount;
     if (updateData.storedByMe !== undefined) {
       item.storedByMe = updateData.storedByMe;
-      // 저장 개수 업데이트: 이전 상태와 비교하여 변경
-      if (updateData.storedByMe && !wasStored) {
-        // 저장: +1
-        item.saves = (item.saves ?? 0) + 1;
-      } else if (!updateData.storedByMe && wasStored) {
-        // 언저장: -1 (최소 0)
-        item.saves = Math.max(0, (item.saves ?? 0) - 1);
-      }
+      if (updateData.storedByMe && !wasStored) item.saves = (item.saves ?? 0) + 1;
+      else if (!updateData.storedByMe && wasStored) item.saves = Math.max(0, (item.saves ?? 0) - 1);
     }
   }
   
-  // 상세 모달의 데이터도 업데이트
   if (selectedQuiz.value && selectedQuiz.value.boardId === updateData.boardId) {
-    if (updateData.likedByMe !== undefined) {
-      selectedQuiz.value.likedByMe = updateData.likedByMe;
-    }
-    if (updateData.likeCount !== undefined) {
-      selectedQuiz.value.likeCount = updateData.likeCount;
-    }
-    if (updateData.commentCount !== undefined) {
-      selectedQuiz.value.commentCount = updateData.commentCount;
-    }
-    if (updateData.storedByMe !== undefined) {
-      selectedQuiz.value.storedByMe = updateData.storedByMe;
-    }
+    Object.assign(selectedQuiz.value, updateData);
   }
 };
 
-// 휠/페이지네이션 등 기존 로직 유지
 const handleGlobalWheel = (e: WheelEvent) => {
   if (isWriteModalOpen.value || isDetailModalOpen.value || isThrottled.value) return;
   if (e.deltaY > 0) { if (currentPage.value < totalPages.value) { slideDirection.value = 'next'; changePage(currentPage.value + 1); } }
@@ -237,7 +245,7 @@ onMounted(() => {
 onUnmounted(() => { window.removeEventListener('wheel', handleGlobalWheel); });
 
 const handleCreateClick = () => {
-  if (userStore.isGuest) return; 
+  if (userStore.isGuest) return openAlert("로그인 후 이용해주세요.", 'error'); 
   isWriteModalOpen.value = true;
 };
 
@@ -250,13 +258,14 @@ const handlePostSubmit = (data: any) => {
     currentPage.value = 1;
     currentSort.value = 'newest';
     fetchBoards();
+    openAlert("게시글이 성공적으로 등록되었습니다!", 'success'); // 성공 알림
   }).catch((error) => {
     const code = getErrorCode(error);
     const message = getErrorMessage(error);
     if (code === 'B004' || message.includes('중복된 퀴즈')) {
-      alert('중복된 퀴즈입니다.');
+      openAlert('이미 공유된 퀴즈입니다.', 'error');
     } else {
-      alert(message);
+      openAlert(message, 'error');
     }
   });
 };
@@ -371,6 +380,24 @@ const handlePostSubmit = (data: any) => {
 
     <CommunityWriteModal v-if="isWriteModalOpen" @close="isWriteModalOpen = false" @submit="handlePostSubmit" />
     <CommunityDetailModal v-if="isDetailModalOpen" :quiz="selectedQuiz" @close="isDetailModalOpen = false" @update="handleDetailUpdate" />
+    
+    <ConfirmModal
+      :isOpen="confirmState.isOpen"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirmLabel="confirmState.confirmLabel"
+      :icon="confirmState.icon"
+      :variant="confirmState.variant"
+      @close="confirmState.isOpen = false"
+      @confirm="handleConfirmAction"
+    />
+
+    <AlertModal
+      :isOpen="alertState.isOpen"
+      :message="alertState.message"
+      :type="alertState.type"
+      @close="alertState.isOpen = false"
+    />
 
   </div>
 </template>

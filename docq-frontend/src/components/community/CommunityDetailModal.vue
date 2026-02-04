@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import { likeBoard, unlikeBoard, storeQuiz, unstoreQuiz, getComments, createComment, deleteComment, type CommentItem } from '@/services/api';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
+import AlertModal from '@/components/common/AlertModal.vue'; // [추가]
 
 const props = defineProps<{ quiz: any }>();
 const emit = defineEmits(['close', 'update']);
@@ -23,6 +24,21 @@ const comments = ref<CommentItem[]>([]);
 const commentPage = ref(1);
 const commentTotal = ref(0);
 const isLoadingComments = ref(false);
+
+// --- Alert Modal State (토스트 알림) ---
+const alertState = ref({
+  isOpen: false,
+  message: '',
+  type: 'success' as 'success' | 'error'
+});
+
+const openAlert = (message: string, type: 'success' | 'error' = 'error') => {
+  alertState.value = {
+    isOpen: true,
+    message,
+    type
+  };
+};
 
 // 날짜 포맷팅 헬퍼
 const formatDate = (dateString: string) => {
@@ -67,7 +83,7 @@ onMounted(() => {
 });
 
 const toggleLike = () => {
-  if (userStore.isGuest) return alert("로그인이 필요한 기능입니다.");
+  if (userStore.isGuest) return openAlert("로그인이 필요한 기능입니다.", 'error');
   const userId = userStore.userId;
   if (!userId) return;
   const boardId = props.quiz.boardId;
@@ -83,22 +99,22 @@ const toggleLike = () => {
     });
   }).catch((error) => {
     console.error('좋아요 토글 실패:', error);
-    alert('좋아요 처리에 실패했습니다.');
+    openAlert('좋아요 처리에 실패했습니다.', 'error');
   });
 };
 
 const handleSaveClick = () => {
   if (userStore.isGuest) {
-    alert("로그인 후 이용해주세요!");
+    openAlert("로그인 후 이용해주세요!", 'error');
     return;
   }
   const userId = userStore.userId;
   if (!userId) {
-    alert("로그인 후 이용해주세요!");
+    openAlert("로그인 후 이용해주세요!", 'error');
     return;
   }
   if (!props.quiz.quiz?.quizId) {
-    alert('저장할 수 없는 게시글입니다.');
+    openAlert('저장할 수 없는 게시글입니다.', 'error');
     return;
   }
 
@@ -109,6 +125,10 @@ const handleSaveClick = () => {
   action(quizId)
     .then((res) => {
       isSaved.value = res.stored;
+      // 저장 성공 메시지
+      if (res.stored) openAlert("퀴즈가 저장되었습니다.", 'success');
+      else openAlert("저장이 취소되었습니다.", 'success');
+
       // 부모 컴포넌트에 변경사항 전달 (목록 동기화)
       emit('update', {
         boardId: props.quiz.boardId,
@@ -118,7 +138,7 @@ const handleSaveClick = () => {
     })
     .catch((error) => {
       console.error('퀴즈 저장/언저장 실패:', error);
-      alert(wasStored ? '퀴즈 저장 취소에 실패했습니다.' : '퀴즈 저장에 실패했습니다.');
+      openAlert(wasStored ? '퀴즈 저장 취소에 실패했습니다.' : '퀴즈 저장에 실패했습니다.', 'error');
     });
 };
 
@@ -163,7 +183,7 @@ const handleCommentSubmit = async () => {
     });
   } catch (error) {
     console.error('댓글 작성 실패:', error);
-    alert('댓글 작성에 실패했습니다.');
+    openAlert('댓글 작성에 실패했습니다.', 'error');
     commentInput.value = content; // 실패 시 입력값 복원
   }
 };
@@ -186,7 +206,7 @@ const handleDeleteComment = async (commentId: number) => {
     });
   } catch (error) {
     console.error('댓글 삭제 실패:', error);
-    alert('댓글 삭제에 실패했습니다.');
+    openAlert('댓글 삭제에 실패했습니다.', 'error');
   }
 };
 
@@ -198,7 +218,7 @@ const isMyQuiz = computed(() => {
 const handleDeleteQuiz = () => {
     openConfirm('게시글 삭제', '정말 이 게시글을 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.', '삭제', 'delete_forever', 'danger', () => {
         // TODO: API Call -> DELETE /boards/{boardId}
-        alert("게시글이 삭제되었습니다.");
+        openAlert("게시글이 삭제되었습니다.", 'success');
         emit('close');
         // 상위 컴포넌트에서 목록 리로드 필요
     });
@@ -283,7 +303,7 @@ const handleConfirmAction = () => {
               
               <div class="flex flex-col gap-2 h-[100px] pr-1 overflow-y-auto custom-scrollbar">
                  <div v-if="userStore.isGuest" class="h-full flex items-center justify-center text-gray-400 text-xs">
-                    로그인 후 미리보기를 확인하세요.
+                   로그인 후 미리보기를 확인하세요.
                  </div>
                  <div v-else v-for="(q, idx) in previewQuestions" :key="idx" 
                       class="bg-[#f9f9f9] p-2 rounded-lg border border-[#eeeeee] flex gap-2.5 items-center">
@@ -385,7 +405,6 @@ const handleConfirmAction = () => {
 
     </div>
 
-    <!-- Confirm Modal -->
     <ConfirmModal
       :isOpen="confirmState.isOpen"
       :title="confirmState.title"
@@ -395,6 +414,13 @@ const handleConfirmAction = () => {
       :variant="confirmState.variant"
       @close="confirmState.isOpen = false"
       @confirm="handleConfirmAction"
+    />
+
+    <AlertModal
+      :isOpen="alertState.isOpen"
+      :message="alertState.message"
+      :type="alertState.type"
+      @close="alertState.isOpen = false"
     />
   </div>
 </template>
