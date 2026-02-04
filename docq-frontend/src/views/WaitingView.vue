@@ -9,7 +9,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { useUiStore } from '@/stores/uiStore'
-import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, getMyQuizzes, type MyQuizItem } from '@/services/api'
+import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, getMyQuizzes, getStoredQuizzes, type MyQuizItem } from '@/services/api'
 import type { QuizResponse } from '@/types/docq-api'
 import AlertModal from '@/components/common/AlertModal.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
@@ -116,12 +116,15 @@ const handleOpenMyQuizModal = async () => {
 
 const fetchMyQuizzes = async () => {
     try {
-        // TODO: "저장한 퀴즈" API가 나오면 분기 처리
-        // 현재는 둘 다 getMyQuizzes 호출
-        const res = await getMyQuizzes();
+        let res;
+        if (activeMyQuizTab.value === 'saved') {
+            res = await getStoredQuizzes();
+        } else {
+            res = await getMyQuizzes();
+        }
         myQuizzes.value = res.quizzes;
     } catch (error) {
-        console.error("Failed to fetch my quizzes", error);
+        console.error("Failed to fetch quizzes", error);
         toastMessage.value = '퀴즈 목록을 불러오지 못했습니다.';
         toastType.value = 'error';
         isToastOpen.value = true;

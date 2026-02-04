@@ -396,6 +396,15 @@ export const getMyQuizzes = async (): Promise<MyQuizListResponse> => {
     return response.data
 }
 
+/**
+ * 내가 저장한 퀴즈 목록 조회
+ * GET /quizzes/stored-quizz
+ */
+export const getStoredQuizzes = async (): Promise<MyQuizListResponse> => {
+    const response = await apiClient.get<MyQuizListResponse>('/quizzes/stored-quizz')
+    return response.data
+}
+
 // ==================== Comments API ====================
 
 /**
@@ -472,6 +481,7 @@ export default {
     storeQuiz,
     unstoreQuiz,
     getMyQuizzes,
+    getStoredQuizzes,
     getComments,
     createComment,
     deleteComment,
