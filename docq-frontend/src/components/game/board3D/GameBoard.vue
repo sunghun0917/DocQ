@@ -76,6 +76,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
 
 import { useGameStore } from '@/stores/gameStore'
+import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import type { PlayerInfo } from '@/types/docq-api'
 
@@ -135,7 +136,9 @@ const emit = defineEmits<{
 }>()
 
 const gameStore = useGameStore()
+const userStore = useUserStore()
 const wsStore = useWebSocketStore()
+const myPlayerId = computed(() => userStore.playerId)
 
 const cameraPosition = ref<[number, number, number]>([MAP_CENTER[0] + 10, MAP_CENTER[1] + 20, MAP_CENTER[2] + 10])
 // 실제 카메라가 보는 지점을 변경 필요
@@ -643,16 +646,31 @@ watch(() => gameStore.currentMove, async (move) => {
       }
 
       if (action.type === 'BUFF') {
-        await showActionNotice(`아이템 '${getBuffLabel(action.buffType)}'이 적용됩니다.`, 1500)
+        // PLUS_THREE는 버프 룰렛 완료 시 이미 알림 표시됨 → 중복 방지
+        if (action.buffType !== 'PLUS_THREE') {
+          await showActionNotice(`아이템 '${getBuffLabel(action.buffType)}'이 적용됩니다.`, 1500)
+        }
       }
 
-      if (action.type === 'TILE_EFFECT') {
+      if (action.type === 'SWAP_POSITION' && action.targetPlayerId != null) {
+        // 자리바꾸기: 알림이 사라진 뒤 한 번에 위치 교환 (한 칸씩 이동 없음)
+        // 본인 관점에서 "상대방" 이름 표시 (아이템 사용자/대상 모두 상대 이름이 보이도록)
+        const otherId = myPlayerId.value === move.playerId ? action.targetPlayerId : move.playerId
+        const otherPlayer = players.value.find(p => p.playerId === otherId)
+        const otherName = otherPlayer?.nickname || '알 수 없음'
+        await showActionNotice(`${otherName}님과 자리를 바꿉니다.`, 1500)
+        animatingPlayers.value[playerId] = after
+        animatingPlayers.value[action.targetPlayerId] = before
+        currentPos = after
+      } else if (action.type === 'TILE_EFFECT') {
         const label = getEffectLabel(action.effectType)
         await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
+        await moveStep(playerId, currentPos, after, followCameraStep)
+        currentPos = after
+      } else {
+        await moveStep(playerId, currentPos, after, followCameraStep)
+        currentPos = after
       }
-
-      await moveStep(playerId, currentPos, after, followCameraStep)
-      currentPos = after
     }
   }
 
@@ -679,9 +697,20 @@ watch(() => gameStore.currentMove, async (move) => {
   isMovingGlobal.value = false
   gameStore.setMovementInProgress(false)
   emit('movement-change', false)
-  wsStore.sendAck('MOVE_COMPLETE', gameStore.lastMoveQuizId ?? undefined, gameStore.gameState.round ?? undefined)
-  // 미니게임 +3칸 즉시 이동 후 재개 ACK
-  if (gameStore.pendingPlusThreeAck) {
+  
+  // SWAP_POSITION인 경우: 미니게임 후 아이템 사용이므로 BUFF_ROULETTE_COMPLETE ACK 전송
+  const isSwapPositionMove = move.moveProcess?.some((a: any) => a.type === 'SWAP_POSITION')
+  if (isSwapPositionMove) {
+    await sleep(1500) // 이동 완료 후 1.5초 대기
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+  } else {
+    // 일반 이동 완료: MOVE_COMPLETE ACK 전송
+    wsStore.sendAck('MOVE_COMPLETE', gameStore.lastMoveQuizId ?? undefined, gameStore.gameState.round ?? undefined)
+  }
+  
+  // 미니게임 +3칸 이동: 전원 ACK 필요 → 이번 이동이 +3 버프면 모든 클라이언트가 BUFF_ROULETTE_COMPLETE 전송
+  const isPlusThreeMove = move.moveProcess?.some((a: any) => a.type === 'BUFF' && a.buffType === 'PLUS_THREE')
+  if (gameStore.pendingPlusThreeAck || isPlusThreeMove) {
     wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
     gameStore.setPendingPlusThreeAck(false)
   }
