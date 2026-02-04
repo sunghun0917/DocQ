@@ -114,6 +114,11 @@ public class GameController {
         gameService.selectAvatar(request);
     }
 
+    @MessageMapping("/game/chat")
+    public void sendChat(GameDto.ChatRequest request) {
+        gameService.sendChat(request);
+    }
+
     @MessageMapping("/game/ack")
     public void handleAck(GameDto.AckRequest request) {
         gameService.handleAck(request);

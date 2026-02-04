@@ -327,18 +327,8 @@ onMounted(async () => {
   audioStore.playBgm('main');
 })
 
-// 유저 ID를 키로, 메시지 내용을 값으로 저장하는 상태
-const userMessages = ref<Record<string, string>>({});
-
-// 메시지를 띄우고 3초 뒤에 지우는 함수
-const showQuickMessage = (playerId: string, message: string) => {
-  userMessages.value[playerId] = message;
-
-  // 3초 후에 해당 메시지 삭제
-  setTimeout(() => {
-    delete userMessages.value[playerId];
-  }, 3000);
-};
+// 퀵메시지는 websocketStore.userMessages에서 WebSocket으로 수신 (다른 유저와 공유)
+const userMessages = computed(() => wsStore.userMessages);
 
 // 내가 보낼 퀵메시지 목록 (8개로 확장)
 const quickMessages = [
@@ -571,7 +561,7 @@ const quickMessages = [
             style="font-size: 70px;">chat</span>
           <div class="flex flex-wrap gap-3 justify-center items-center">
             <button v-for="msg in quickMessages" :key="msg.label"
-              @click="showQuickMessage(userStore.playerId, msg.content)"
+              @click="wsStore.sendQuickMessage(roomId, userStore.playerId, msg.content)"
               class="bg-white hover:bg-green-50 !px-6 !py-4 rounded-[24px] border-4 border-wood-border text-2xl font-black text-wood-dark shadow-[0_2px_0_#5d4037] active:translate-y-[8px] active:shadow-none transition-all whitespace-nowrap">
               {{ msg.label }}
             </button>
