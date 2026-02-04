@@ -37,11 +37,11 @@ const handleMouseUp = () => { /* isClicking.value = false; (이거 때문에 끊
 
 const animate = () => {
   if (cursorRef.value) {
-    const speed = 0.25; 
+    const speed = 1; 
     currentX += (mouseX - currentX) * speed;
     currentY += (mouseY - currentY) * speed;
-    // 기존에 잘 된다고 하신 좌표 계산 유지
-    cursorRef.value.style.transform = `translate3d(${currentX - 16}px, ${currentY - 16}px, 0)`;
+    // [수정] 커서의 좌상단(0,0)을 마우스 좌표에 맞춤 (-16 제거)
+    cursorRef.value.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
   }
   requestAnimationFrame(animate);
 };
@@ -88,12 +88,15 @@ onUnmounted(() => {
 }
 
 .cursor-body {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 0 50% 50% 50%;
   background: linear-gradient(135deg, #66BB6A, #43A047);
   box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
   border: 2px solid #1B5E20;
+  
+  /* [수정] 회전/확대 기준점을 좌상단(뾰족한 끝)으로 설정 */
+  transform-origin: 0 0;
   
   /* [수정] 기본 상태: 각도 0도 명시 */
   transform: rotate(0deg) scale(1);
@@ -127,6 +130,9 @@ onUnmounted(() => {
   /* [핵심] 애니메이션 중에는 트랜지션을 꺼야 팅기는 효과가 즉시 나옴 */
   transition: none; 
   
+  /* [수정] 애니메이션 시에는 중앙 기준 */
+  transform-origin: center; 
+
   /* 애니메이션 재생 */
   animation: tick 0.4s ease-out forwards;
 }
