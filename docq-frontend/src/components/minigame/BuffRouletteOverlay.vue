@@ -68,11 +68,11 @@ const spin = () => {
 
   // 각 아이템별 개별 오프셋 (테스트 결과 기반)
   const offsetByCode: Record<string, number> = {
-    'BANANA': 120,
+    'BANANA': 30,         // 이전 PLUS_THREE 값
     'BOOM': -40,
-    'SWAP_POSITION': -120,
-    'QUIZ_INTERFERENCE': 30,
-    'PLUS_THREE': 180
+    'SWAP_POSITION': 120,
+    'QUIZ_INTERFERENCE': 180,
+    'PLUS_THREE': -120    // 이전 BANANA 값
   };
   const landingOffset = offsetByCode[props.buffCode] ?? 0;
   const targetFinalAngle = landingOffset; // 공식 계산 대신 직접 오프셋 사용
@@ -125,28 +125,30 @@ const rotationRadian = computed(() => rotation.value * (Math.PI / 180));
 
 <template>
   <div v-if="isVisible" class="roulette-overlay">
-    <div class="roulette-modal">
-      <div class="modal-header">
-        <h3>아이템 룰렛</h3>
-        <p v-if="winnerName" class="winner-text">{{ winnerName }}님 보상</p>
+    <div class="roulette-content">
+      <div class="floating-header">
+        <h3>{{ winnerName || '승자' }}님의 보상</h3>
       </div>
-      <div class="modal-body">
-        <div class="canvas-container">
-          <TresCanvas clear-color="#ffffff" alpha>
-            <TresPerspectiveCamera :position="[0, 6, -10]" :look-at="[0, 0, 0]" />
-            <TresAmbientLight :intensity="2.0" />
-            <TresDirectionalLight :position="[5, 5, 5]" :intensity="1.5" cast-shadow />
 
-            <GameItemRoulette3D :rotation="rotation" :is-spinning="isSpinning" :model-scale="1.8"
-              :arrow-offset="{ x: 0, y: 0, z: 3.2 }" :initial-rotation="{ x: 140, y: 0, z: 0 }" />
-          </TresCanvas>
+      <div class="roulette-container">
+        <TresCanvas alpha :clear-alpha="0" shadows>
+          <TresPerspectiveCamera :position="[0, 8, -8]" :look-at="[0, 0, 0]" />
+
+          <GameItemRoulette3D :rotation="rotation" :is-spinning="isSpinning" :model-scale="1.8"
+            :arrow-offset="{ x: 0, y: 0, z: 3.2 }" :initial-rotation="{ x: 140, y: 0, z: 0 }" />
+
+          <TresAmbientLight :intensity="1.5" />
+          <TresDirectionalLight :position="[2, 5, 2]" :intensity="1.5" cast-shadow />
+        </TresCanvas>
+      </div>
+
+      <div class="info-text">
+        <div v-if="showResult" class="result-badge cartoon-panel">
+          <span class="result-emoji">{{ labels[targetIndex]?.emoji }}</span>
+          <span class="result-label">{{ labels[targetIndex]?.label }} 획득!</span>
         </div>
-
-        <div class="info-text">
-          <p v-if="showResult" class="result-text">
-            {{ labels[targetIndex]?.label }} 획득!
-          </p>
-          <small v-if="showResult">잠시 후 게임이 이어집니다</small>
+        <div v-else class="waiting-badge cartoon-panel">
+          <p class="waiting-text">두구두구...</p>
         </div>
       </div>
     </div>
@@ -154,89 +156,107 @@ const rotationRadian = computed(() => rotation.value * (Math.PI / 180));
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
 .roulette-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 2500;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  font-family: 'Jua', sans-serif;
 }
 
-.roulette-modal {
-  background: white;
-  width: 460px;
-  height: 520px;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  background: #f8fafc;
-  padding: 16px;
-  border-bottom: 1px solid #e2e8f0;
-  text-align: center;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #0f172a;
-  font-weight: 800;
-}
-
-.winner-text {
-  margin: 4px 0 0;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.modal-body {
-  flex: 1;
+.roulette-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-}
-
-.canvas-container {
   width: 100%;
-  height: 320px;
-  /* 3D 캔버스 영역 */
+  max-width: 900px;
+  animation: fadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.info-text {
-  margin-top: 10px;
-  text-align: center;
-  height: 60px;
+.floating-header h3 {
+  color: #fff8e1;
+  font-size: 2.2rem;
+  font-weight: 400;
+  margin-bottom: 30px;
+  text-shadow: 3px 3px 0 #5d4037, 0 0 15px rgba(0, 0, 0, 0.3);
+  letter-spacing: 1px;
 }
 
-.result-text {
+.roulette-container {
+  position: relative;
+  width: 100%;
+  height: 550px;
+  cursor: default;
+}
+
+.cartoon-panel {
+  background: #fff8e1;
+  border: 5px solid #8d6e63;
+  border-radius: 24px;
+  box-shadow: 0 8px 0 #5d4037, 0 15px 20px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 15px 40px;
+  transform: rotate(-2deg);
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.result-badge {
+  /* 결과 나왔을 때 스타일 */
+}
+
+.waiting-badge {
+  padding: 12px 30px;
+  transform: rotate(1deg);
+  background: #d7ccc8;
+}
+
+.result-emoji {
+  font-size: 3rem;
+}
+
+.result-label {
+  color: #5d4037;
+  font-size: 2rem;
+  margin-top: 8px;
+}
+
+.waiting-text {
+  color: #5d4037;
   font-size: 1.8rem;
-  font-weight: 900;
-  color: #ea580c;
   margin: 0;
-  animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes popIn {
   from {
-    transform: scale(0.5);
     opacity: 0;
+    transform: scale(0.5) translateY(50px);
   }
-
   to {
-    transform: scale(1);
     opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 </style>

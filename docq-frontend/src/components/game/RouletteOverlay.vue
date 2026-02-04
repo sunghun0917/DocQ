@@ -116,7 +116,7 @@ watch(() => [gameStore.rouletteTargetId, rouletteValue.value] as const, ([newId,
 
       <div class="roulette-container">
         <TresCanvas alpha :clear-alpha="0" shadows>
-          <TresPerspectiveCamera :position="[0, 6, -10]" :look-at="[0, 0, 0]" />
+          <TresPerspectiveCamera :position="[0, 8, -8]" :look-at="[0, 0, 0]" />
 
           <component :is="isGhostMode ? GameGhostRoulette3D : GameRoulette3D" :rotation="rotation"
             :isSpinning="isSpinning" :spin-axis="spinAxis" :initial-rotation="initialRotation"
