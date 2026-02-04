@@ -33,9 +33,9 @@
       <TresGroup :rotation="[0, 0, 0]" :position="[0, 1.5, 0]">
         <primitive v-if="boardScene" :object="boardScene" />
 
-        <!-- Special tile markers (from backend mapEvents) -->
+        <!-- Special tile markers (from backend mapEvents) - Non-banana events -->
         <TresMesh
-          v-for="marker in specialTileMarkers"
+          v-for="marker in nonBananaMarkers"
           :key="marker.key"
           :position="[marker.x, marker.y + 0.05, marker.z]"
           :scale="[0.25, 0.25, 0.25]"
@@ -43,6 +43,16 @@
           <TresSphereGeometry :args="[0.35, 16, 16]" />
           <TresMeshStandardMaterial color="#8b5cf6" />
         </TresMesh>
+
+        <!-- Banana 3D models -->
+        <primitive
+          v-for="marker in bananaMarkers"
+          :key="marker.key"
+          v-if="bananaScene"
+          :object="bananaScene.clone()"
+          :position="[marker.x, marker.y + 0.05, marker.z]"
+          :scale="[1.5, 1.5, 1.5]"
+        />
 
         <!-- Players -->
         <GameCharacter
@@ -174,6 +184,7 @@ type PointerEventsObject3D = THREE.Object3D & {
 }
 
 const boardScene = shallowRef<PointerEventsObject3D | null>(null)
+const bananaScene = shallowRef<THREE.Group | null>(null)
 
 const players = computed(() => gameStore.gameState.players)
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
@@ -329,6 +340,7 @@ const specialTileMarkers = computed(() => {
       if (!tile) return null
       return {
         key: `${key}-${eventType}`,
+        eventType,
         x: tile.position.x,
         y: tile.position.y,
         z: tile.position.z
@@ -336,6 +348,13 @@ const specialTileMarkers = computed(() => {
     })
     .filter((v): v is NonNullable<typeof v> => v !== null)
 })
+
+const bananaMarkers = computed(() => 
+  specialTileMarkers.value.filter(m => m.eventType === 'BANANA')
+)
+const nonBananaMarkers = computed(() => 
+  specialTileMarkers.value.filter(m => m.eventType !== 'BANANA')
+)
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t)
@@ -694,6 +713,8 @@ function sleep(ms: number) {
 // script setup 내부
 onMounted(async () => {
   const loader = new GLTFLoader()
+  
+  // 게임 맵 로드
   const gltf: GLTF = await loader.loadAsync('/assets/models/game_map.glb')
   
   const model = gltf.scene
@@ -703,14 +724,18 @@ onMounted(async () => {
     if (child.isMesh) {
       child.castShadow = true    // 이 물체는 그림자를 만듦 (ex: 나무, 배)
       child.receiveShadow = true // 이 물체 위에 그림자가 생김 (ex: 바닥 타일)
-      
-      // (선택사항) 재질이 빛에 더 잘 반응하도록 설정
-      // child.material.roughness = 1
-      // child.material.metalness = 0
     }
   })
 
   boardScene.value = model as unknown as PointerEventsObject3D
+  
+  // 바나나 모델 로드
+  try {
+    const bananaGltf: GLTF = await loader.loadAsync('/assets/models/banana.glb')
+    bananaScene.value = bananaGltf.scene
+  } catch (e) {
+    console.warn('Failed to load banana model:', e)
+  }
 })
 </script>
 
