@@ -321,7 +321,7 @@ const handlePostSubmit = (data: any) => {
               <ul>
                 <li>
                   <span class="q-num">Preview</span>
-                  <span class="q-text">클릭하여 퀴즈 상세 내용을 확인하세요.</span>
+                  <span class="q-text ">클릭하여 퀴즈 상세 내용을 확인하세요.</span>
                 </li>
               </ul>
             </div>
@@ -514,7 +514,6 @@ const handlePostSubmit = (data: any) => {
   padding: 10px; 
   border: 1px solid #eeeeee;
   flex: 1; 
-  margin-bottom: 10px; 
   overflow: hidden; /* 박스 자체도 넘침 방지 */
 }
 

@@ -35,8 +35,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const isConnecting = ref(false)
     const lastError = ref<string | null>(null)
     const quizGeneratedNotice = ref<QuizGeneratedNotice | null>(null)
-    /** 대기실 퀵메시지 (playerId -> message), 3초 후 자동 삭제 */
+    /** 대기실 퀵메시지 (playerId -> message), 2초 후 자동 삭제 */
     const userMessages = ref<Record<string, string>>({})
+    const chatHideTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
     // Getters
     const connectionStatus = computed(() => {
@@ -280,15 +281,19 @@ export const useWebSocketStore = defineStore('websocket', () => {
             router.push('/')
         })
 
-        // 대기실 퀵메시지(채팅) 구독
+        // 대기실 퀵메시지(채팅) 구독 - 새 메시지 시 기존 타이머 취소 후 2초 재시작
         wsService.value.subscribe(`/topic/game/${roomId}/chat`, (data: { playerId: string; message: string }) => {
             if (!data?.playerId || !data?.message) return
-            userMessages.value = { ...userMessages.value, [data.playerId]: data.message }
-            setTimeout(() => {
+            const pid = data.playerId
+            const existing = chatHideTimeouts.get(pid)
+            if (existing) clearTimeout(existing)
+            userMessages.value = { ...userMessages.value, [pid]: data.message }
+            chatHideTimeouts.set(pid, setTimeout(() => {
+                chatHideTimeouts.delete(pid)
                 const next = { ...userMessages.value }
-                delete next[data.playerId]
+                delete next[pid]
                 userMessages.value = next
-            }, 3000)
+            }, 2000))
         })
     }
 
@@ -550,6 +555,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
      * 모든 구독 해제 및 연결 종료 (방 나갈 때 아바타 캐시도 초기화)
      */
     const cleanup = () => {
+        chatHideTimeouts.forEach((t) => clearTimeout(t))
+        chatHideTimeouts.clear()
         disconnect()
         lastError.value = null
         quizGeneratedNotice.value = null
