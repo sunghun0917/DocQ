@@ -21,7 +21,7 @@ gsap.registerPlugin(Observer);
 const audioStore = useAudioStore();
 // --- 1. 데이터 ---
 const menuItems = [
-  { id: 'profile', label: '내 정보', description: '닉네임을 수정할 수 있어요.', icon: 'face' },
+  { id: 'profile', label: '내 정보', description: '', icon: 'face' },
   { id: 'create', label: '방 만들기', description: '새로운 게임 방을 만들어요.', icon: 'add_circle' },
   { id: 'join', label: '참여하기', description: '코드를 입력해 방에 들어가요.', icon: 'login' },
   { id: 'community', label: '커뮤니티', description: '다른 퀴즈를 공유해요.', icon: 'forum' },
@@ -408,7 +408,7 @@ onUnmounted(() => { stopRoulette(); });
                             <span>로그인</span> <span class="material-symbols-outlined">login</span>
                         </button>
                         <button @click="handleGuestLogin" class="cartoon-btn gray large-btn">
-                            <span>게스트 로그인</span> <span class="material-symbols-outlined">person_off</span>
+                            <span>게스트</span> <span class="material-symbols-outlined">person_off</span>
                         </button>
                     </div>
                     <GuestLoginForm v-else-if="isGuestInputVisible" @success="onLoginSuccess" @error="onAuthError" @close="goBack" />
@@ -441,14 +441,21 @@ onUnmounted(() => { stopRoulette(); });
                                 <p class="description">{{ item.description }}</p>
 
                                 <div class="action-area mt-6">
+
                                     <div v-if="item.id === 'profile'">
-                                        <div class="welcome-msg mb-4"><span class="material-symbols-outlined check-icon">check_circle</span><span><span class="highlight">{{ nickname }}</span>님</span></div>
-                                        <button @click.stop="handleAction('profile')" class="cartoon-btn secondary mb-2">
-                                            <span class="material-symbols-outlined">Edit</span>수정하기
-                                        </button>
-                                        <button @click.stop="handleLogout" class="cartoon-btn gray">
-                                            <span class="material-symbols-outlined">logout</span>로그아웃
-                                        </button>
+                                        <div class="welcome-msg mb-4">
+                                            <span><span class="highlight">[ {{ nickname }} ]</span>님 환영합니다!</span>
+                                        </div>
+                                        
+                                        <div class="flex gap-4 w-full">
+                                            <button @click.stop="handleAction('profile')" class="cartoon-btn gray flex-1">
+                                                <span class="material-symbols-outlined">edit</span>수정하기
+
+                                            </button>
+                                            <button @click.stop="handleLogout" class="cartoon-btn secondary flex-1">
+                                                <span class="material-symbols-outlined">logout</span>로그아웃
+                                            </button>
+                                        </div>
                                     </div>
                                     <div v-else-if="item.id === 'create'">
                                         <button @click.stop="handleAction('create')" class="cartoon-btn primary large-btn animate-pulse-slow">
@@ -619,7 +626,7 @@ onUnmounted(() => { stopRoulette(); });
 .main-container { position: absolute; inset: 0; z-index: 10; }
 .active-content { position: absolute; z-index: 30; top: 5%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 420px; text-align: center; }
 .carousel-stage { position: relative; width: 100%; height: 450px; perspective: 1000px; display: flex; justify-content: center; align-items: center; }
-.carousel-item { position: absolute; top: 50%; left: 50%; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); transform-style: preserve-3d; }
+.carousel-item { position: absolute; top: 50%; left: 50%; width: 420px; height: 290px; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); transform-style: preserve-3d; }
 
 .pos-center { width: 420px; z-index: 20; opacity: 1; transform: translate(-50%, -50%) scale(1) rotateY(0deg); pointer-events: auto; }
 .pos-left { width: 420px; z-index: 10; opacity: 0.7; transform: translate(-120%, -50%) scale(0.65) rotateY(25deg); cursor: pointer; }
