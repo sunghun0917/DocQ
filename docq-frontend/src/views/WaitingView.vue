@@ -9,7 +9,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import { useUiStore } from '@/stores/uiStore'
-import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, getMyQuizzes, getStoredQuizzes, type MyQuizItem } from '@/services/api'
+import { getRoomById, getErrorMessage, generateQuiz, getQuizzes, setDefaultQuizzes, getMyQuizzes, getStoredQuizzes, setQuizFromDb, type MyQuizItem } from '@/services/api'
 import type { QuizResponse } from '@/types/docq-api'
 import AlertModal from '@/components/common/AlertModal.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
@@ -136,12 +136,20 @@ watch(activeMyQuizTab, () => {
 });
 
 const handleSelectMyQuiz = async (quiz: MyQuizItem) => {
-    // TODO: 선택한 퀴즈를 게임방에 로드하는 API 연동 필요
-    console.log("Selected Quiz:", quiz);
-    toastMessage.value = `[${quiz.title}] 퀴즈를 선택했습니다. (기능 준비중)`;
-    toastType.value = 'success';
-    isToastOpen.value = true;
-    isMyQuizModalOpen.value = false;
+    if (!roomId.value) return;
+    try {
+        await setQuizFromDb(roomId.value, quiz.quizId);
+        // toastMessage.value = `[${quiz.title}] 퀴즈가 설정되었습니다.`;
+        // toastType.value = 'success';
+        // isToastOpen.value = true;
+        isMyQuizModalOpen.value = false;
+        // 퀴즈 설정 후 로딩/완료 처리는 websocket 이벤트(QUIZ_GENERATING, QUIZ_GENERATED)로 처리됨
+    } catch (error) {
+        console.error("Failed to set quiz", error);
+        toastMessage.value = '퀴즈 선택 실패: ' + getErrorMessage(error);
+        toastType.value = 'error';
+        isToastOpen.value = true;
+    }
 }
 
 // --- 5. 동작 함수들 ---
@@ -552,7 +560,7 @@ const quickMessages = [
               </div>
 
               <div v-if="generatedQuizzes.length === 0" class="flex gap-3 w-full h-14 shrink-0">
-                <button @click="handleOpenMyQuizModal" class="cartoon-btn color-purple h-full text-lg flex-1">마이 퀴즈</button>
+                <button v-if="!userStore.isGuest" @click="handleOpenMyQuizModal" class="cartoon-btn color-purple h-full text-lg flex-1">마이 퀴즈</button>
                 <button @click="isBasicQuizModalOpen = true" class="cartoon-btn color-brown h-full text-lg flex-1">기본 퀴즈</button>
               </div>
 

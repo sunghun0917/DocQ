@@ -42,7 +42,7 @@ public class QuizService {
                     map.put("options", item.getOptions());
                     map.put("answerIndex", item.getAnswerIndex());
                     map.put("answerText", item.getAnswerText());
-                    
+
                     return map;
                 })
                 .collect(Collectors.toList());
@@ -106,5 +106,9 @@ public class QuizService {
                 .quizzes(items)
                 .build();
     }
-}
 
+    public Quiz findById(Long quizId) {
+        return quizRepository.findById(quizId)
+                .orElseThrow(() -> new DocqException(ErrorCode.QUIZ_NOT_FOUND));
+    }
+}

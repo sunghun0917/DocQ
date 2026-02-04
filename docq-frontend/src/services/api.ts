@@ -281,6 +281,15 @@ export const getQuizzes = async (roomId: string): Promise<QuizResponse[]> => {
 }
 
 /**
+ * DB에 저장된 퀴즈 선택
+ * POST /game/{roomId}/quiz/{quizId}
+ */
+export const setQuizFromDb = async (roomId: string, quizId: number): Promise<{ count: number }> => {
+    const response = await apiClient.post<{ count: number }>(`/game/${roomId}/quiz/${quizId}`)
+    return response.data
+}
+
+/**
  * 기본 퀴즈 선택
  * POST /api/game/{roomId}/quiz/default?type=nonsense|common|mixed
  */
@@ -464,10 +473,12 @@ export default {
     createRoom,
     getRoomById,
     getRoomByInviteCode,
+    getRoomByInviteCode,
     verifyJoinRoom,
     generateQuiz,
     getQuizzes,
     setDefaultQuizzes,
+    setQuizFromDb,
     checkNicknameAvailability,
     checkUserIdAvailability,
     signUp,

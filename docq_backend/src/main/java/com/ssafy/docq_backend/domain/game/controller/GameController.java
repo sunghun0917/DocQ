@@ -68,8 +68,7 @@ public class GameController {
     public ResponseEntity<?> generateQuiz(
             @PathVariable String roomId,
             @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal CustomUserDetails user
-    ) {
+            @AuthenticationPrincipal CustomUserDetails user) {
         try {
             Long userId = user != null ? user.getUserId() : null;
             gameService.generateQuizFromPdf(roomId, file, userId);
@@ -101,6 +100,14 @@ public class GameController {
     public Map<String, Object> setDefaultQuizzes(@PathVariable String roomId,
             @RequestParam("type") String type) {
         int count = gameService.setDefaultQuizzes(roomId, type);
+        return Map.of("count", count);
+    }
+
+    @ResponseBody
+    @PostMapping("/game/{roomId}/quiz/{quizId}")
+    public Map<String, Object> setQuizFromDb(@PathVariable String roomId,
+            @PathVariable Long quizId) {
+        int count = gameService.setQuizFromDb(roomId, quizId);
         return Map.of("count", count);
     }
 
