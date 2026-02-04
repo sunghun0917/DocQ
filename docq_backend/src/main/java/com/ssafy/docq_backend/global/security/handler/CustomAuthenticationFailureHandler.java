@@ -1,18 +1,17 @@
 package com.ssafy.docq_backend.global.security.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.docq_backend.global.exception.ErrorCode;
+import com.ssafy.docq_backend.global.exception.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 @Component
 public class CustomAuthenticationFailureHandler implements AuthenticationFailureHandler {
@@ -23,14 +22,18 @@ public class CustomAuthenticationFailureHandler implements AuthenticationFailure
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
             AuthenticationException exception) throws IOException, ServletException {
 
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        // ErrorResponse 생성
+        ErrorCode errorCode = ErrorCode.INVALID_CREDENTIALS;
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+
+        // JSON 응답 작성
+        response.setStatus(errorCode.getStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
 
-        Map<String, String> data = new HashMap<>();
-        data.put("code", "AUTHENTICATION_FAILED");
-        data.put("message", "Authentication failed: " + exception.getMessage());
-
-        objectMapper.writeValue(response.getWriter(), data);
+        objectMapper.writeValue(response.getWriter(), errorResponse);
     }
 }

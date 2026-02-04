@@ -9,7 +9,8 @@ import {
     signUp as signUpApi,
     login as loginApi,
     logout as logoutApi,
-    getMyInfo
+    getMyInfo,
+    updateMemberNickname
 } from '@/services/api'
 
 // 통합 사용자 프로필 타입
@@ -224,12 +225,29 @@ export const useUserStore = defineStore('user', () => {
     /**
      * 6. 닉네임 변경 (Mock)
      */
+    /**
+     * 6. 닉네임 변경 (API 연동)
+     */
     const updateUsername = async (newNickname: string) => {
         if (!currentUser.value) return false
 
-        currentUser.value.username = newNickname
-        sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-        return true
+        try {
+            if (isGuest.value) {
+                // 게스트: playerId 필요
+                await updateGuestNickname(playerId.value, newNickname)
+            } else {
+                // 회원: 세션 기반
+                await updateMemberNickname(newNickname)
+            }
+
+            // 성공 시 로컬 상태 업데이트
+            currentUser.value.username = newNickname
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+            return true
+        } catch (error) {
+            console.error('Nickname update failed:', error)
+            return false
+        }
     }
 
 

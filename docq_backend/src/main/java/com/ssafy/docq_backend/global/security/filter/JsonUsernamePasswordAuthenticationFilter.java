@@ -10,7 +10,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import java.io.IOException;
 
@@ -18,7 +18,7 @@ public class JsonUsernamePasswordAuthenticationFilter extends AbstractAuthentica
 
     private final ObjectMapper objectMapper;
 
-    public JsonUsernamePasswordAuthenticationFilter(AntPathRequestMatcher defaultFilterProcessesUrl,
+    public JsonUsernamePasswordAuthenticationFilter(RequestMatcher defaultFilterProcessesUrl,
             ObjectMapper objectMapper) {
         super(defaultFilterProcessesUrl);
         this.objectMapper = objectMapper;

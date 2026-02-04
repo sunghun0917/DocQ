@@ -6,6 +6,8 @@ import com.ssafy.docq_backend.global.security.filter.GuestLoginFilter;
 import com.ssafy.docq_backend.global.security.filter.JsonUsernamePasswordAuthenticationFilter;
 import com.ssafy.docq_backend.global.security.handler.CustomAuthenticationFailureHandler;
 import com.ssafy.docq_backend.global.security.handler.CustomAuthenticationSuccessHandler;
+import com.ssafy.docq_backend.global.security.handler.CustomAccessDeniedHandler;
+import com.ssafy.docq_backend.global.security.handler.CustomAuthenticationEntryPoint;
 import com.ssafy.docq_backend.global.security.provider.GuestAuthenticationProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -35,6 +37,8 @@ public class SecurityConfig {
     private final GuestAuthenticationProvider guestAuthenticationProvider;
     private final CustomAuthenticationSuccessHandler successHandler;
     private final CustomAuthenticationFailureHandler failureHandler;
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final CustomAccessDeniedHandler accessDeniedHandler;
     private final ObjectMapper objectMapper;
 
     @Bean
@@ -46,6 +50,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configure(http))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         // 1. Public Endpoints
                         .requestMatchers("/auth/login", "/auth/signup", "/guests/login").permitAll()
@@ -91,6 +98,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @SuppressWarnings("deprecation")
     public JsonUsernamePasswordAuthenticationFilter jsonWithUsernamePasswordFilter(
             AuthenticationManager authenticationManager) {
         JsonUsernamePasswordAuthenticationFilter filter = new JsonUsernamePasswordAuthenticationFilter(
@@ -108,6 +116,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @SuppressWarnings("deprecation")
     public GuestLoginFilter guestLoginFilter(AuthenticationManager authenticationManager) {
         GuestLoginFilter filter = new GuestLoginFilter(
                 new AntPathRequestMatcher("/guests/login", "POST"),

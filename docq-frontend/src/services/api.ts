@@ -211,6 +211,15 @@ export const updateGuestNickname = async (playerId: string, nickname: string): P
 }
 
 /**
+ * 회원 닉네임 변경
+ * PATCH /users/me/nickname
+ */
+export const updateMemberNickname = async (nickname: string): Promise<{ nickname: string }> => {
+    const response = await apiClient.patch<{ nickname: string }>('/users/me/nickname', { nickname })
+    return response.data
+}
+
+/**
  * 방 생성
  * POST /rooms
  */
@@ -441,6 +450,7 @@ export const getErrorCode = (error: any): string | null => {
 export default {
     guestLogin,
     updateGuestNickname,
+    updateMemberNickname,
     createRoom,
     getRoomById,
     getRoomByInviteCode,
