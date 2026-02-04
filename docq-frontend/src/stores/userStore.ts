@@ -30,6 +30,8 @@ export const useUserStore = defineStore('user', () => {
     const currentUser = ref<UserProfile | null>(null)
     const isAuthenticated = ref(false)
     const isLoading = ref(false)
+    /** 앱 시작 시 세션 복구(restoreUser) 완료 여부. 이게 true가 된 후에 로그인 UI 표시 여부 결정 */
+    const authChecked = ref(false)
 
     // Getters
     /** 로그인(회원) 시 RDS 사용자 ID. 로그인 유저만 값 있음, 게스트는 빈 문자열 */
@@ -90,7 +92,7 @@ export const useUserStore = defineStore('user', () => {
             return { success }
         } catch (error) {
             console.error('Login failed:', error)
-            return { success: false, error }
+            return { success: false, error: error ?? '로그인에 실패했습니다.' }
         } finally {
             isLoading.value = false
         }
@@ -154,12 +156,22 @@ export const useUserStore = defineStore('user', () => {
      */
     /**
      * 세션 복구 및 내 정보 조회 (새로고침 시)
+     * - 게스트: sessionStorage에서만 복구 (API 호출 없음, 403 방지)
+     * - 회원: getMyInfo API 호출
      */
     const restoreUser = async () => {
+        isLoading.value = true
         try {
-            isLoading.value = true
+            const stored = sessionStorage.getItem('user')
+            if (stored) {
+                const parsed = JSON.parse(stored) as UserProfile
+                if (parsed?.playerId && parsed?.username && parsed.isGuest) {
+                    currentUser.value = parsed
+                    isAuthenticated.value = true
+                    return true
+                }
+            }
             const response = await getMyInfo()
-
             currentUser.value = {
                 userId: 'id' in response ? String(response.id) : undefined,
                 playerId: response.playerId,
@@ -171,14 +183,25 @@ export const useUserStore = defineStore('user', () => {
             isAuthenticated.value = true
             sessionStorage.setItem('user', JSON.stringify(currentUser.value))
             return true
-        } catch (error) {
-            console.error('Session restoration failed:', error)
+        } catch {
+            const stored = sessionStorage.getItem('user')
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored) as UserProfile
+                    if (parsed?.playerId && parsed?.username) {
+                        currentUser.value = parsed
+                        isAuthenticated.value = true
+                        return true
+                    }
+                } catch { /* ignore */ }
+            }
             currentUser.value = null
             isAuthenticated.value = false
             sessionStorage.removeItem('user')
             return false
         } finally {
             isLoading.value = false
+            authChecked.value = true
         }
     }
 
@@ -253,6 +276,7 @@ export const useUserStore = defineStore('user', () => {
         currentUser,
         isAuthenticated,
         isLoading,
+        authChecked,
         userId,
         playerId,
         username,

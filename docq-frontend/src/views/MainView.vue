@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'; // watch 추가됨
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { gsap, Observer } from 'gsap/all';
 import { useUserStore } from '@/stores/userStore';
 import { getErrorMessage, updateGuestNickname } from '@/services/api';
@@ -249,6 +249,11 @@ const syncNicknameFromStore = () => {
   }
 };
 
+// authChecked가 true가 되면(restoreUser 완료) 세션에서 닉네임 동기화
+watch(() => userStore.authChecked, (checked) => {
+  if (checked) syncNicknameFromStore();
+}, { immediate: true });
+
 const handleAction = (action: string) => {
   if (action === 'create') showCreateModal.value = true;
   if (action === 'join') showJoinModal.value = true;
@@ -322,8 +327,7 @@ const generateClouds = () => {
   clouds.value = newClouds;
 };
 
-onMounted(() => { 
-    userStore.restoreUser(); 
+onMounted(() => {
     syncNicknameFromStore();
     generateClouds();
     startRoulette();
@@ -380,8 +384,19 @@ onUnmounted(() => { stopRoulette(); });
         <p class="game-subtitle">PDF 퀴즈 배틀</p>
     </div>
 
-    <transition name="intro-fade">
-        <div v-if="!isNicknameSet" class="intro-container">
+    <transition name="intro-fade" mode="out-in">
+        <div v-if="!userStore.authChecked" key="loading" class="intro-container intro-loading">
+            <div class="intro-panel wood-panel">
+                <div class="logo-area">
+                    <h1 class="game-title">DocQ</h1>
+                    <p class="game-subtitle">PDF 퀴즈 배틀</p>
+                </div>
+                <div class="input-area flex items-center justify-center min-h-[120px]">
+                    <span class="material-symbols-outlined animate-pulse text-4xl text-wood-dark">sync</span>
+                </div>
+            </div>
+        </div>
+        <div v-else-if="!isNicknameSet" key="intro" class="intro-container">
             <div class="intro-panel wood-panel">
                 <div class="logo-area">
                     <h1 class="game-title">DocQ</h1>
@@ -404,7 +419,7 @@ onUnmounted(() => { stopRoulette(); });
         </div>
     </transition>
 
-    <transition name="fade-scale" mode="out-in">
+    <transition name="fade-scale" mode="out-in" appear>
         <div v-if="isNicknameSet && !isAnyModalOpen" class="main-container">
             
             <div class="active-content">
