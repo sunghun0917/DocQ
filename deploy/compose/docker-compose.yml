@@ -61,7 +61,7 @@ services:
     container_name: prometheus
     restart: unless-stopped
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus:/etc/prometheus
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090" # SSH 터널링용 로컬 바인딩
