@@ -815,6 +815,23 @@ public class GameService {
         }
     }
 
+    /**
+     * 대기실 퀵 메시지 브로드캐스트 (채팅)
+     */
+    public void sendChat(GameDto.ChatRequest request) {
+        if (request == null || request.getRoomId() == null || request.getPlayerId() == null
+                || request.getMessage() == null || request.getMessage().isBlank()) {
+            return;
+        }
+        roomRepository.findById(request.getRoomId()).ifPresent(room -> {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("playerId", request.getPlayerId());
+            payload.put("message", request.getMessage().trim());
+            messagingTemplate.convertAndSend("/topic/game/" + request.getRoomId() + "/chat", payload);
+            log.debug("Chat from {} in room {}: {}", request.getPlayerId(), request.getRoomId(), request.getMessage());
+        });
+    }
+
     // --- Quiz Logic ---
 
     public void startQuiz(String roomId) {

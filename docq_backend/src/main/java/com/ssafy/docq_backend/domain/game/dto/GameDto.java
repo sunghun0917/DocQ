@@ -119,6 +119,18 @@ public class GameDto {
         private Integer avatarId;
     }
 
+    /** 대기실 퀵 메시지 (채팅) */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class ChatRequest {
+        private String roomId;
+        private String playerId;
+        private String message;
+    }
+
     @Getter
     @Builder
     @AllArgsConstructor

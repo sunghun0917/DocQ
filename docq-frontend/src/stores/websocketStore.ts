@@ -35,6 +35,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const isConnecting = ref(false)
     const lastError = ref<string | null>(null)
     const quizGeneratedNotice = ref<QuizGeneratedNotice | null>(null)
+    /** 대기실 퀵메시지 (playerId -> message), 3초 후 자동 삭제 */
+    const userMessages = ref<Record<string, string>>({})
 
     // Getters
     const connectionStatus = computed(() => {
@@ -277,6 +279,17 @@ export const useWebSocketStore = defineStore('websocket', () => {
             gameStore.reset()
             router.push('/')
         })
+
+        // 대기실 퀵메시지(채팅) 구독
+        wsService.value.subscribe(`/topic/game/${roomId}/chat`, (data: { playerId: string; message: string }) => {
+            if (!data?.playerId || !data?.message) return
+            userMessages.value = { ...userMessages.value, [data.playerId]: data.message }
+            setTimeout(() => {
+                const next = { ...userMessages.value }
+                delete next[data.playerId]
+                userMessages.value = next
+            }, 3000)
+        })
     }
 
     /**
@@ -402,6 +415,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
             isReady: isReady, // Java 필드명
             ready: isReady   // Jackson 기본 매핑용 키
         })
+    }
+
+    /**
+     * 대기실 퀵메시지 전송 (WebSocket)
+     */
+    const sendQuickMessage = (roomId: string, playerId: string, message: string) => {
+        if (!wsService.value || !message?.trim()) return
+        wsService.value.publish('/app/game/chat', { roomId, playerId, message: message.trim() })
     }
 
     /**
@@ -533,6 +554,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         lastError.value = null
         quizGeneratedNotice.value = null
         avatarCache.value = {}
+        userMessages.value = {}
     }
 
     const clearQuizGeneratedNotice = () => {
@@ -545,12 +567,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
         isConnecting,
         lastError,
         quizGeneratedNotice,
+        userMessages,
 
         // Getters
         connectionStatus,
 
         // Actions
         connect,
+        sendQuickMessage,
         disconnect,
         subscribeGameState,
         subscribeMiniGame,

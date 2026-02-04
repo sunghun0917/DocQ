@@ -79,7 +79,7 @@ onUnmounted(() => {
   left: 0;
   width: 32px;
   height: 32px;
-  z-index: 9999; 
+  z-index: 2147483647; /* CSS 최대값, 모든 요소 위에 표시 */ 
   pointer-events: none;
   will-change: transform;
   display: flex;
