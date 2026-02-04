@@ -40,6 +40,7 @@ pipeline {
                     branch 'develop'
                 }
             }
+
             steps {
                 sh '''
                     set -e
