@@ -141,15 +141,18 @@ const apiClient: AxiosInstance = axios.create({
     }
 })
 
-// 응답 인터셉터 (에러 로깅용)
+// 응답 인터셉터 (에러 로깅용). /users/me 403은 미인증 시 정상이므로 로그 생략
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response) {
-            console.error('API Error Data:', error.response.data)
-            console.error('API Error Status:', error.response.status)
-        } else {
-            console.error('API Error Message:', error.message)
+        const isMe403 = error.response?.status === 403 && String(error.config?.url || '').includes('/users/me')
+        if (!isMe403) {
+            if (error.response) {
+                console.error('API Error Data:', error.response.data)
+                console.error('API Error Status:', error.response.status)
+            } else {
+                console.error('API Error Message:', error.message)
+            }
         }
         return Promise.reject(error)
     }
@@ -420,15 +423,10 @@ export const deleteComment = async (boardId: number, commentId: number): Promise
  * API 에러 메시지 추출
  */
 export const getErrorMessage = (error: any): string => {
-    if (typeof error === 'string') {
-        return error
-    }
-    if (error.response?.data?.message) {
-        return error.response.data.message
-    }
-    if (error.message) {
-        return error.message
-    }
+    if (error == null) return '알 수 없는 오류가 발생했습니다.'
+    if (typeof error === 'string') return error
+    if (error.response?.data?.message) return error.response.data.message
+    if (error.message) return error.message
     return '알 수 없는 오류가 발생했습니다.'
 }
 
