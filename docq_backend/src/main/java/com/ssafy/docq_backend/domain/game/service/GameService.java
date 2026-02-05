@@ -3,6 +3,7 @@ package com.ssafy.docq_backend.domain.game.service;
 import com.ssafy.docq_backend.domain.game.entity.PlayerState;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
+import com.ssafy.docq_backend.domain.room.entity.AiStatus;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
 import com.ssafy.docq_backend.domain.player.entity.Player;
