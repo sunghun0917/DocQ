@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -13,6 +13,13 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(['close', 'confirm']);
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (props.isOpen && e.key === 'Escape') emit('close');
+};
+
+onMounted(() => window.addEventListener('keydown', handleKeydown));
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
 const confirmBtnClass = computed(() => {
   return props.variant === 'primary' 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
@@ -14,6 +14,13 @@ const userStore = useUserStore()
 const roomStore = useRoomStore()
 const wsStore = useWebSocketStore()
 const isSubmitting = ref(false)
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') emit('close');
+};
+
+onMounted(() => window.addEventListener('keydown', handleKeydown));
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
 const roomCode = ref('');
 const resolvedRoom = ref<RoomResponse | null>(null)

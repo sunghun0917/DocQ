@@ -14,6 +14,7 @@ import GuestLoginForm from '@/components/auth/GuestLoginForm.vue';
 import LoginForm from '@/components/auth/LoginForm.vue';
 import SignUpForm from '@/components/auth/SignUpForm.vue';
 import CommunitySystem from '@/components/community/CommunitySystem.vue';
+import ServiceIntroModal from '@/components/common/ServiceIntroModal.vue';
 
 gsap.registerPlugin(Observer);
 
@@ -21,15 +22,36 @@ gsap.registerPlugin(Observer);
 const audioStore = useAudioStore();
 // --- 1. 데이터 ---
 const menuItems = [
-  { id: 'profile', label: '내 정보', description: '', icon: 'face' },
-  { id: 'create', label: '방 만들기', description: '새로운 게임 방을 만들어요.', icon: 'add_circle' },
-  { id: 'join', label: '참여하기', description: '코드를 입력해 방에 들어가요.', icon: 'login' },
-  { id: 'community', label: '커뮤니티', description: '다른 퀴즈를 공유해요.', icon: 'forum' },
-  { id: 'guide', label: '게임 가이드', description: '게임 방법을 알아볼까요?', icon: 'menu_book' },
-  { id: 'stack', label: '기술 스택', description: '개발 도구 정보입니다.', icon: 'code_blocks' },
-  { id: 'team', label: '만든 사람들', description: '우리를 소개합니다!', icon: 'groups' },
-];
+  { 
+    id: 'profile', label: '내 정보', description: '', icon: 'face', 
+    color: '#42a5f5', darkColor: '#1565c0' // 파랑 (정보/신뢰)
+  },
+  { 
+    id: 'create', label: '방 만들기', description: '새로운 게임 방을 만들어요.', icon: 'add_circle', 
+    color: '#7cb342', darkColor: '#33691e' // 초록 (생성/시작 - 기존 색상)
+  },
+  { 
+    id: 'join', label: '참여하기', description: '코드를 입력해 방에 들어가요.', icon: 'login', 
+    color: '#7cb342', darkColor: '#33691e' // 초록 (생성/시작 - 기존 색상)
+  },
+  { 
+    id: 'community', label: '커뮤니티', description: '다른 퀴즈를 공유해요.', icon: 'forum', 
+        color: '#ffca28', darkColor: '#ff6f00' // 노랑 (소통)
 
+  },
+  { 
+    id: 'guide', label: '게임 가이드', description: '게임 방법을 알아볼까요?', icon: 'menu_book', 
+    color: '#26a69a', darkColor: '#00796b' // 청록 (지식/안내)
+  },
+  { 
+    id: 'intro', label: '개요', description: 'docq가 무엇인가요?', icon: 'description', 
+    color: '#ab47bc', darkColor: '#7b1fa2' // 보라 (재미)
+  },
+  { 
+    id: 'team', label: '팀 소개', description: '우리를 소개합니다!', icon: 'groups', 
+    color: '#8d6e63', darkColor: '#4e342e' // 갈색 (사람/우드톤)
+  },
+];
 const totalItems = menuItems.length;
 const anglePerItem = 360 / totalItems;
 
@@ -43,6 +65,7 @@ const showJoinModal = ref(false);
 const showEditNicknameModal = ref(false);
 const showGuideModal = ref(false);
 const showCommunityModal = ref(false);
+const isIntroModalOpen = ref(false);
 
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
@@ -58,7 +81,7 @@ const isSignUpInputVisible = ref(false);
 
 // [핵심 로직 추가] 어떤 모달이라도 열려있는지 감지
 const isAnyModalOpen = computed(() => {
-  return showCreateModal.value || showJoinModal.value || showGuideModal.value || showCommunityModal.value || showEditNicknameModal.value;
+  return showCreateModal.value || showJoinModal.value || showGuideModal.value || showCommunityModal.value || showEditNicknameModal.value || isIntroModalOpen.value;
 });
 
 // --- 2. 룰렛 변수 ---
@@ -123,7 +146,7 @@ const playTickAnimation = (direction: number) => {
 // 메인 루프
 const updateLoop = () => {
   if (!isInteracting) {
-      targetRotation -= 0.05; 
+      targetRotation -= 0.1; 
   }
   const diff = targetRotation - currentRotation;
   currentRotation += diff * 0.08;
@@ -160,15 +183,7 @@ const startRoulette = () => {
     if (observer) return;
     gsap.ticker.add(updateLoop);
     observer = Observer.create({
-        target: window, type: "wheel,touch,pointer", wheelSpeed: -1.3,
-        onPress: () => { 
-            if (!isNicknameSet.value || isAnyModalOpen.value) return; // 모달 열려있으면 막음
-            isInteracting = true; clearTimeout(idleTimer); 
-        },
-        onRelease: () => { 
-            if (!isNicknameSet.value || isAnyModalOpen.value) return; 
-            clearTimeout(idleTimer); idleTimer = setTimeout(() => isInteracting = false, 1000); 
-        },
+        target: window, type: "wheel", wheelSpeed: -1.3,
         onChange: (self: any) => {
             if (!isNicknameSet.value || isAnyModalOpen.value) return;
             isInteracting = true;
@@ -263,13 +278,23 @@ const handleAction = (action: string) => {
       showEditNicknameModal.value = true;
   }
   if (action === 'guide') showGuideModal.value = true;
+  if (action === 'intro') isIntroModalOpen.value = true;
   if (action === 'community') showCommunityModal.value = true;
 };
 
 const closeEditNickname = () => { showEditNicknameModal.value = false; };
+const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && showEditNicknameModal.value) closeEditNickname();
+};
+
 const checkEditNicknameDuplicate = async () => {
     if (!editNickname.value || editNickname.value.trim().length < 2) {
         editCheckMsg.value = "닉네임은 두 글자 이상이어야 해요!";
+        editCheckStatus.value = 'error';
+        return;
+    }
+    if (editNickname.value.length > 10) {
+        editCheckMsg.value = "닉네임은 10자 이하로 해주세요!";
         editCheckStatus.value = 'error';
         return;
     }
@@ -288,6 +313,12 @@ const checkEditNicknameDuplicate = async () => {
 const saveNickname = async () => {
     if (editNickname.value === nickname.value) {
         closeEditNickname();
+        return;
+    }
+    if (editNickname.value.length > 10) {
+        editCheckMsg.value = "닉네임은 10자 이하로 해주세요!";
+        editCheckStatus.value = 'error';
+        triggerShake();
         return;
     }
     if (!isEditNicknameChecked.value) {
@@ -328,6 +359,7 @@ const generateClouds = () => {
 };
 
 onMounted(() => {
+    window.addEventListener('keydown', handleKeydown);
     syncNicknameFromStore();
     generateClouds();
     startRoulette();
@@ -347,7 +379,10 @@ onMounted(() => {
     window.addEventListener('click', enableAudio);
     window.addEventListener('keydown', enableAudio);
 });
-onUnmounted(() => { stopRoulette(); });
+onUnmounted(() => { 
+    stopRoulette(); 
+    window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
@@ -433,24 +468,26 @@ onUnmounted(() => { stopRoulette(); });
                     >
                         <div class="panel-content" :class="{ 'main-mode': index === activeIndex, 'side-mode': index !== activeIndex }">
                             <div v-if="index === activeIndex" class="full-content" @click.stop>
-                                <div class="content-header">
-                                    <div class="icon-circle"><span class="leaf-icon material-symbols-outlined">{{ item.icon }}</span></div>
-                                    <span class="index-number">Menu {{ index + 1 }} / {{ totalItems }}</span>
-                                </div>
-                                <h1 class="wood-text">{{ item.label }}</h1>
+                                <div class="icon-circle"
+     :style="{ backgroundColor: item.color, borderColor: item.darkColor }">
+         <span class="leaf-icon material-symbols-outlined">{{ item.icon }}</span>
+    </div>
+                                <h1 class="wood-text">
+                                    {{ item.id === 'profile' ? nickname : item.label }}
+                                </h1>
                                 <p class="description">{{ item.description }}</p>
 
-                                <div class="action-area mt-6">
+                                <div class="action-area mt-4 p-2">
 
                                     <div v-if="item.id === 'profile'">
-                                        <div class="welcome-msg mb-4">
-                                            <span><span class="highlight">[ {{ nickname }} ]</span>님 환영합니다!</span>
+                                        <div class="welcome-msg ">
+                                            <span>환영합니다!</span>
                                         </div>
                                         
                                         <div class="flex gap-4 w-full">
-                                            <button @click.stop="handleAction('profile')" class="cartoon-btn gray flex-1">
+                                            <button @click.stop="handleAction('profile')" class="cartoon-btn flex-1"
+                                                :style="{ backgroundColor: item.color, boxShadow: `0 5px 0 ${item.darkColor}` }">
                                                 <span class="material-symbols-outlined">edit</span>수정하기
-
                                             </button>
                                             <button @click.stop="handleLogout" class="cartoon-btn secondary flex-1">
                                                 <span class="material-symbols-outlined">logout</span>로그아웃
@@ -468,13 +505,21 @@ onUnmounted(() => { stopRoulette(); });
                                         </button>
                                     </div>
                                     <div v-else-if="item.id === 'community'">
-                                        <button @click.stop="handleAction('community')" class="cartoon-btn primary large-btn">
+                                        <button @click.stop="handleAction('community')" class="cartoon-btn large-btn"
+                                            :style="{ backgroundColor: item.color, boxShadow: `0 5px 0 ${item.darkColor}` }">
                                             <span class="material-symbols-outlined text-3xl">forum</span>커뮤니티 입장
                                         </button>
                                     </div>
                                     <div v-else-if="item.id === 'guide'">
-                                        <button @click.stop="handleAction('guide')" class="cartoon-btn primary large-btn">
+                                        <button @click.stop="handleAction('guide')" class="cartoon-btn large-btn"
+                                            :style="{ backgroundColor: item.color, boxShadow: `0 5px 0 ${item.darkColor}` }">
                                             <span class="material-symbols-outlined text-3xl">menu_book</span>가이드 보기
+                                        </button>
+                                    </div>
+                                    <div v-else-if="item.id === 'intro'">
+                                        <button @click.stop="handleAction('intro')" class="cartoon-btn large-btn"
+                                            :style="{ backgroundColor: item.color, boxShadow: `0 5px 0 ${item.darkColor}` }">
+                                            <span class="material-symbols-outlined text-3xl">description</span>서비스 소개
                                         </button>
                                     </div>
                                     <div v-else class="info-msg">
@@ -484,8 +529,10 @@ onUnmounted(() => { stopRoulette(); });
                                 </div>
                             </div>
                             <div v-else class="mini-content">
-                                <span class="material-symbols-outlined side-icon">{{ item.icon }}</span>
-                                <span class="side-label">{{ item.label }}</span>
+<span class="material-symbols-outlined side-icon" 
+      :style="{ color: item.color }">
+    {{ item.icon }}
+</span>                                <span class="side-label">{{ item.label }}</span>
                             </div>
                         </div>
                     </div>
@@ -500,10 +547,23 @@ onUnmounted(() => { stopRoulette(); });
                 </div>
                 <div class="nav-bar-container">
                     <div v-for="(item, index) in menuItems" :key="'nav-' + item.id" class="nav-dot"
-                        :class="{ active: index === activeIndex }" @click="goToIndex(index)">
-                        <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
-                        <span class="nav-tooltip">{{ item.label }}</span>
-                    </div>
+     :class="{ active: index === activeIndex }" 
+     @click="goToIndex(index)"
+     :style="index === activeIndex ? { 
+         backgroundColor: item.color, 
+         borderColor: item.darkColor,
+         boxShadow: `0 5px 10px ${item.darkColor}40` /* 40은 투명도 */
+     } : {}">
+    
+    <span class="material-symbols-outlined nav-icon"
+          :style="index !== activeIndex ? { color: item.color } : {}">
+        {{ item.icon }}
+    </span>
+    
+    <span class="nav-tooltip" :style="{ backgroundColor: item.darkColor }">
+        {{ item.label }}
+    </span>
+</div>
                 </div>
             </div>
 
@@ -515,7 +575,7 @@ onUnmounted(() => { stopRoulette(); });
     <JoinRoomModal v-if="showJoinModal" @close="showJoinModal = false" />
     <GameGuideModal v-if="showGuideModal" @close="showGuideModal = false" />
     <CommunitySystem v-if="showCommunityModal" @close="showCommunityModal = false" />
-
+    <ServiceIntroModal v-if="isIntroModalOpen" @close="isIntroModalOpen = false" />
     <transition name="intro-fade">
       <div v-if="showEditNicknameModal" class="edit-nickname-backdrop" @click.self="closeEditNickname">
         <div class="edit-nickname-modal">
@@ -527,6 +587,7 @@ onUnmounted(() => { stopRoulette(); });
                     <input 
                         v-model="editNickname" 
                         type="text" 
+                        maxlength="10"
                         placeholder="닉네임을 입력하세요" 
                         @keyup.enter="saveNickname" 
                         @input="isEditNicknameChecked = false; editCheckMsg = ''"
@@ -545,7 +606,7 @@ onUnmounted(() => { stopRoulette(); });
     </transition>
   </div>
   <button @click="audioStore.toggleMute" 
-          class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
+          class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 rounded-full shadow-lg transition-all">
     <span class="material-symbols-outlined !text-3xl text-[#5d4037]">
       {{ audioStore.isMuted ? 'volume_off' : 'volume_up' }}
     </span>
@@ -624,9 +685,9 @@ onUnmounted(() => { stopRoulette(); });
 .cartoon-btn.gray:active { top: 5px; box-shadow: 0 0 0 #546e7a; }
 
 .main-container { position: absolute; inset: 0; z-index: 10; }
-.active-content { position: absolute; z-index: 30; top: 5%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 420px; text-align: center; }
-.carousel-stage { position: relative; width: 100%; height: 450px; perspective: 1000px; display: flex; justify-content: center; align-items: center; }
-.carousel-item { position: absolute; top: 50%; left: 50%; width: 420px; height: 290px; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); transform-style: preserve-3d; }
+.active-content { position: absolute; z-index: 30; top: 8%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 420px; text-align: center; }
+.carousel-stage { position: relative; width: 100%; height: 460px; perspective: 1000px; display: flex; justify-content: center; align-items: center; }
+.carousel-item { position: absolute; top: 50%; left: 50%; width: 420px; height: 270px; transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); transform-style: preserve-3d; }
 
 .pos-center { width: 420px; z-index: 20; opacity: 1; transform: translate(-50%, -50%) scale(1) rotateY(0deg); pointer-events: auto; }
 .pos-left { width: 420px; z-index: 10; opacity: 0.7; transform: translate(-120%, -50%) scale(0.65) rotateY(25deg); cursor: pointer; }
@@ -639,13 +700,13 @@ onUnmounted(() => { stopRoulette(); });
 .panel-content.main-mode { padding: 24px; background: rgba(255, 248, 225, 0.95); }
 .panel-content.main-mode::before, .panel-content.main-mode::after { content: ''; position: absolute; width: 12px; height: 12px; background: var(--wood-border); border-radius: 50%; top: 15px; }
 .panel-content.main-mode::before { left: 15px; } .panel-content.main-mode::after { right: 15px; }
-.panel-content.side-mode { display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(255, 248, 225, 0.5); border-width: 4px; height: 300px; margin-top: 75px; }
+.panel-content.side-mode { display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(255, 248, 225, 0.5); border-width: 4px; height: 260px; margin-top: 75px; }
 .mini-content { text-align: center; display: flex; flex-direction: column; gap: 10px; }
 .side-icon { font-size: 4rem; color: var(--wood-dark); opacity: 0.8; }
 .side-label { font-size: 1.5rem; color: var(--wood-dark); }
 
 .content-header { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
-.icon-circle { width: 48px; height: 48px; background: var(--leaf-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid var(--leaf-dark); color: white; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2); }
+.icon-circle { width: 48px; height: 48px; background: var(--leaf-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid var(--leaf-dark); color: white; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2); margin: 0 auto 12px auto; }
 .index-number { font-size: 1.4rem; color: var(--wood-dark); }
 h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text-brown); text-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
 .description { margin-top: 8px; font-size: 1rem; color: var(--wood-dark); line-height: 1.3; }
@@ -662,8 +723,8 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 
 .bottom-nav-area { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 50; }
 .scroll-indicator { position: static; margin-bottom: 5px; font-size: 1.1rem; color: white; text-shadow: 2px 2px 0 rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px; }
-.nav-bar-container { display: flex; justify-content: center; gap: 15px; padding: 12px 25px; background: rgba(255, 255, 255, 0.25); border-radius: 50px; backdrop-filter: blur(5px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid rgba(255,255,255,0.4); }
-.nav-dot { position: relative; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; background: #efebe9; border-radius: 50%; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 2px solid #a1887f; color: #5d4037; }
+.nav-bar-container { display: flex; justify-content: center; gap: 15px; padding: 12px 25px; background: rgba(255, 255, 255, 0.25); border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid rgba(255,255,255,0.4); }
+.nav-dot { position: relative; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; background: #efebe9; border-radius: 50%; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 2px solid #a1887f; color: #5d4037; color: inherit;}
 .nav-icon { font-size: 24px; }
 .nav-dot.active { background: var(--leaf-green); color: white; transform: scale(1.15) translateY(-5px); border-color: #33691e; box-shadow: 0 5px 10px rgba(0,0,0,0.2); }
 .nav-tooltip { position: absolute; top: -40px; left: 50%; transform: translateX(-50%); background: rgba(93, 64, 55, 0.9); color: white; font-size: 0.85rem; padding: 5px 10px; border-radius: 8px; opacity: 0; pointer-events: none; transition: all 0.2s; white-space: nowrap; }
@@ -692,7 +753,7 @@ h1.wood-text { font-size: 2.8rem; margin: 0; line-height: 1.1; color: var(--text
 .main-title-banner .game-title { font-size: 2.6rem; }
 .main-title-banner .game-subtitle { font-size: 0.95rem; margin-top: 2px; }
 
-.edit-nickname-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; z-index: 60; backdrop-filter: blur(2px); }
+.edit-nickname-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; z-index: 60; }
 .edit-nickname-modal { width: min(90%, 360px); background: #fff8e1; border: 5px solid var(--wood-border); border-radius: 24px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); text-align: center; }
 .edit-nickname-title { margin: 0 0 6px 0; font-size: 1.8rem; color: var(--text-brown); }
 .edit-nickname-desc { margin: 0 0 16px 0; color: var(--wood-dark); }
