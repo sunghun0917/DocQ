@@ -197,6 +197,8 @@ public class MiniGameService {
             case BANANA:
                 if (request.getTargetPosition() != null) {
                     room.getMapEvents().put(request.getTargetPosition(), "BANANA");
+                    roomRepository.save(room);
+                    gameService.broadcastGameState(room);
                 }
                 break;
             case SWAP_POSITION:

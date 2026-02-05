@@ -31,7 +31,34 @@
 />
 
       <TresGroup :rotation="[0, 0, 0]" :position="[0, 1.5, 0]">
+        <BananaTileRaycaster
+          v-if="props.bananaPlacementMode"
+          :enabled="props.bananaPlacementMode"
+          :tiles="bananaSelectableTiles"
+          :plane-y-offset="1.5"
+          @hover="setHoveredBananaTile"
+        />
         <primitive v-if="boardScene" :object="boardScene" />
+
+        <!-- 바나나 설치: 타일 단위 규격(1x1), 호버는 BananaTileRaycaster로 감지 -->
+        <TresGroup
+          v-for="item in bananaSelectableTiles"
+          :key="`banana-sel-${item.position}`"
+          :position="[item.x, item.y + (hoveredBananaTile === item.position ? 0.15 : 0.01), item.z]"
+          :rotation="[-Math.PI / 2, 0, 0]"
+        >
+          <TresMesh @click="emit('tile-selected', item.position)">
+            <TresPlaneGeometry :args="[BANANA_TILE_SIZE, BANANA_TILE_SIZE]" />
+            <TresMeshBasicMaterial
+              color="#64b5f6"
+              :opacity="hoveredBananaTile === item.position ? 0.5 : 0.35"
+              :transparent="true"
+              :depthWrite="false"
+            />
+          </TresMesh>
+          <!-- 테두리만 강조 (호버 시 더 밝게) -->
+          <primitive v-if="bananaTileOutlines.get(item.position)" :object="bananaTileOutlines.get(item.position)!" />
+        </TresGroup>
 
         <!-- Special tile markers (from backend mapEvents) - Non-banana events -->
         <TresMesh
@@ -84,6 +111,7 @@ import * as THREE from 'three'
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
+import BananaTileRaycaster from '@/components/game/board3D/BananaTileRaycaster.vue'
 
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
@@ -102,6 +130,9 @@ type MapTile = {
 
 const MAP_START_POSITION = 1
 const MAP_GOAL_POSITION = 30
+
+/** 바나나 선택 타일 크기 (맵 타일 간격 ~1에 맞춤) */
+const BANANA_TILE_SIZE = 1.0
 
 const parseTileNumber = (name: string): number => {
   const match = /Tile_(\d+)_/i.exec(name)
@@ -141,8 +172,15 @@ const computeMapCenter = (): [number, number, number] => {
 
 const MAP_CENTER = computeMapCenter()
 
+const props = defineProps<{
+  /** 바나나 설치 시 맵 타일 클릭 선택 모드 */
+  bananaPlacementMode?: boolean
+}>()
+
 const emit = defineEmits<{
   (e: 'movement-change', moving: boolean): void
+  (e: 'banana-placement-done'): void
+  (e: 'tile-selected', position: number): void
 }>()
 
 const gameStore = useGameStore()
@@ -159,6 +197,8 @@ const cameraTarget = ref<[number, number, number]>([
     MAP_CENTER[2] // Z축 오프셋 (카메라가 아래쪽을 봄 -> 맵은 위쪽으로 이동)
 ])
 const cameraZoom = ref(0.12)
+const DEFAULT_ZOOM = 0.12
+const BANANA_SELECT_ZOOM = 0.10 // 바나나 선택 시 더 멀리서 맵 전체 보기
 const introPlayed = ref(false)
 
 const aspect = ref(window.innerWidth / window.innerHeight)
@@ -330,6 +370,87 @@ const getPlayerLookTarget = (p: PlayerInfo): Vec3 => {
 }
 
 const isPlayerMoving = (userId: string) => isMovingGlobal.value && gameStore.currentMove?.playerId === userId
+
+/** 바나나 설치: 호버 중인 타일 (BananaTileRaycaster가 감지) */
+const hoveredBananaTile = ref<number | null>(null)
+const setHoveredBananaTile = (pos: number | null) => { hoveredBananaTile.value = pos }
+
+/** 바나나 설치 모드일 때 클릭 가능한 타일 1~30 (위치 + 월드 좌표) */
+const bananaSelectableTiles = computed(() => {
+  if (!props.bananaPlacementMode) return []
+  return Array.from({ length: 30 }, (_, i) => i + 1)
+    .map(pos => {
+      const tile = getTileByPosition(pos)
+      if (!tile) return null
+      return {
+        position: pos,
+        x: tile.position.x,
+        y: tile.position.y,
+        z: tile.position.z
+      }
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null)
+})
+
+watch(() => props.bananaPlacementMode, (on) => {
+  if (!on) {
+    hoveredBananaTile.value = null
+    cameraZoom.value = DEFAULT_ZOOM
+  } else {
+    cameraZoom.value = BANANA_SELECT_ZOOM // 멀리서 맵 전체 보기
+  }
+})
+
+/** 바나나 타일 테두리 (LineSegments) - 타일 단위 규격, 호버 시 테두리만 강조 */
+const bananaTileOutlineGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(BANANA_TILE_SIZE, BANANA_TILE_SIZE))
+const bananaTileOutlines = shallowRef<Map<number, THREE.LineSegments>>(new Map())
+watch(
+  bananaSelectableTiles,
+  (tiles) => {
+    const map = new Map<number, THREE.LineSegments>()
+    for (const t of tiles) {
+      const mat = new THREE.LineBasicMaterial({
+        color: 0xffeb3b,
+        transparent: true,
+        opacity: 0.65
+      })
+      map.set(t.position, new THREE.LineSegments(bananaTileOutlineGeo, mat))
+    }
+    bananaTileOutlines.value = map
+  },
+  { immediate: true }
+)
+watch(hoveredBananaTile, (hovered) => {
+  bananaTileOutlines.value.forEach((line, pos) => {
+    const mat = line.material as THREE.LineBasicMaterial
+    mat.color.setHex(hovered === pos ? 0xdd0000 : 0xffeb3b) // 호버: 진한 빨간색
+    mat.opacity = hovered === pos ? 1 : 0.65
+  })
+})
+
+/** 바나나 모드일 때 보드 씬이 레이캐스트를 막지 않도록 raycast 비활성화 → 타일 호버/클릭만 감지 */
+const boardRaycastBackup = new Map<THREE.Object3D, (raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) => void>()
+watch(
+  () => [props.bananaPlacementMode, boardScene.value] as const,
+  ([mode, scene]) => {
+    if (!scene) return
+    scene.traverse((obj) => {
+      if (!('raycast' in obj) || typeof (obj as THREE.Mesh).raycast !== 'function') return
+      const mesh = obj as THREE.Mesh
+      if (mode) {
+        if (!boardRaycastBackup.has(mesh)) boardRaycastBackup.set(mesh, mesh.raycast.bind(mesh))
+        mesh.raycast = () => {}
+      } else {
+        const orig = boardRaycastBackup.get(mesh)
+        if (orig) {
+          mesh.raycast = orig
+        }
+      }
+    })
+    if (!mode) boardRaycastBackup.clear()
+  },
+  { immediate: true }
+)
 
 const specialTileMarkers = computed(() => {
   const events = mapEvents.value
@@ -513,6 +634,8 @@ const MOVE_FOCUS_ZOOM = 0.22
 const MOVE_FOCUS_IN_MS = 350
 const MOVE_FOCUS_FOLLOW_MS = 220
 const MOVE_FOCUS_OUT_MS = 450
+const BANANA_FOCUS_ZOOM = 0.28
+const BANANA_FOCUS_HOLD_MS = 1500
 
 const lastMoveKey = ref<string | null>(null)
 
@@ -521,6 +644,44 @@ const waitForMoveUnlock = async () => {
     await sleep(100)
   }
 }
+
+// 바나나 설치: 해당 타일 확대 → 잠시 유지 → 축소 후 ACK 전송
+watch(() => gameStore.bananaPlacementPosition, async (pos) => {
+  if (pos == null || typeof pos !== 'number') return
+  const tile = getTileByPosition(pos)
+  if (!tile) {
+    gameStore.bananaPlacementPosition = null
+    emit('banana-placement-done')
+    return
+  }
+  const target: [number, number, number] = [tile.position.x, tile.position.y, tile.position.z]
+  const snapshotTarget = [...cameraTarget.value] as [number, number, number]
+  const snapshotPos = [...cameraPosition.value] as [number, number, number]
+  const snapshotZoom = cameraZoom.value
+  const baseOffset: [number, number, number] = [
+    snapshotPos[0] - snapshotTarget[0],
+    snapshotPos[1] - snapshotTarget[1],
+    snapshotPos[2] - snapshotTarget[2]
+  ]
+  await animateCameraTo({
+    target,
+    zoom: BANANA_FOCUS_ZOOM,
+    duration: MOVE_FOCUS_IN_MS,
+    offset: baseOffset
+  })
+  await sleep(BANANA_FOCUS_HOLD_MS)
+  await animateCameraTo({
+    target: snapshotTarget,
+    zoom: snapshotZoom,
+    duration: MOVE_FOCUS_OUT_MS,
+    offset: baseOffset
+  })
+  cameraTarget.value = snapshotTarget
+  cameraPosition.value = snapshotPos
+  cameraZoom.value = snapshotZoom
+  gameStore.bananaPlacementPosition = null
+  emit('banana-placement-done')
+})
 
 const showActionNotice = (text: string, duration = 1500) => {
   if (actionNoticeTimer !== null) {
@@ -682,6 +843,11 @@ watch(() => gameStore.currentMove, async (move) => {
         animatingPlayers.value[action.targetPlayerId] = before
         currentPos = after
       } else if (action.type === 'TILE_EFFECT') {
+        if (action.effectType === 'BANANA_SLIP') {
+          const events = { ...(gameStore.gameState.mapEvents || {}) }
+          delete events[String(before)]
+          gameStore.setGameState({ ...gameStore.gameState, mapEvents: events })
+        }
         const label = getEffectLabel(action.effectType)
         await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
         await moveStep(playerId, currentPos, after, followCameraStep)
