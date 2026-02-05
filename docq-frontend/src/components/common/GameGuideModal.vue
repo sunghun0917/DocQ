@@ -9,6 +9,7 @@ interface SlideItem {
   desc: string;
   image?: string;
   images?: string[];
+  items?: { image: string; label: string }[]; // 아이템 가이드용
   icon: string;
   color: string;
 }
@@ -36,11 +37,24 @@ const slides: SlideItem[] = [
     color: "#ef5350"
   },
   {
-    title: "아이템 & 미니게임",
-    desc: "2배 타일, 아이템, 미니게임 등\n매 판 다른 변수가 등장해요!",
+    title: "미니게임 & 효과",
+    desc: "2배 타일, 미니게임, 상대 잡기로\n짜릿한 역전을 노려보세요!",
     images: ["/images/buff.png", "/images/minigame.png"],
-    icon: "bolt",
+    icon: "videogame_asset",
     color: "#42a5f5"
+  },
+  {
+    title: "아이템 가이드",
+    desc: "미니게임 승리 시 아이템 획득 !\n아이템으로 판을 뒤집으세요.",
+    items: [
+      { image: "/images/boom.png", label: "꽝" },
+      { image: "/images/banana.png", label: "바나나 설치\n(밟으면 뒤로 3칸)" },
+      { image: "/images/plus.png", label: "앞으로 3칸 이동" },
+      { image: "/images/quiz.png", label: "상대 퀴즈 방해" },
+      { image: "/images/switch.png", label: "자리 바꾸기" }
+    ],
+    icon: "bolt",
+    color: "#ab47bc"
   }
 ];
 
@@ -124,6 +138,7 @@ onUnmounted(() => {
         <transition :name="direction === 'next' ? 'slide-next' : 'slide-prev'" mode="out-in">
           <div :key="currentSlide" class="flex flex-col items-center gap-6 w-full max-w-[700px]">
             
+            <!-- Case 1: Multiple Images (Steal Turn) -->
             <div v-if="activeSlide.images" class="relative w-[600px] h-[340px]">
                 <div class="absolute top-0 left-8 w-[58%] h-[85%] z-10 rounded-2xl shadow-md border-4 border-[#8d6e63] bg-[#bcaaa4] overflow-hidden">
                     <img :src="activeSlide.images[0]" class="w-full h-full object-cover" />
@@ -133,6 +148,18 @@ onUnmounted(() => {
                 </div>
             </div>
 
+            <!-- Case 2: Items Grid (Item Guide) -->
+            <div v-else-if="activeSlide.items" class="relative w-[600px] h-[340px] bg-[#fff8e1] rounded-2xl border-[5px] border-[#8d6e63] px-8 py-4 flex flex-col justify-center shadow-lg overflow-hidden">
+                <div class="flex flex-col justify-between h-full py-2 px-2">
+                    <div v-for="(item, idx) in activeSlide.items" :key="idx" 
+                         class="flex items-center gap-6">
+                        <img :src="item.image" class="w-14 h-14 object-contain drop-shadow-sm shrink-0" />
+                        <span class="text-3xl text-[#5d4037] font-bold leading-tight break-keep text-left">{{ item.label }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Case 3: Single Image (Standard) -->
             <div
               v-else
               class="w-[600px] h-[340px] rounded-2xl overflow-hidden
