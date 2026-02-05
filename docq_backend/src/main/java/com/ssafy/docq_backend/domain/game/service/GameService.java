@@ -17,6 +17,7 @@ import com.ssafy.docq_backend.domain.minigame.service.MiniGameService;
 import com.ssafy.docq_backend.domain.quiz.dto.QuizApiDto;
 import com.ssafy.docq_backend.domain.quiz.service.QuizService;
 import com.ssafy.docq_backend.global.client.AiClient;
+import com.ssafy.docq_backend.global.client.dto.AiDto;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
