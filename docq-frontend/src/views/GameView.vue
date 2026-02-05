@@ -1015,8 +1015,8 @@ onUnmounted(() => {
   font-weight: 700;
   color: #5d4037;
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
-  max-width: 260px;
-  white-space: normal;
+  max-width: 360px;
+  white-space: nowrap;
   word-break: keep-all;
 }
 
