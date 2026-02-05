@@ -144,7 +144,7 @@ watch(quiz, () => {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 100;
+  z-index: 15; /* 보드 위, 플레이어/매크로 아래 */
   display: flex;
   flex-direction: column;
   align-items: center;
