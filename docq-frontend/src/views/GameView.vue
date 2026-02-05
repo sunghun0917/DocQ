@@ -497,7 +497,7 @@ const handleMiniGameClose = () => {
       gameStore.clearMiniGame()
     } else {
       // 승자가 있는 경우 (기존 로직 유지: 알림 후 모달 닫기 등)
-      const noticeText = name ? `미니게임의 승자는 ${name}입니다.` : '미니게임 승자가 없습니다.'
+      const noticeText = name ? `미니게임의 승자는 ${name}님입니다.` : '미니게임 승자가 없습니다.'
       
       // 알림 먼저 표시 (2초 대기)
       await showSystemNotice(noticeText, 2000)
@@ -576,7 +576,7 @@ const handleItemUse = async (data: { targetPlayerId?: string; targetPosition?: n
     )
 
     // SWAP: GameBoard "000님과 자리를 바꿉니다"만 표시 / BANANA: 확대 애니메이션만 표시
-    if (name && itemLabel && itemType !== 'SWAP_POSITION' && itemType !== 'BANANA') {
+    if (name && itemLabel && itemType !== 'SWAP_POSITION' && itemType !== 'BANANA' && itemType !== 'QUIZ_INTERFERENCE') {
       await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
     }
 
