@@ -37,7 +37,7 @@ const slides: SlideItem[] = [
   },
   {
     title: "아이템 & 미니게임",
-    desc: "2배 타일, 버프, 미니게임 등\n매 판 다른 변수가 등장해요!",
+    desc: "2배 타일, 아이템, 미니게임 등\n매 판 다른 변수가 등장해요!",
     images: ["/images/buff.png", "/images/minigame.png"],
     icon: "bolt",
     color: "#42a5f5"
