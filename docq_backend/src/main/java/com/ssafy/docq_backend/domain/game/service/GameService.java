@@ -1272,9 +1272,11 @@ public class GameService {
                             .build());
                 }
 
-                if (room.getMapEvents().containsKey(nextPos)) {
+                // 타일 효과는 목적지에 도착하지 않은 경우에만 처리
+                if (nextPos < TARGET_POSITION && room.getMapEvents().containsKey(nextPos)) {
                     Set<Integer> visitedTiles = new HashSet<>();
-                    while (room.getMapEvents().containsKey(nextPos) && !visitedTiles.contains(nextPos)) {
+                    while (nextPos < TARGET_POSITION && room.getMapEvents().containsKey(nextPos)
+                            && !visitedTiles.contains(nextPos)) {
                         visitedTiles.add(nextPos);
                         String eventType = room.getMapEvents().get(nextPos);
                         int before = nextPos;
