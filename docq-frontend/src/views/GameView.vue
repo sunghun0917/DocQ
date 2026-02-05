@@ -195,6 +195,12 @@ function getBuffLabelForNotice(buffCode?: string): string {
       return '+3칸 이동'
     case 'BOOM':
       return '꽝'
+    case 'BANANA':
+      return '바나나'
+    case 'SWAP_POSITION':
+      return '자리 바꾸기'
+    case 'QUIZ_INTERFERENCE':
+      return '방해하기'
     default:
       return buffCode || '아이템'
   }
@@ -272,9 +278,11 @@ watch(
     if (winnerId) {
       const winnerName = roomStore.users.find(u => u.playerId === winnerId)?.nickname || '알 수 없음'
       if (winnerId === currentTurnId) {
-        noticeText = `플레이어 ${winnerName}가 정답을 맞추었습니다.`
+        // 플레이어 텍스트만 빨간색/굵게, 닉네임은 기본색 + 님
+        noticeText = `<span style="color:#dc2626;font-weight:900;">플레이어</span> ${winnerName}님이 정답을 맞추었습니다.`
       } else {
-        noticeText = `승자는 고스트 ${winnerName}입니다.`
+        // 고스트 텍스트만 파란색/굵게, 닉네임은 기본색 + 님
+        noticeText = `<span style="color:#1d4ed8;font-weight:900;">고스트</span> ${winnerName}님이 정답을 맞추었습니다.`
       }
     }
     await showSystemNotice(noticeText, 2500)
@@ -759,9 +767,7 @@ onUnmounted(() => {
 
     <transition name="result-pop">
       <div v-if="systemNotice" class="system-notice">
-        <div class="system-notice-card">
-          {{ systemNotice }}
-        </div>
+        <div class="system-notice-card" v-html="systemNotice"></div>
       </div>
     </transition>
 
@@ -1198,6 +1204,11 @@ onUnmounted(() => {
   color: #111827;
   text-align: center;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.system-notice-card .ghost-name {
+  color: #1d4ed8; /* 파란색 텍스트 */
+  font-weight: 900;
 }
 
 .catch-effect {
