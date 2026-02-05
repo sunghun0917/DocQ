@@ -101,6 +101,12 @@ watch(quiz, () => {
       </div>
     </div>
 
+    <!-- MIRROR 디버프 표시 (퀴즈 방해하기 적용된 플레이어 전용) -->
+    <div v-if="shouldMirror" class="mirror-badge">
+      <span class="mirror-emoji">👻</span>
+      <span class="mirror-text-label">문제 방해 효과가 적용된 상태입니다.</span>
+    </div>
+
     <!-- 문제 카드 -->
     <div class="question-card">
       <div class="header-badge">
@@ -258,6 +264,29 @@ watch(quiz, () => {
 
 .timer-bar.urgent {
   background: #ff7043;
+}
+
+/* MIRROR 디버프 뱃지 */
+.mirror-badge {
+  margin: 0 auto 12px auto;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.95);
+  border: 3px solid #bfdbfe;
+  color: #e0f2fe;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 6px 0 rgba(15, 23, 42, 0.6);
+  font-size: 1.2rem;
+}
+
+.mirror-emoji {
+  font-size: 1.6rem;
+}
+
+.mirror-text-label {
+  font-weight: 700;
 }
 
 /* 질문 카드 */

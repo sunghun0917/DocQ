@@ -20,11 +20,11 @@ const isVisible = ref(true);
 const showResult = ref(false);
 
 const labels = [
-  { code: 'BOOM', label: '꽝', emoji: '💥' },                   // 0번: 폭탄 → 폭탄 ✓
-  { code: 'BANANA', label: '바나나', emoji: '🍌' },            // 1번: 이전 +3 위치 → 바나나
-  { code: 'SWAP_POSITION', label: '자리 바꾸기', emoji: '�' }, // 2번: 이전 방해하기 위치 → 자리바꾸기
-  { code: 'QUIZ_INTERFERENCE', label: '방해하기', emoji: '�' }, // 3번: 이전 자리바꾸기 위치 → 방해하기
-  { code: 'PLUS_THREE', label: '+3칸', emoji: '➕3️⃣' }        // 4번: 이전 바나나 위치 → +3
+  { code: 'BOOM', label: '꽝', emoji: '💥' },                    // 0번: 폭탄 → 폭탄 ✓
+  { code: 'BANANA', label: '바나나', emoji: '🍌' },             // 1번: 이전 +3 위치 → 바나나
+  { code: 'SWAP_POSITION', label: '자리 바꾸기', emoji: '🔄' }, // 2번: 이전 방해하기 위치 → 자리바꾸기
+  { code: 'QUIZ_INTERFERENCE', label: '방해하기', emoji: '👻' }, // 3번: 이전 자리바꾸기 위치 → 방해하기
+  { code: 'PLUS_THREE', label: '+3칸', emoji: '➕3️⃣' }         // 4번: 이전 바나나 위치 → +3
 ];
 
 // Note: 3D 모델의 아이템 배치 순서를 확인해야 정확한 각도 계산 가능

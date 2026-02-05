@@ -39,11 +39,11 @@ const confirmLogin = async () => {
                 <input type="password" v-model="loginPw" placeholder="비밀번호" @keyup.enter="confirmLogin" />
             </div>
             <button @click="confirmLogin" class="cartoon-btn primary large-btn mb-2">
-                <span>START</span>
+                <span>시작하기</span>
                 <span class="material-symbols-outlined">play_arrow</span>
             </button>
             <button @click="$emit('to-signup')" class="cartoon-btn secondary large-btn">
-                <span>Sign up</span>
+                <span>회원가입</span>
                 <span class="material-symbols-outlined">person_add</span>
             </button>
         </div>
