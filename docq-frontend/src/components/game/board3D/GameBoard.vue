@@ -88,6 +88,7 @@
           :modelUrl="getPlayerModelUrl(p.playerId)"
           :position="getPlayerWorldPos(p)"
           :isMoving="isPlayerMoving(p.playerId)"
+          :isBananaHit="activeSpecificEffects[p.playerId] === 'BANANA_SLIP'"
           :lookTarget="getPlayerLookTarget(p)"
         />
       </TresGroup>
@@ -235,6 +236,7 @@ const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string,
 
 const animatingPlayers = ref<Record<string, number>>({})
 const lastStablePositions = ref<Record<string, number>>({})
+const activeSpecificEffects = ref<Record<string, string>>({})
 const isMovingGlobal = ref(false)
 const actionNotice = ref<string | null>(null)
 let actionNoticeTimer: number | null = null
@@ -847,11 +849,28 @@ watch(() => gameStore.currentMove, async (move) => {
           const events = { ...(gameStore.gameState.mapEvents || {}) }
           delete events[String(before)]
           gameStore.setGameState({ ...gameStore.gameState, mapEvents: events })
+          
+          await showActionNotice(`바나나를 밟아 미끄러집니다!`, 1500)
+          
+          // [MOD] 바나나 애니메이션 적용 (w/ GameCharacter.vue)
+          // 1. 상태 설정: GameCharacter에게 바나나 효과임을 알림
+          activeSpecificEffects.value[playerId] = 'BANANA_SLIP'
+          
+          // 2. 위치 즉시 이동 (GameCharacter가 내부적으로 1080도 회전 + 점프하며 이동)
+          animatingPlayers.value[playerId] = after
+          currentPos = after
+          
+          // 3. 애니메이션 시간 대기 (GameCharacter BANANA_DURATION_S=1.0s + 여유 0.1s)
+          await sleep(1100)
+          
+          // 4. 상태 해제
+          activeSpecificEffects.value[playerId] = ''
+        } else {
+            const label = getEffectLabel(action.effectType)
+            await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
+            await moveStep(playerId, currentPos, after, followCameraStep)
+            currentPos = after
         }
-        const label = getEffectLabel(action.effectType)
-        await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
-        await moveStep(playerId, currentPos, after, followCameraStep)
-        currentPos = after
       } else {
         await moveStep(playerId, currentPos, after, followCameraStep)
         currentPos = after

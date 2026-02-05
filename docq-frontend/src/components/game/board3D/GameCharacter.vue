@@ -18,9 +18,11 @@ const props = withDefaults(defineProps<{
   position: Vec3
   lookTarget: Vec3
   isMoving: boolean
+  isBananaHit?: boolean
   color?: string
 }>(), {
-  color: '#ffffff'
+  color: '#ffffff',
+  isBananaHit: false
 })
 
 const MODEL_YAW_OFFSET = 0
@@ -28,6 +30,11 @@ const STEP_DURATION_MS = 350
 const STEP_DURATION_S = STEP_DURATION_MS / 1000
 const JUMP_HEIGHT = 0.35
 const CHARACTER_Y_OFFSET = 0
+
+// 바나나 효과용 상수
+const BANANA_DURATION_S = 1.0
+const ROTATION_360 = Math.PI * 2
+const ROTATION_1080 = Math.PI * 6
 
 const gltfCache = new Map<string, GLTF>()
 const gltfPromiseCache = new Map<string, Promise<GLTF>>()
@@ -118,22 +125,37 @@ const animateTo = (target: THREE.Vector3) => {
   const from = currentScene.position.clone()
   const to = target.clone()
 
-  currentScene.rotation.set(0, getYawTowards(from, to), 0)
+  // 바나나 밟음 여부에 따른 설정
+  const isBanana = props.isBananaHit
+  const duration = isBanana ? BANANA_DURATION_S : STEP_DURATION_S
 
-  const progress = { t: 0 }
+  // 기본적으로 바라볼 방향 설정
+  const baseRotation = getYawTowards(from, to)
+  currentScene.rotation.set(0, baseRotation, 0)
+
+  const progress = { t: 0, rot: 0 } // rot: 추가 회전값 (바나나용)
+
   activeTween = gsap.to(progress, {
     t: 1,
-    duration: STEP_DURATION_S,
+    rot: isBanana ? ROTATION_1080 : 0, // 바나나면 1080도 회전
+    duration: duration,
     ease: 'none',
     onUpdate: () => {
       const eased = easeInOut(progress.t)
 
+      // 위치 이동
       currentScene.position.x = THREE.MathUtils.lerp(from.x, to.x, eased)
       currentScene.position.z = THREE.MathUtils.lerp(from.z, to.z, eased)
 
       const baseY = THREE.MathUtils.lerp(from.y, to.y, eased)
       const jumpY = JUMP_HEIGHT * Math.sin(Math.PI * eased)
       currentScene.position.y = baseY + jumpY
+
+      // 회전 적용 (기본 방향 + 뱅글뱅글)
+      // 바나나일 때: baseRotation + progress.rot
+      if (isBanana) {
+        currentScene.rotation.y = baseRotation + progress.rot
+      }
     },
     onComplete: () => {
       currentScene.position.copy(to)
