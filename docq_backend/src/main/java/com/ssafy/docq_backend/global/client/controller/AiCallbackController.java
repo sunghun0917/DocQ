@@ -1,4 +1,4 @@
-package com.ssafy.docq_backend.global.client;
+package com.ssafy.docq_backend.global.client.controller;
 
 import com.ssafy.docq_backend.domain.game.service.GameService;
 import com.ssafy.docq_backend.global.client.dto.AiDto;
