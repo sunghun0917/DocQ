@@ -238,11 +238,21 @@ const changePage = (page: number) => {
   setTimeout(() => isThrottled.value = false, 600);
 };
 
+const handleKeydown = (e: KeyboardEvent) => {
+  // 자식 모달이 열려있으면 닫지 않음 (자식 모달이 처리하거나, 닫힐 때까지 대기)
+  if (isWriteModalOpen.value || isDetailModalOpen.value || confirmState.value.isOpen || alertState.value.isOpen) return;
+  if (e.key === 'Escape') emit('close');
+};
+
 onMounted(() => {
   fetchBoards();
   window.addEventListener('wheel', handleGlobalWheel);
+  window.addEventListener('keydown', handleKeydown);
 });
-onUnmounted(() => { window.removeEventListener('wheel', handleGlobalWheel); });
+onUnmounted(() => { 
+  window.removeEventListener('wheel', handleGlobalWheel);
+  window.removeEventListener('keydown', handleKeydown);
+});
 
 const handleCreateClick = () => {
   if (userStore.isGuest) return openAlert("로그인 후 이용해주세요.", 'error'); 

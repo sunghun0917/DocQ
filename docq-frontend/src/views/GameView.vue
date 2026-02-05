@@ -177,6 +177,10 @@ const hasShownGameEndNotice = ref(false)
 let systemNoticeTimer: number | null = null
 let systemNoticeResolver: (() => void) | null = null
 
+/** 인게임 퀵메시지(채팅 매크로) – websocketStore.userMessages 재사용 */
+const userMessages = computed(() => wsStore.userMessages)
+
+
 const handleBeforeUnload = () => {
   if (!userStore.playerId || !roomId.value) return
   sessionStorage.setItem('docq:lastPage', 'game')
@@ -781,6 +785,14 @@ onUnmounted(() => {
             { 'corner-card-active': p?.playerId === currentTurnPlayer?.playerId }
           ]">
           <template v-if="p">
+            <!-- 인게임 퀵메시지 말풍선 -->
+            <transition name="pop">
+              <div v-if="userMessages[p.playerId]" class="corner-chat-bubble-wrapper">
+                <div class="corner-chat-bubble">
+                  {{ userMessages[p.playerId] }}
+                </div>
+              </div>
+            </transition>
             <!-- Left: Avatar (Static Emoji) -->
             <div class="flex items-center justify-center pointer-events-none z-10 px-4">
               <div class="text-7xl drop-shadow-md shrink-0 leading-snug">{{roomStore.users.find(u => u.playerId ===
@@ -858,6 +870,32 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- 인게임 퀵메시지 매크로 바 -->
+    <div class="ingame-quickchat-bar pointer-events-auto">
+      <div class="ingame-quickchat-inner">
+        <span class="material-symbols-outlined ingame-quickchat-icon">chat</span>
+        <div class="ingame-quickchat-buttons ingame-quickchat-grid">
+          <button
+            v-for="msg in [
+              { label: '독큐', content: '독큐!' },   // 1행 왼쪽
+              { label: '1', content: '1번!' },      // 1행 오른쪽
+              { label: '빨리', content: '빨리빨리~' }, // 2행 왼쪽
+              { label: '2', content: '2번!' },      // 2행 오른쪽
+              { label: '미안', content: '미안해요 ㅠㅠ' }, // 3행 왼쪽
+              { label: '3', content: '3번!' },      // 3행 오른쪽
+              { label: '감사', content: '고마워요!' },   // 4행 왼쪽
+              { label: '4', content: '4번!' }       // 4행 오른쪽
+            ]"
+            :key="`macro-${msg.label}`"
+            class="ingame-quickchat-btn"
+            @click="roomId && myPlayerId && wsStore.sendQuickMessage(roomId, myPlayerId, msg.content)"
+          >
+            {{ msg.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 결과 모달 (Global Scope) -->
     <ResultModal v-if="canShowResultModal && !isGameEndNoticeActive" :is-open="true"
       :ranking-results="finalRankingResults ?? rankingResults" :is-host="isHost" @close="openConfirm('leave')"
@@ -920,13 +958,157 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 10;
+  z-index: 20; /* 퀴즈 모달 백그라운드(15) 위 */
   /* 3D 캔버스보다 위에 표시 */
   pointer-events: none;
   /* 클릭 이벤트를 3D 쪽으로 통과시킴 (버튼 등은 pointer-events-auto 필요) */
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+/* 인게임 퀵채팅 말풍선 (코너 플레이어 위) */
+.corner-chat-bubble-wrapper {
+  position: absolute;
+  z-index: 30;
+}
+
+/* 위쪽 코너(1, 2): 말풍선을 아래에 배치 */
+.corner-1 .corner-chat-bubble-wrapper,
+.corner-2 .corner-chat-bubble-wrapper {
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 10px);
+}
+
+/* 아래쪽 코너(3, 4): 말풍선을 위에 배치 */
+.corner-3 .corner-chat-bubble-wrapper,
+.corner-4 .corner-chat-bubble-wrapper {
+  top: -10px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+}
+
+/* 코너별로 말풍선을 맵 중심 방향으로 약간 이동 */
+.corner-1 .corner-chat-bubble-wrapper {
+  left: 65%;
+}
+
+.corner-2 .corner-chat-bubble-wrapper {
+  left: 35%;
+}
+
+.corner-3 .corner-chat-bubble-wrapper {
+  left: 65%;
+}
+
+.corner-4 .corner-chat-bubble-wrapper {
+  left: 35%;
+}
+
+.corner-chat-bubble {
+  background: #fffef0;
+  border-radius: 999px;
+  border: 3px solid #8d6e63;
+  padding: 15px 27px;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #5d4037;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+  max-width: 260px;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+/* 말풍선 꼬리 (위/아래 방향으로 카드 쪽을 가리킴) */
+.corner-chat-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+}
+
+/* 위쪽 카드(1,2) → 말풍선이 아래에 있으므로, 꼬리는 위로 향하게 (카드 쪽) */
+.corner-1 .corner-chat-bubble::after,
+.corner-2 .corner-chat-bubble::after {
+  top: -10px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid #fffef0;
+}
+
+/* 아래쪽 카드(3,4) → 말풍선이 위에 있으므로, 꼬리는 아래로 향하게 (카드 쪽) */
+.corner-3 .corner-chat-bubble::after,
+.corner-4 .corner-chat-bubble::after {
+  bottom: -10px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid #fffef0;
+}
+
+/* 인게임 퀵메시지 매크로 바 */
+.ingame-quickchat-bar {
+  position: fixed;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  z-index: 40;
+}
+
+.ingame-quickchat-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  padding: 36px 24px; /* 세로 여유를 늘려 배경 높이 확장 */
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border: 3px solid #8d6e63;
+  box-shadow: 0 6px 0 rgba(93, 64, 55, 0.6);
+}
+
+.ingame-quickchat-icon {
+  font-size: 28px;
+  color: #5d4037;
+}
+
+.ingame-quickchat-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ingame-quickchat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 6px 8px;
+}
+
+.ingame-quickchat-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 3px solid #5d4037;
+  background: #ffffff;
+  font-family: 'Jua', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #5d4037;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(93, 64, 55, 0.7);
+  transition: all 0.1s ease;
+}
+
+.ingame-quickchat-btn:hover {
+  background: #f1f8e9;
+}
+
+.ingame-quickchat-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(93, 64, 55, 0.7);
 }
 
 /* 퀴즈 콘텐츠 영역 */
@@ -1063,7 +1245,7 @@ onUnmounted(() => {
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 2600;
+  z-index: 11000; /* 미니게임 모달(z-[9999])보다 위 */
   display: flex;
   flex-direction: column;
   align-items: flex-end;

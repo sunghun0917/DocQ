@@ -35,7 +35,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const isConnecting = ref(false)
     const lastError = ref<string | null>(null)
     const quizGeneratedNotice = ref<QuizGeneratedNotice | null>(null)
-    /** 대기실 퀵메시지 (playerId -> message), 2초 후 자동 삭제 */
+    /** 대기실/인게임 퀵메시지 (playerId -> message), 2초 후 자동 삭제 */
     const userMessages = ref<Record<string, string>>({})
     const chatHideTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 

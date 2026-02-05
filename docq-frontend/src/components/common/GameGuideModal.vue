@@ -99,15 +99,13 @@ onUnmounted(() => {
     ></div>
 
     <div
-      class="relative w-[650px] h-[700px] !p-4 bg-[#fff8e1]
+      class="relative w-[650px] h-[660px] !p-4 bg-[#fff8e1]
              rounded-[32px] border-[6px] border-[#8d6e63]
              shadow-[0_12px_35px_rgba(0,0,0,0.25)]
              flex flex-col"
     >
       <div class="absolute top-5 left-5 w-4 h-4 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]" />
       <div class="absolute top-5 right-5 w-4 h-4 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]" />
-      <div class="absolute bottom-5 left-5 w-4 h-4 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]" />
-      <div class="absolute bottom-5 right-5 w-4 h-4 rounded-full bg-[#bcaaa4] border-2 border-[#8d6e63]" />
 
       <header class="pt-10 pb-4 text-center shrink-0">
         <h2 class="text-4xl text-[#5d4037] tracking-wide drop-shadow-sm mt-4">
@@ -204,13 +202,14 @@ onUnmounted(() => {
           :class="i === currentSlide ? 'bg-[#5d4037] scale-125' : 'bg-[#d7ccc8] hover:bg-[#bcaaa4]'"
         ></div>
       </div>
-      <div class="w-full h-4"></div>
-      <footer class="mt-auto px-10 pb-8 pt-4 border-[#d7ccc8]/50 shrink-0">
-        <button
-          @click="$emit('close')"
-          class="cartoon-btn secondary w-full"
-        >
-          닫기
+      <footer class="mt-auto px-10 !pb-8 !pt-4 border-[#d7ccc8]/50 shrink-0 flex flex-col items-center gap-4">
+        <button v-if="currentSlide === slides.length - 1" @click="$emit('close')"
+          class="cartoon-btn primary !px-12 !py-3 !text-xl shadow-[0_4px_0_#558b2f] animate-bounce-slight">
+          START
+        </button>
+        <button v-else @click="nextSlide"
+          class="cartoon-btn secondary !px-12 !py-3 !text-xl shadow-[0_4px_0_#8d6e63]">
+          NEXT
         </button>
       </footer>
     </div>
@@ -225,27 +224,23 @@ onUnmounted(() => {
 }
 
 .cartoon-btn {
-  height: 56px;
-  border-radius: 16px;
-  font-size: 1.4rem;
-  font-weight: bold;
+  border-radius: 12px;
+  font-weight: 900;
   color: white;
-  background: #8d6e63;
-  box-shadow: 0 5px 0 #5d4037;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.1s;
 }
-
 .cartoon-btn:active {
-  transform: translateY(5px);
-  box-shadow: none;
+  transform: translateY(4px);
+  box-shadow: none !important;
 }
+.cartoon-btn.primary { background: #7cb342; }
+.cartoon-btn.primary:hover { background: #689f38; }
 
-.cartoon-btn:hover {
-    background-color: #795548;
-}
+.cartoon-btn.secondary { background: #8d6e63; }
+.cartoon-btn.secondary:hover { background: #795548; }
 
 /* Next Animation (오른쪽 -> 왼쪽) */
 .slide-next-enter-active,
@@ -273,5 +268,13 @@ onUnmounted(() => {
 .slide-prev-leave-to {
   opacity: 0;
   transform: translateX(50px);
+}
+
+.animate-bounce-slight {
+  animation: bounceSlight 2s infinite;
+}
+@keyframes bounceSlight {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 </style>
