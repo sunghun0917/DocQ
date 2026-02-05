@@ -10,7 +10,7 @@ from app.workers.mineru_worker import run_gpu_job
 
 logger = logging.getLogger(__name__)
 
-QUEUE_KEY = "mineru:queue"
+QUEUE_KEY = "mineru:queue"22222222
 LOCK_TTL = 600  # GPU 작업 최대 시간
 WORKERS = [18001, 18002, 18003]  # 논리적 GPU worker
 BACKEND_CALLBACK_URL = os.getenv("BACKEND_CALLBACK_URL", "http://backend:8080/ai/callback")
@@ -92,9 +92,9 @@ def scheduler_loop():
             # Spring Boot에 결과 전송
             send_callback(job["jobId"], "completed", result=result)
 
-        except Exception:
+        except Exception as e:
             logger.exception("[SCHEDULER] Job failed, dropped")
-            send_callback(job["jobId"], "failed", error="Processing failed")
+            send_callback(job["jobId"], "failed", error=str(e))
             
 
         finally:

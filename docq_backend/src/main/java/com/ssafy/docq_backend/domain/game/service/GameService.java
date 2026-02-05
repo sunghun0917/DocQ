@@ -1522,7 +1522,7 @@ public class GameService {
         }
 
         room.setQuizList(quizzes);
-        room.setAiStatus(AiStatus.COMPLETED);
+        room.setAiStatus(AiStatus.DONE);
         roomRepository.save(room);
 
         log.info("AI quizzes loaded for room {}: {} quizzes", room.getId(), quizzes.size());
