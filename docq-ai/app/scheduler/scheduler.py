@@ -4,6 +4,7 @@ import threading
 import logging
 import os
 import requests
+from concurrent.futures import ThreadPoolExecutor
 
 from app.infra.redis import redis_client
 from app.workers.mineru_worker import run_gpu_job
@@ -68,15 +69,43 @@ def release_worker(port):
     redis_client.delete(f"mineru:worker:{port}:lock")
 
 
+# ---------- Thread Pool ----------
+
+# 워커 수만큼 스레드풀 생성
+executor = ThreadPoolExecutor(max_workers=len(WORKERS))
+
+
+def process_job(job: dict, port: int, api_url: str):
+    """별도 스레드에서 실행될 작업 처리 함수"""
+    pdf_path = job.get("pdf_path")
+    try:
+        logger.info(f"[WORKER:{port}] Start job {job['jobId']}")
+        result = run_gpu_job(job, api_url)
+        send_callback(job["jobId"], "completed", result=result)
+        logger.info(f"[WORKER:{port}] Completed job {job['jobId']}")
+    except Exception as e:
+        logger.exception(f"[WORKER:{port}] Job failed: {job['jobId']}")
+        send_callback(job["jobId"], "failed", error=str(e))
+    finally:
+        release_worker(port)
+        # 파일 정리
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.remove(pdf_path)
+                logger.info(f"[WORKER:{port}] Cleaned up {pdf_path}")
+            except Exception:
+                logger.warning(f"[WORKER:{port}] Failed to cleanup {pdf_path}")
+
+
 # ---------- Scheduler Loop ----------
 
 def scheduler_loop():
-    logger.info("[SCHEDULER] Started")
+    logger.info("[SCHEDULER] Started (parallel mode)")
 
     while True:
         job = dequeue()
         if not job:
-            time.sleep(1)
+            time.sleep(0.5)  # 병렬 처리 시 더 빠른 폴링
             continue
 
         pdf_path = job.get("pdf_path")
@@ -89,32 +118,14 @@ def scheduler_loop():
 
         port, api_url = acquire_worker()
         if not port:
+            # 모든 워커가 사용 중 → 큐에 다시 넣고 대기
             enqueue(job)
-            time.sleep(1)
+            time.sleep(0.5)
             continue
 
-        try:
-            logger.info(f"[SCHEDULER] Dispatch job {job['jobId']} to worker {port} ({api_url})")
-            result = run_gpu_job(job, api_url)
-
-            # Spring Boot에 결과 전송
-            send_callback(job["jobId"], "completed", result=result)
-
-        except Exception as e:
-            logger.exception("[SCHEDULER] Job failed, dropped")
-            send_callback(job["jobId"], "failed", error=str(e))
-            
-
-        finally:
-            release_worker(port)
-
-            # 파일 정리
-            if pdf_path and os.path.exists(pdf_path):
-                try:
-                    os.remove(pdf_path)
-                    logger.info(f"[SCHEDULER] Cleaned up {pdf_path}")
-                except Exception:
-                    logger.warning(f"[SCHEDULER] Failed to cleanup {pdf_path}")
+        # 별도 스레드에서 비동기 실행 (블로킹 없음!)
+        logger.info(f"[SCHEDULER] Dispatch job {job['jobId']} to worker {port}")
+        executor.submit(process_job, job, port, api_url)
 
 
 def start_scheduler():
