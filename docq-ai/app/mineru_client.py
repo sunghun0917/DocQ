@@ -18,7 +18,7 @@ _LATEX_COMMAND_RE = re.compile(r"\\[A-Za-z]+")
 _KOR_SPACED_RE = re.compile(r"(?<=[가-힣])\s+(?=[가-힣])")
 _ALNUM_SPACED_RE = re.compile(r"(?<=[0-9A-Za-z])\s+(?=[0-9A-Za-z])")
 _LINE_WS_RE = re.compile(r"[ \t]+")
-
+MAX_PARSE_PAGES = 20
 
 def _first_result_payload(payload: dict) -> dict:
     results = payload.get("results") or {}
@@ -130,4 +130,3 @@ def parse_pdf_with_mineru(file_path: str) -> str:
         return _clean_markdown(text)
     md_content = (result.get("md_content") or "").strip()
     return _clean_markdown(md_content)
-MAX_PARSE_PAGES = 20
