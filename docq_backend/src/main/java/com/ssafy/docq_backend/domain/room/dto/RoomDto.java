@@ -2,6 +2,7 @@ package com.ssafy.docq_backend.domain.room.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -44,6 +45,8 @@ public class RoomDto {
         private int currentCount;
         private int capacity;
         private int quizCount; // 퀴즈 개수 확인용
+        @JsonProperty("isGenerating")
+        private boolean isGenerating;
     }
 
     @Getter
