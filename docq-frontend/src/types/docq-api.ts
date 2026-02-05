@@ -100,6 +100,7 @@ export interface RoomResponse {
     currentCount: number
     capacity: number
     quizCount: number
+    isGenerating: boolean
 }
 export interface JoinRoomRequest {
     roomId: string

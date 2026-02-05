@@ -428,7 +428,14 @@ onMounted(async () => {
   try {
     const room = await getRoomById(roomId.value)
     roomStore.joinRoom({ roomId: room.roomId, title: room.title, capacity: room.capacity, isPrivate: room.isPrivate, status: room.status, currentCount: room.currentCount, quizCount: room.quizCount })
-    await applyInitialQuizState(room.quizCount)
+    
+    // [ADD] 중간 입장 시 생성 상태 동기화
+    if (room.isGenerating) {
+      isGenerating.value = true;
+      isPdfMode.value = true; // 서버에서 파일명까지 받진 않지만, 일단 PDF 모드 로딩으로 간주
+    } else {
+      await applyInitialQuizState(room.quizCount)
+    }
   } catch (error) { router.push('/'); return; }
 
   await wsStore.connect()
@@ -642,7 +649,7 @@ const quickMessages = [
                 </div>
               </div>
 
-              <div v-if="generatedQuizzes.length === 0" class="flex gap-3 w-full h-14 shrink-0">
+              <div v-if="generatedQuizzes.length === 0 && !isGenerating" class="flex gap-3 w-full h-14 shrink-0">
                 <button v-if="!userStore.isGuest" @click="handleOpenMyQuizModal" class="cartoon-btn color-purple h-full text-lg flex-1">마이 퀴즈</button>
                 <button @click="isBasicQuizModalOpen = true" class="cartoon-btn color-brown h-full text-lg flex-1">기본 퀴즈</button>
               </div>
@@ -658,23 +665,20 @@ const quickMessages = [
 
               <div
                 class="flex-1 w-full rounded-2xl border-4 border-dashed border-wood-light bg-white/50 flex flex-col items-center justify-center text-center overflow-hidden">
-                <div v-if="generatedQuizzes.length === 0" class="flex flex-col items-center gap-4 transition-all duration-500 w-full h-full justify-center">
-                  <template v-if="isGenerating">
-                    <div class="w-full flex-1 relative bg-white/30 rounded-xl overflow-hidden shadow-inner mx-4 min-h-0">
-                       <CharacterBackground :isRunning="true" />
-                    </div>
-                    <div class="flex flex-col items-center gap-1 shrink-0">
-                      <p class="text-wood-dark font-black text-xl px-4 break-keep leading-tight animate-pulse transition-all duration-300">
-                        {{ currentLoadingMessage }}
-                      </p>
-                    </div>
-                  </template>
-                  <template v-else>
+                <div v-if="isGenerating" class="flex flex-col items-center gap-1 w-full h-full p-2">
+                  <div class="w-full flex-1 relative bg-white/30 rounded-xl overflow-hidden shadow-inner cursor-default min-h-0">
+                    <CharacterBackground :isRunning="true" />
+                  </div>
+                  <p class="text-xl font-black text-wood-dark px-4 break-keep leading-tight animate-pulse transition-all duration-300 shrink-0 text-center">
+                    {{ currentLoadingMessage }}
+                  </p>
+                </div>
+                
+                <div v-else-if="generatedQuizzes.length === 0" class="flex flex-col items-center gap-4 transition-all duration-500 w-full h-full justify-center">
                     <div class="flex flex-col items-center gap-4 opacity-60">
                       <span class="material-symbols-outlined text-8xl text-wood-dark animate-bounce">hourglass_top</span>
                       <p class="text-2xl font-black text-wood-dark">{{ processingText }}</p>
                     </div>
-                  </template>
                 </div>
                 <div v-else class="flex flex-col items-center text-leaf-dark gap-2">
                   <span class="material-symbols-outlined text-6xl">check_circle</span>

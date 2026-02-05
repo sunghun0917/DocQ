@@ -85,64 +85,72 @@ public class GameService {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-        // AI Client 호출
-        List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
-        log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
+        room.setGenerating(true);
+        roomRepository.save(room);
 
-        // (1) 게임용 Quiz 엔티티 생성 (Room에 세팅)
-        List<Quiz> quizzes = new ArrayList<>();
-        for (int i = 0; i < quizResponses.size(); i++) {
-            QuizDto.Response dto = quizResponses.get(i);
-            quizzes.add(Quiz.builder()
-                    .quizId((long) (i + 1)) // 1-based sequential ID
-                    .question(dto.getQuestion())
-                    .options(dto.getOptions())
-                    .answerIndex(dto.getAnswerIndex())
-                    .answerText(dto.getAnswerText())
-                    .build());
-        }
+        try {
+            // AI Client 호출
+            List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
+            log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
 
-        room.setQuizList(quizzes);
-
-        // (2) 나의 퀴즈(quizzes 테이블)에 자동 저장 (userId가 있을 때만)
-        if (userId != null && !quizResponses.isEmpty()) {
-            try {
-                List<QuizApiDto.QuizItemRequest> items = quizResponses.stream()
-                        .map(dto -> new QuizApiDto.QuizItemRequest(
-                                dto.getQuestion(),
-                                dto.getOptions(),
-                                dto.getAnswerIndex(),
-                                dto.getAnswerText()
-
-                        ))
-                        .toList();
-
-                // PDF 파일명에서 확장자 제거하여 타이틀로 사용
-                String originalFilename = pdfFile.getOriginalFilename();
-                String quizTitle = originalFilename != null
-                        ? originalFilename.replaceFirst("[.][^.]+$", "") // 확장자 제거
-                        : "PDF 퀴즈";
-
-                // 최대 길이 제한 (45자)
-                if (quizTitle.length() > 45) {
-                    quizTitle = quizTitle.substring(0, 45);
-                }
-
-                QuizApiDto.CreateQuizRequest createReq = new QuizApiDto.CreateQuizRequest(items, quizTitle);
-                QuizApiDto.CreateQuizResponse saved = quizService.create(userId, createReq);
-                log.info("Saved quizzes to 'quizzes' table as quizId={}, count={}, title={}", saved.getQuizId(),
-                        saved.getQuizCount(), quizTitle);
-            } catch (Exception e) {
-                log.warn("Failed to persist AI-generated quizzes for userId={}", userId, e);
+            // (1) 게임용 Quiz 엔티티 생성 (Room에 세팅)
+            List<Quiz> quizzes = new ArrayList<>();
+            for (int i = 0; i < quizResponses.size(); i++) {
+                QuizDto.Response dto = quizResponses.get(i);
+                quizzes.add(Quiz.builder()
+                        .quizId((long) (i + 1)) // 1-based sequential ID
+                        .question(dto.getQuestion())
+                        .options(dto.getOptions())
+                        .answerIndex(dto.getAnswerIndex())
+                        .answerText(dto.getAnswerText())
+                        .build());
             }
+
+            room.setQuizList(quizzes);
+
+            // (2) 나의 퀴즈(quizzes 테이블)에 자동 저장 (userId가 있을 때만)
+            if (userId != null && !quizResponses.isEmpty()) {
+                try {
+                    List<QuizApiDto.QuizItemRequest> items = quizResponses.stream()
+                            .map(dto -> new QuizApiDto.QuizItemRequest(
+                                    dto.getQuestion(),
+                                    dto.getOptions(),
+                                    dto.getAnswerIndex(),
+                                    dto.getAnswerText()
+
+                            ))
+                            .toList();
+
+                    // PDF 파일명에서 확장자 제거하여 타이틀로 사용
+                    String originalFilename = pdfFile.getOriginalFilename();
+                    String quizTitle = originalFilename != null
+                            ? originalFilename.replaceFirst("[.][^.]+$", "") // 확장자 제거
+                            : "PDF 퀴즈";
+
+                    // 최대 길이 제한 (45자)
+                    if (quizTitle.length() > 45) {
+                        quizTitle = quizTitle.substring(0, 45);
+                    }
+
+                    QuizApiDto.CreateQuizRequest createReq = new QuizApiDto.CreateQuizRequest(items, quizTitle);
+                    QuizApiDto.CreateQuizResponse saved = quizService.create(userId, createReq);
+                    log.info("Saved quizzes to 'quizzes' table as quizId={}, count={}, title={}", saved.getQuizId(),
+                            saved.getQuizCount(), quizTitle);
+                } catch (Exception e) {
+                    log.warn("Failed to persist AI-generated quizzes for userId={}", userId, e);
+                }
+            }
+
+            // 완료 알림 브로드캐스트
+            Map<String, Object> message = new HashMap<>();
+            message.put("type", "QUIZ_GENERATED");
+            message.put("count", quizzes.size());
+
+            messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+        } finally {
+            room.setGenerating(false);
+            roomRepository.save(room);
         }
-
-        // 완료 알림 브로드캐스트
-        Map<String, Object> message = new HashMap<>();
-        message.put("type", "QUIZ_GENERATED");
-        message.put("count", quizzes.size());
-
-        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
     }
 
     public int setDefaultQuizzes(String roomId, String type) {
@@ -823,7 +831,8 @@ public class GameService {
                 // 아이템 사용 알림 표시 시간 보장 (아이템 사용 후 재개 시)
                 // useItem()에서 scheduleResumeAfterMiniGame() 호출 시에도 fallback이 있지만,
                 // ACK로 즉시 재개되는 경우를 대비해 최소 지연 시간 추가
-                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, ITEM_USAGE_NOTICE_DELAY_MS);
+                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload,
+                        ITEM_USAGE_NOTICE_DELAY_MS);
             }
             case BUFF_ROULETTE_COMPLETE -> {
                 // handled via MINIGAME_COMPLETE normalization

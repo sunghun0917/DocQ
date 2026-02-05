@@ -95,6 +95,10 @@ public class Room {
     // Pending PLUS_THREE move (player ID waiting for ACK to apply +3 move)
     private String pendingPlusThreePlayerId;
 
+    // Quiz Generation State
+    @Builder.Default
+    private volatile boolean isGenerating = false;
+
     public void addPlayer(String playerId) {
         players.add(playerId);
         this.currentCount = players.size();
