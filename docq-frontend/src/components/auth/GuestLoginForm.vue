@@ -77,7 +77,7 @@ const checkNickname = async () => {
                 <p v-if="checkMsg" class="check-msg" :class="checkStatus">{{ checkMsg }}</p>
             </div>
             <button @click="confirmNickname" class="cartoon-btn primary large-btn">
-                <span>START</span>
+                <span>시작하기</span>
                 <span class="material-symbols-outlined">play_arrow</span>
             </button>
         </div>
