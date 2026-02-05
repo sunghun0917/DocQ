@@ -86,13 +86,13 @@ onUnmounted(() => {
   if (timer) clearInterval(timer);
 });
 
-const icons: Record<string, string> = { ArrowUp: '⇧', ArrowDown: '⇩', ArrowLeft: '⇦', ArrowRight: '⇨' };
+const icons: Record<string, string> = { ArrowUp: '⬆', ArrowDown: '⬇', ArrowLeft: '⬅', ArrowRight: '➡' };
 </script>
 
 <template>
-  <div class="text-center w-full h-full min-h-[500px] flex flex-col justify-center items-center gap-8 font-jua">
+  <div class="text-center w-full h-full min-h-[400px] flex flex-col justify-center items-center gap-8 font-jua">
     <h2 class="text-4xl font-black text-[#5d4037] mb-12 drop-shadow-sm">
-      틀리면 뒤로 밀려난다!
+      방향을 빠르게 입력하세요!
     </h2>
 
     <div class="grid grid-cols-6 gap-4 mb-8 transition-transform w-full max-w-xl mx-auto"
@@ -115,15 +115,11 @@ const icons: Record<string, string> = { ArrowUp: '⇧', ArrowDown: '⇩', ArrowL
             ? 'bg-[#fff8e1] border-[#bcaaa4] text-[#8d6e63]'
             : ''
         ]">
-        <span>
+        <span class="!text-5xl font-bold">
           {{ icons[key] }}
         </span>
       </div>
     </div>
-
-    <p v-if="isWrong" class="text-[#d32f2f] font-black animate-pulse text-2xl drop-shadow-sm">
-      오답! 집중하세요!
-    </p>
   </div>
 </template>
 

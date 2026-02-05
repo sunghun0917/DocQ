@@ -74,7 +74,7 @@ onUnmounted(() => {
 
 <template>
   <div class="text-center w-full h-full flex flex-col justify-center gap-8 font-jua">
-    <h2 class="text-4xl font-black text-[#5d4037] mb-8 drop-shadow-sm">좌우로 마구 연타해!!</h2>
+    <h2 class="text-4xl font-black text-[#5d4037] mb-8 drop-shadow-sm">좌우키를 빠르게 연타하세요!</h2>
 
     <div class="text-7xl font-black mb-4 transition-colors"
       :class="{ 'text-[#ef5350]': timeLeft <= 3, 'text-[#5d4037]': timeLeft > 3 }">
@@ -93,13 +93,15 @@ onUnmounted(() => {
 
     <div class="flex justify-center gap-12 text-5xl text-[#8d6e63]">
       <div class="transition-transform p-4 rounded-xl border-4 border-transparent"
-        :class="{ 'text-[#ff7043] scale-125 border-[#ff7043] bg-[#fff8e1] shadow-cartoon': lastKey === 'left' }">⬅️
+        :class="{ 'text-[#ff7043] scale-125 border-[#ff7043] bg-[#fff8e1] shadow-cartoon': lastKey === 'left' }">
+        <span class="!text-6xl font-bold">⬅</span>
       </div>
       <div class="transition-transform p-4 rounded-xl border-4 border-transparent"
-        :class="{ 'text-[#ff7043] scale-125 border-[#ff7043] bg-[#fff8e1] shadow-cartoon': lastKey === 'right' }">➡️
+        :class="{ 'text-[#ff7043] scale-125 border-[#ff7043] bg-[#fff8e1] shadow-cartoon': lastKey === 'right' }">
+        <span class="!text-6xl font-bold">➡</span>
       </div>
     </div>
-  </div>
+  </div> 
 </template>
 
 <style scoped>

@@ -150,7 +150,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 메인 게임 컨테이너 -->
-      <div class="game-board-cartoon w-full max-w-2xl min-h-[450px] flex items-center justify-center relative z-10 p-8">
+      <div class="game-board-cartoon w-full max-w-xl min-h-[450px] flex items-center justify-center relative z-10 !p-8">
 
         <!-- 카운트다운 -->
         <div v-if="!isStarted"
