@@ -69,6 +69,8 @@ const buffRouletteCode = computed(() => {
 // 아이템 사용 UI 상태
 const showItemUsageModal = ref(false)
 const currentItemToUse = ref<string | null>(null)
+/** 바나나: 맵에서 클릭해 선택한 타일 위치 (1~30) */
+const selectedBananaPosition = ref<number | null>(null)
 // 다른 플레이어 대기 상태 (승자가 아닌 플레이어용)
 const itemWaitingState = ref<{ playerName: string; itemType: string } | null>(null)
 
@@ -515,6 +517,7 @@ const handleBuffRouletteDone = async (payload: { buffCode: string; requiresInter
   if (payload.requiresInteraction && isWinner && buffCode !== 'PLUS_THREE') {
     // 승자만 타겟 선택 모달 표시 (바나나/위치스왑/퀴즈방해)
     currentItemToUse.value = buffCode
+    selectedBananaPosition.value = null
     showItemUsageModal.value = true
   } else if (payload.requiresInteraction && !isWinner) {
     // 다른 플레이어는 대기 상태 표시 후, ACK 일관성을 위해 결과 확인 ACK 전송
@@ -564,29 +567,43 @@ const handleItemUse = async (data: { targetPlayerId?: string; targetPosition?: n
       data.targetPosition
     )
 
-    // 자리바꾸기(SWAP)는 GameBoard에서 "000님과 자리를 바꿉니다" 알림만 표시
-    if (name && itemLabel && itemType !== 'SWAP_POSITION') {
+    // SWAP: GameBoard "000님과 자리를 바꿉니다"만 표시 / BANANA: 확대 애니메이션만 표시
+    if (name && itemLabel && itemType !== 'SWAP_POSITION' && itemType !== 'BANANA') {
       await showSystemNotice(`${name}님이 ${itemLabel}을(를) 획득했습니다.`, 2000)
     }
 
     showItemUsageModal.value = false
     currentItemToUse.value = null
+    selectedBananaPosition.value = null
     gameStore.clearMiniGame()
     
-    // SWAP_POSITION은 이동 완료 후 GameBoard에서 ACK 전송하므로 여기서는 보내지 않음
-    // 다른 아이템(BANANA, QUIZ_INTERFERENCE)은 즉시 적용되므로 ACK 전송
-    if (itemType !== 'SWAP_POSITION') {
+    // SWAP_POSITION: 이동 완료 후 GameBoard에서 ACK 전송
+    // BANANA: 바나나 설치 좌표 확대→축소 애니메이션 후 GameBoard에서 banana-placement-done 시 ACK 전송
+    // QUIZ_INTERFERENCE: 즉시 ACK 전송
+    if (itemType !== 'SWAP_POSITION' && itemType !== 'BANANA') {
       wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
     }
   }
+}
+
+/** 바나나 설치 좌표 확대→축소 애니메이션 종료 시 전원 ACK 전송 */
+const onBananaPlacementDone = () => {
+  wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
 }
 
 /** 아이템 사용 취소 */
 const handleItemCancel = () => {
   showItemUsageModal.value = false
   currentItemToUse.value = null
+  selectedBananaPosition.value = null
   wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
   gameStore.clearMiniGame()
+}
+
+/** 바나나: 3D 맵에서 타일 클릭 시 선택 */
+const onBananaTileSelected = (position: number) => {
+  if (currentItemToUse.value !== 'BANANA') return
+  selectedBananaPosition.value = position
 }
 
 watch(
@@ -648,15 +665,24 @@ onMounted(() => {
 
 // 아이템 사용 완료 이벤트 핸들러 (다른 플레이어의 아이템 사용 알림)
 const handleItemUsedEvent = (e: CustomEvent) => {
-  const { playerId, playerName, itemType } = e.detail
+  const { playerId, playerName, itemType, targetPosition } = e.detail
   // 대기 상태 해제
   itemWaitingState.value = null
+
+  // 바나나 설치: 모든 클라이언트에서 해당 좌표 확대→축소 후 전원 ACK 전송
+  const isBanana = itemType && String(itemType).toUpperCase() === 'BANANA'
+  if (isBanana && targetPosition != null) {
+    gameStore.bananaPlacementPosition = Number(targetPosition)
+    return
+  }
 
   // 자리바꾸기(SWAP)인 경우: 아무에게도 "아이템을 사용했습니다" 알림 표시 안 함
   const isSwap = itemType && String(itemType).toUpperCase() === 'SWAP_POSITION'
   if (isSwap) return
 
-  
+  // 본인이 사용한 경우에도 알림 표시 안 함
+  const isMe = playerId === myPlayerId.value
+  if (isMe) return
 
   if (playerName && itemType) {
     const itemLabel = getBuffLabelForNotice(itemType)
@@ -691,7 +717,11 @@ onUnmounted(() => {
     <div class="map-focus-blur" aria-hidden="true" />
 
     <!-- 3D 보드게임 컴포넌트 (배경) -->
-    <GameBoard class="game-board-layer" @movement-change="(moving) => (isBoardMoving = moving)" />
+    <GameBoard class="game-board-layer"
+      :banana-placement-mode="!!(showItemUsageModal && currentItemToUse && String(currentItemToUse).toUpperCase() === 'BANANA')"
+      @movement-change="(moving) => (isBoardMoving = moving)"
+      @banana-placement-done="onBananaPlacementDone"
+      @tile-selected="onBananaTileSelected" />
 
     <MiniGameModal v-if="isMiniGameActive && miniGameUiType && !showBuffRoulette" :game-type="miniGameUiType"
       :time-limit-ms="miniGame.timeLimitMs ?? undefined" :description="miniGame.description ?? undefined"
@@ -714,6 +744,7 @@ onUnmounted(() => {
       :winner-name="winnerName" @done="handleBuffRouletteDone" />
 
     <ItemUsageModal v-if="showItemUsageModal && currentItemToUse" :item-type="currentItemToUse" :players="otherPlayers"
+      :map-selected-tile="currentItemToUse && String(currentItemToUse).toUpperCase() === 'BANANA' ? selectedBananaPosition : null"
       @use="handleItemUse" @cancel="handleItemCancel" />
 
     <!-- 다른 플레이어 아이템 사용 대기 화면 -->

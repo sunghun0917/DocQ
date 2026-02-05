@@ -64,7 +64,7 @@ public class GameService {
     private static final long ITEM_USAGE_NOTICE_DELAY_MS = 2000; // 아이템 사용 알림 표시 시간 보장
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
-    private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
+    private static final long MINIGAME_RESUME_FALLBACK_MS = 5000;
     /** SWAP_POSITION: 즉시 교환 애니메이션 후 다음 퀴즈까지 짧은 delay (알림 1.5초 + 버퍼) */
     private static final long SWAP_RESUME_DELAY_MS = 3500;
     private static final long ROULETTE_FALLBACK_MS = 7000;
@@ -1297,9 +1297,7 @@ public class GameService {
                                     .before(before)
                                     .after(nextPos)
                                     .build());
-
-                            // 밟은 바나나 제거 (1회용)
-                            room.getMapEvents().remove(before);
+                            // 바나나 제거는 applyMove에서 (이동 시작 시 프론트에서 보이도록)
                         }
                     }
                 }
@@ -1428,6 +1426,10 @@ public class GameService {
 
             if (plannedMove.getActions() != null) {
                 for (MoveActionPayload action : plannedMove.getActions()) {
+                    if ("TILE_EFFECT".equals(action.getType()) && "BANANA_SLIP".equals(action.getEffectType())
+                            && action.getBefore() != null) {
+                        latest.getMapEvents().remove(action.getBefore());
+                    }
                     if ("CATCH".equals(action.getType())) {
                         PlayerState other = latest.getPlayerStates().get(action.getTargetPlayerId());
                         if (other != null) {

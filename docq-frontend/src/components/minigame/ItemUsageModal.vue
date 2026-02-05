@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 interface Player {
     playerId: string
@@ -10,6 +10,8 @@ interface Player {
 const props = defineProps<{
     itemType: string // 'BANANA', 'SWAP_POSITION', 'QUIZ_INTERFERENCE'
     players?: Player[] // 타겟 선택 가능한 플레이어 목록
+    /** 바나나: 3D 맵에서 클릭해 선택한 타일(1~30). 있으면 selectedPosition과 동기화 */
+    mapSelectedTile?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -22,14 +24,22 @@ const selectedPosition = ref<number | null>(null)
 const timeRemaining = ref(10) // 10초 타이머
 let timerInterval: number | null = null
 
+// 맵에서 타일 클릭 시 선택값 동기화
+watch(() => props.mapSelectedTile, (v) => {
+    if (v != null) selectedPosition.value = v
+}, { immediate: true })
+
+const isBanana = computed(() => String(props.itemType).toUpperCase() === 'BANANA')
+
 const itemInfo = computed(() => {
+    if (isBanana.value) {
+        return {
+            title: '🍌 바나나 설치',
+            description: '맵에서 설치할 칸을 클릭하세요.',
+            instruction: '상대가 밟으면 뒤로 3칸 이동합니다.'
+        }
+    }
     switch (props.itemType) {
-        case 'BANANA':
-            return {
-                title: '🍌 바나나 설치',
-                description: '바나나를 설치할 타일을 선택하세요.',
-                instruction: '상대가 밟으면 뒤로 3칸 이동합니다.'
-            }
         case 'SWAP_POSITION':
             return {
                 title: '🔄 자리 바꾸기',
@@ -52,7 +62,7 @@ const itemInfo = computed(() => {
 })
 
 const canUse = computed(() => {
-    if (props.itemType === 'BANANA') {
+    if (isBanana.value) {
         return selectedPosition.value !== null
     }
     return selectedPlayerId.value !== null
@@ -60,10 +70,6 @@ const canUse = computed(() => {
 
 const selectPlayer = (playerId: string) => {
     selectedPlayerId.value = playerId
-}
-
-const selectTile = (position: number) => {
-    selectedPosition.value = position
 }
 
 const handleUse = () => {
@@ -84,9 +90,9 @@ const handleCancel = () => {
 // 타이머 자동 사용 (시간 초과 시)
 const autoUse = () => {
     // 선택되지 않은 경우 첫 번째 옵션 자동 선택
-    if (props.itemType === 'BANANA') {
+    if (isBanana.value) {
         if (selectedPosition.value === null) {
-            selectedPosition.value = 1 // 첫 번째 타일
+            selectedPosition.value = 1
         }
     } else {
         if (selectedPlayerId.value === null && props.players && props.players.length > 0) {
@@ -120,28 +126,38 @@ onMounted(() => {
 onUnmounted(() => {
     stopTimer()
 })
-
-// 바나나용 타일 번호 (1~30)
-const tileNumbers = Array.from({ length: 30 }, (_, i) => i + 1)
 </script>
 
 <template>
-    <div class="item-usage-overlay">
-        <div class="item-usage-modal">
-            <!-- Header -->
+    <!-- 바나나: 맵에서만 선택. 숫자 그리드 없음. -->
+    <div v-if="isBanana" class="item-usage-overlay banana-map-mode">
+        <div class="map-click-through" aria-hidden="true"></div>
+        <div class="item-usage-modal banana-only-map">
             <div class="modal-header">
-                <div class="timer-badge" :class="{ urgent: timeRemaining <= 3 }">
-                    {{ timeRemaining }}초
-                </div>
+                <div class="timer-badge" :class="{ urgent: timeRemaining <= 3 }">{{ timeRemaining }}초</div>
+                <h3>{{ itemInfo.title }}</h3>
+                <p class="description">{{ itemInfo.description }}</p>
+                <small class="instruction">{{ itemInfo.instruction }}</small>
+                <p v-if="selectedPosition !== null" class="selected-tile-hint">선택된 칸: <strong>{{ selectedPosition }}번</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" @click="handleCancel">취소</button>
+                <button class="btn-use" :disabled="!canUse" @click="handleUse">사용</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 자리바꾸기 / 방해하기: 플레이어 선택 모달 -->
+    <div v-else class="item-usage-overlay">
+        <div class="item-usage-modal">
+            <div class="modal-header">
+                <div class="timer-badge" :class="{ urgent: timeRemaining <= 3 }">{{ timeRemaining }}초</div>
                 <h3>{{ itemInfo.title }}</h3>
                 <p class="description">{{ itemInfo.description }}</p>
                 <small class="instruction">{{ itemInfo.instruction }}</small>
             </div>
-
-            <!-- Body -->
             <div class="modal-body">
-                <!-- 플레이어 선택 (자리바꾸기, 방해하기) -->
-                <div v-if="itemType !== 'BANANA' && players" class="player-selection">
+                <div v-if="players" class="player-selection">
                     <div v-for="player in players" :key="player.playerId" class="player-card"
                         :class="{ selected: selectedPlayerId === player.playerId }"
                         @click="selectPlayer(player.playerId)">
@@ -149,17 +165,7 @@ const tileNumbers = Array.from({ length: 30 }, (_, i) => i + 1)
                         <div class="player-name">{{ player.nickname }}</div>
                     </div>
                 </div>
-
-                <!-- 타일 선택 (바나나) -->
-                <div v-if="itemType === 'BANANA'" class="tile-selection">
-                    <div v-for="tile in tileNumbers" :key="tile" class="tile-button"
-                        :class="{ selected: selectedPosition === tile }" @click="selectTile(tile)">
-                        {{ tile }}
-                    </div>
-                </div>
             </div>
-
-            <!-- Footer -->
             <div class="modal-footer">
                 <button class="btn-cancel" @click="handleCancel">취소</button>
                 <button class="btn-use" :disabled="!canUse" @click="handleUse">사용</button>
@@ -184,6 +190,84 @@ const tileNumbers = Array.from({ length: 30 }, (_, i) => i + 1)
     z-index: 3000;
     backdrop-filter: blur(4px);
     font-family: 'Jua', sans-serif;
+}
+
+/* 바나나: 맵이 잘 보이도록 배경 거의 없음 */
+.item-usage-overlay.banana-map-mode {
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.08);
+    backdrop-filter: none;
+    pointer-events: none; /* 클릭이 3D 맵(캔버스)으로 통과 */
+}
+
+.map-click-through {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.banana-map-mode .item-usage-modal {
+    position: relative;
+    pointer-events: auto; /* 모달만 클릭 받음 */
+    margin-bottom: 12px;
+    max-height: none;
+}
+
+/* 바나나: 번호 그리드 없이 맵만 → 모달은 안내 + 버튼만, 크기 축소 */
+.item-usage-modal.banana-only-map {
+    max-width: 320px;
+    padding: 0;
+}
+
+.banana-only-map .modal-header {
+    padding: 12px 16px;
+}
+
+.banana-only-map .modal-header h3 {
+    font-size: 1.4rem;
+}
+
+.banana-only-map .description,
+.banana-only-map .instruction {
+    font-size: 0.9rem;
+}
+
+.banana-only-map .selected-tile-hint {
+    font-size: 0.9rem;
+    margin: 6px 0 0;
+}
+
+.banana-only-map .modal-footer {
+    padding: 10px 16px;
+}
+
+.banana-only-map .modal-footer button {
+    padding: 10px;
+    font-size: 1.1rem;
+}
+
+.banana-only-map .timer-badge {
+    padding: 4px 10px;
+    font-size: 0.95rem;
+}
+
+.banana-only-map .modal-body {
+    display: none;
+}
+
+.selected-tile-hint {
+    margin: 8px 0 0;
+    font-size: 1rem;
+    color: #5d4037;
+}
+
+.selected-tile-hint strong {
+    color: #e65100;
 }
 
 .item-usage-modal {
@@ -357,6 +441,7 @@ const tileNumbers = Array.from({ length: 30 }, (_, i) => i + 1)
     box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.3);
     transform: scale(1.1);
 }
+
 
 /* Footer */
 .modal-footer {

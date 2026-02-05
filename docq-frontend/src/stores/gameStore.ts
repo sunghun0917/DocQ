@@ -76,6 +76,8 @@ export const useGameStore = defineStore('game', () => {
     })
     /** +3칸 즉시 이동 후 미니게임 재개 ACK 대기 */
     const pendingPlusThreeAck = ref(false)
+    /** 바나나 설치 위치: 설정 시 GameBoard에서 해당 타일 확대→축소 후 전원 ACK 전송 */
+    const bananaPlacementPosition = ref<number | null>(null)
 
     // Getters
     const totalQuizCount = computed(() => quizzes.value.length)
@@ -104,10 +106,16 @@ export const useGameStore = defineStore('game', () => {
 
     // Actions
     const setGameState = (newState: GameStateResponse) => {
+        const hasBananaSlipMove = movementInProgress.value && currentMove.value?.moveProcess?.some(
+            (a: { type?: string; effectType?: string }) => a.type === 'TILE_EFFECT' && a.effectType === 'BANANA_SLIP'
+        )
+        const mergeState = { ...newState, players: newState.players || [] }
+        if (hasBananaSlipMove && newState.mapEvents != null) {
+            delete (mergeState as Record<string, unknown>).mapEvents
+        }
         gameState.value = {
             ...gameState.value,
-            ...newState,
-            players: newState.players || []
+            ...mergeState
         }
 
         if (newState.players) {
@@ -481,6 +489,7 @@ export const useGameStore = defineStore('game', () => {
         clearMiniGame,
         clearQuiz,
         pendingPlusThreeAck,
-        setPendingPlusThreeAck
+        setPendingPlusThreeAck,
+        bananaPlacementPosition
     }
 })
