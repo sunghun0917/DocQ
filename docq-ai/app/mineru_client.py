@@ -86,8 +86,8 @@ def _extract_text_from_content_list(content_list: list) -> str:
     return "\n".join(parts).strip()
 
 
-def parse_pdf_with_mineru(file_path: str) -> str:
-    api_url = DEFAULT_API_URL
+def parse_pdf_with_mineru(file_path: str, api_url: str = None) -> str:
+    api_url = api_url or DEFAULT_API_URL
     backend = "pipeline"
     parse_method = "auto"
     lang_list = "korean"

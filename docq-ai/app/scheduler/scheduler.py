@@ -12,8 +12,15 @@ logger = logging.getLogger(__name__)
 
 QUEUE_KEY = "mineru:queue"
 LOCK_TTL = 600  # GPU 작업 최대 시간
-WORKERS = [18001, 18002, 18003]  # 논리적 GPU worker
-BACKEND_CALLBACK_URL = os.getenv("BACKEND_CALLBACK_URL", "http://backend:8080/ai/callback")
+BACKEND_CALLBACK_URL = os.getenv("BACKEND_CALLBACK_URL", "http://backend:8081/ai/callback")
+
+# MinerU GPU 워커 설정 (포트 → API URL 매핑)
+# 환경변수로 호스트 설정 가능
+MINERU_HOST = os.getenv("MINERU_HOST", "localhost")
+WORKERS = {
+    18000: f"http://{MINERU_HOST}:18000/file_parse",
+    18001: f"http://{MINERU_HOST}:18001/file_parse",
+}
 
 
 def send_callback(job_id: str, status: str, result: dict = None, error: str = None):
@@ -49,11 +56,12 @@ def dequeue():
 # ---------- Lock ----------
 
 def acquire_worker():
-    for port in WORKERS:
+    """사용 가능한 워커를 찾아 (port, api_url) 튜플 반환"""
+    for port, api_url in WORKERS.items():
         lock_key = f"mineru:worker:{port}:lock"
         if redis_client.set(lock_key, "BUSY", nx=True, ex=LOCK_TTL):
-            return port
-    return None
+            return port, api_url
+    return None, None
 
 
 def release_worker(port):
@@ -79,15 +87,15 @@ def scheduler_loop():
             send_callback(job["jobId"], "failed", error="PDF file not found")
             continue
 
-        port = acquire_worker()
+        port, api_url = acquire_worker()
         if not port:
             enqueue(job)
             time.sleep(1)
             continue
 
         try:
-            logger.info(f"[SCHEDULER] Dispatch job {job['jobId']} to worker {port}")
-            result = run_gpu_job(job)
+            logger.info(f"[SCHEDULER] Dispatch job {job['jobId']} to worker {port} ({api_url})")
+            result = run_gpu_job(job, api_url)
 
             # Spring Boot에 결과 전송
             send_callback(job["jobId"], "completed", result=result)

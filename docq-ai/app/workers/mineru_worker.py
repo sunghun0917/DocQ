@@ -6,16 +6,20 @@ from app.fast_quiz_generator import generate_dynamic_quizzes
 logger = logging.getLogger(__name__)
 
 
-def run_gpu_job(job: dict) -> dict:
+def run_gpu_job(job: dict, api_url: str = None) -> dict:
     """
     실제 GPU 작업
+    
+    Args:
+        job: 작업 정보 (jobId, pdf_path 등)
+        api_url: MinerU API URL (None이면 기본값 사용)
     """
     job_id = job["jobId"]
     pdf_path = job["pdf_path"]
 
-    logger.info(f"[WORKER] Start job {job_id}")
+    logger.info(f"[WORKER] Start job {job_id} (api: {api_url})")
 
-    text = extract_text_with_fallback(pdf_path)
+    text = extract_text_with_fallback(pdf_path, api_url)
     text_len = len(text.strip())
 
     if text_len <= 5000:

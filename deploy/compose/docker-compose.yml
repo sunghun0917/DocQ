@@ -61,10 +61,10 @@ services:
       - ../../docq-ai/.env
     environment:
       - PYTHONUNBUFFERED=1
-      - MINERU_API_URL=http://${EC2_HOST_IP}:18000/file_parse
+      - MINERU_HOST=${EC2_HOST_IP}
       - REDIS_HOST=ai-redis
       - REDIS_PORT=6379
-      - BACKEND_CALLBACK_URL=http://backend:8080/ai/callback
+      - BACKEND_CALLBACK_URL=http://backend:8081/ai/callback
     depends_on:
       - ai-redis
     networks:
