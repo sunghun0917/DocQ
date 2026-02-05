@@ -16,7 +16,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'use', data: { targetPlayerId?: string; targetPosition?: number }): void
-    (e: 'cancel'): void
 }>()
 
 const selectedPlayerId = ref<string | null>(null)
@@ -82,10 +81,7 @@ const handleUse = () => {
     })
 }
 
-const handleCancel = () => {
-    stopTimer()
-    emit('cancel')
-}
+
 
 // 타이머 자동 사용 (시간 초과 시)
 const autoUse = () => {
@@ -138,10 +134,10 @@ onUnmounted(() => {
                 <h3>{{ itemInfo.title }}</h3>
                 <p class="description">{{ itemInfo.description }}</p>
                 <small class="instruction">{{ itemInfo.instruction }}</small>
-                <p v-if="selectedPosition !== null" class="selected-tile-hint">선택된 칸: <strong>{{ selectedPosition }}번</strong></p>
+                <p v-if="selectedPosition !== null" class="selected-tile-hint">선택된 칸: <strong>{{ selectedPosition
+                        }}번</strong></p>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" @click="handleCancel">취소</button>
                 <button class="btn-use" :disabled="!canUse" @click="handleUse">사용</button>
             </div>
         </div>
@@ -167,7 +163,6 @@ onUnmounted(() => {
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" @click="handleCancel">취소</button>
                 <button class="btn-use" :disabled="!canUse" @click="handleUse">사용</button>
             </div>
         </div>
@@ -199,7 +194,8 @@ onUnmounted(() => {
     align-items: center;
     background: rgba(0, 0, 0, 0.08);
     backdrop-filter: none;
-    pointer-events: none; /* 클릭이 3D 맵(캔버스)으로 통과 */
+    pointer-events: none;
+    /* 클릭이 3D 맵(캔버스)으로 통과 */
 }
 
 .map-click-through {
@@ -213,7 +209,8 @@ onUnmounted(() => {
 
 .banana-map-mode .item-usage-modal {
     position: relative;
-    pointer-events: auto; /* 모달만 클릭 받음 */
+    pointer-events: auto;
+    /* 모달만 클릭 받음 */
     margin-bottom: 12px;
     max-height: none;
 }
