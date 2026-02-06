@@ -34,4 +34,11 @@ public class RoomRepository {
     public void deleteById(String id) {
         store.remove(id);
     }
+
+    public Optional<Room> findByAiJobId(String aiJobId) {
+        return store.values().stream()
+                .filter(room -> aiJobId != null && aiJobId.equals(room.getAiJobId()))
+                .findFirst();
+    }
+
 }

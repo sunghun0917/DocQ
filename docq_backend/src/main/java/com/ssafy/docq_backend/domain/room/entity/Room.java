@@ -99,6 +99,11 @@ public class Room {
     @Builder.Default
     private volatile boolean isGenerating = false;
 
+    @Builder.Default
+    private AiStatus aiStatus = AiStatus.IDLE;
+
+    private String aiJobId;
+
     public void addPlayer(String playerId) {
         players.add(playerId);
         this.currentCount = players.size();

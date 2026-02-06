@@ -3,6 +3,7 @@ package com.ssafy.docq_backend.domain.game.service;
 import com.ssafy.docq_backend.domain.game.entity.PlayerState;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
+import com.ssafy.docq_backend.domain.room.entity.AiStatus;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
 import com.ssafy.docq_backend.domain.player.entity.Player;
@@ -17,6 +18,7 @@ import com.ssafy.docq_backend.domain.minigame.service.MiniGameService;
 import com.ssafy.docq_backend.domain.quiz.dto.QuizApiDto;
 import com.ssafy.docq_backend.domain.quiz.service.QuizService;
 import com.ssafy.docq_backend.global.client.AiClient;
+import com.ssafy.docq_backend.global.client.dto.AiDto;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -73,84 +75,22 @@ public class GameService {
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
     private static final long QUIZ_TIME_LIMIT_MS = 7000;
 
-    public void generateQuizFromPdf(String roomId, MultipartFile pdfFile, Long userId) {
-        log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
-
-        // [ADD] 퀴즈 생성 시작 알림 (프론트엔드 대기 화면 전환용)
-        Map<String, Object> startMsg = new HashMap<>();
-        startMsg.put("type", "QUIZ_GENERATING");
-        startMsg.put("fileName", pdfFile.getOriginalFilename());
-        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+    public void requestQuizGeneration(String roomId, MultipartFile pdfFile) {
 
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+                .orElseThrow();
 
-        room.setGenerating(true);
-        roomRepository.save(room);
-
-        try {
-            // AI Client 호출
-            List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
-            log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
-
-            // (1) 게임용 Quiz 엔티티 생성 (Room에 세팅)
-            List<Quiz> quizzes = new ArrayList<>();
-            for (int i = 0; i < quizResponses.size(); i++) {
-                QuizDto.Response dto = quizResponses.get(i);
-                quizzes.add(Quiz.builder()
-                        .quizId((long) (i + 1)) // 1-based sequential ID
-                        .question(dto.getQuestion())
-                        .options(dto.getOptions())
-                        .answerIndex(dto.getAnswerIndex())
-                        .answerText(dto.getAnswerText())
-                        .build());
-            }
-
-            room.setQuizList(quizzes);
-
-            // (2) 나의 퀴즈(quizzes 테이블)에 자동 저장 (userId가 있을 때만)
-            if (userId != null && !quizResponses.isEmpty()) {
-                try {
-                    List<QuizApiDto.QuizItemRequest> items = quizResponses.stream()
-                            .map(dto -> new QuizApiDto.QuizItemRequest(
-                                    dto.getQuestion(),
-                                    dto.getOptions(),
-                                    dto.getAnswerIndex(),
-                                    dto.getAnswerText()
-
-                            ))
-                            .toList();
-
-                    // PDF 파일명에서 확장자 제거하여 타이틀로 사용
-                    String originalFilename = pdfFile.getOriginalFilename();
-                    String quizTitle = originalFilename != null
-                            ? originalFilename.replaceFirst("[.][^.]+$", "") // 확장자 제거
-                            : "PDF 퀴즈";
-
-                    // 최대 길이 제한 (45자)
-                    if (quizTitle.length() > 45) {
-                        quizTitle = quizTitle.substring(0, 45);
-                    }
-
-                    QuizApiDto.CreateQuizRequest createReq = new QuizApiDto.CreateQuizRequest(items, quizTitle);
-                    QuizApiDto.CreateQuizResponse saved = quizService.create(userId, createReq);
-                    log.info("Saved quizzes to 'quizzes' table as quizId={}, count={}, title={}", saved.getQuizId(),
-                            saved.getQuizCount(), quizTitle);
-                } catch (Exception e) {
-                    log.warn("Failed to persist AI-generated quizzes for userId={}", userId, e);
-                }
-            }
-
-            // 완료 알림 브로드캐스트
-            Map<String, Object> message = new HashMap<>();
-            message.put("type", "QUIZ_GENERATED");
-            message.put("count", quizzes.size());
-
-            messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
-        } finally {
-            room.setGenerating(false);
-            roomRepository.save(room);
+        if (room.getAiStatus() == AiStatus.QUEUED ||
+                room.getAiStatus() == AiStatus.PROCESSING) {
+            throw new IllegalStateException("AI already running");
         }
+
+        AiDto.JobResponse job = aiClient.requestQuizJob(pdfFile);
+
+        room.setAiJobId(job.getJobId());
+        room.setAiStatus(AiStatus.QUEUED);
+
+        roomRepository.save(room);
     }
 
     public int setDefaultQuizzes(String roomId, String type) {
@@ -1702,5 +1642,63 @@ public class GameService {
                     .build());
         }
         return quizzes;
+    }
+    // ========== AI Callback Handlers ==========
+
+    public void handleAiQuizResult(String jobId, List<AiDto.QuizItem> quizItems) {
+        Room room = roomRepository.findByAiJobId(jobId)
+                .orElseThrow(() -> {
+                    log.error("Room not found for jobId: {}", jobId);
+                    return new DocqException(ErrorCode.ROOM_NOT_FOUND);
+                });
+
+        // Convert AiDto.QuizItem to Quiz entity
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < quizItems.size(); i++) {
+            AiDto.QuizItem item = quizItems.get(i);
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1))
+                    .question(item.getQuestion())
+                    .options(item.getOptions())
+                    .answerIndex(item.getAnswerIndex())
+                    .answerText(item.getAnswerText())
+                    .explanation(item.getExplanation())
+                    .build());
+        }
+
+        room.setQuizList(quizzes);
+        room.setAiStatus(AiStatus.DONE);
+        roomRepository.save(room);
+
+        log.info("AI quizzes loaded for room {}: {} quizzes", room.getId(), quizzes.size());
+
+        // Broadcast update to room
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+        message.put("status", "completed");
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/quiz", message);
+    }
+
+    public void handleAiJobFailed(String jobId, String error) {
+        Room room = roomRepository.findByAiJobId(jobId)
+                .orElse(null);
+
+        if (room == null) {
+            log.error("Room not found for failed jobId: {}", jobId);
+            return;
+        }
+
+        room.setAiStatus(AiStatus.FAILED);
+        roomRepository.save(room);
+
+        log.error("AI job failed for room {}: {}", room.getId(), error);
+
+        // Broadcast failure to room
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATION_FAILED");
+        message.put("error", error);
+        message.put("status", "failed");
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/quiz", message);
     }
 }

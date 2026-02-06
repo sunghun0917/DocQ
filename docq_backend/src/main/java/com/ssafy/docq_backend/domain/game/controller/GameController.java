@@ -65,28 +65,19 @@ public class GameController {
 
     @ResponseBody
     @PostMapping("/game/{roomId}/quiz/generate")
-    public ResponseEntity<?> generateQuiz(
+    public ResponseEntity<Map<String, Object>> generateQuiz(
             @PathVariable String roomId,
-            @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal CustomUserDetails user) {
-        try {
-            Long userId = user != null ? user.getUserId() : null;
-            gameService.generateQuizFromPdf(roomId, file, userId);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Quiz generation started",
-                    "roomId", roomId));
-        } catch (com.ssafy.docq_backend.global.exception.DocqException e) {
-            log.error("Quiz generation failed (Managed): {}", e.getMessage());
-            return ResponseEntity
-                    .status(e.getErrorCode().getStatus())
-                    .body(Map.of("message", e.getMessage()));
-        } catch (Exception e) {
-            log.error("Quiz generation failed", e);
-            return ResponseEntity
-                    .status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("message", e.getMessage()));
-        }
+            @RequestParam("file") MultipartFile file
+    ) {
+        // TODO: 방장 검증
+        gameService.requestQuizGeneration(roomId, file);
 
+        return ResponseEntity.accepted().body(
+                Map.of(
+                        "message", "Quiz generation started",
+                        "roomId", roomId
+                )
+        );
     }
 
     @ResponseBody

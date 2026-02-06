@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/login", "/auth/signup", "/guests/login").permitAll()
                         .requestMatchers("/users/userId/exists", "/users/nickname/exists").permitAll()
                         .requestMatchers("/ws-docq/**", "/actuator/**", "/error").permitAll()
+                        .requestMatchers("/ai/callback").permitAll() // ai 생성 webhook
 
                         // 2. Shared Authenticated Routes (Game, Room, Guest Info)
                         // 회원/게스트 모두 게임 참여 및 진행 가능
