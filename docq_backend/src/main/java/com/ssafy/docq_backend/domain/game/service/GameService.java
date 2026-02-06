@@ -522,7 +522,7 @@ public class GameService {
         // 맵 특수 효과 배치 (Random 5 tiles with "TILE_X2")
         room.getMapEvents().clear();
         // [TEST] Force specific tiles for testing PLUS_THREE combo
-        // Legacy Random Logic Disabled
+        room.getMapEvents().clear();
         Random random = new Random();
         Set<Integer> eventTiles = new HashSet<>();
         int eventMinPosition = START_POSITION + 1;
@@ -535,7 +535,6 @@ public class GameService {
                 room.getMapEvents().put(pos, "TILE_X2");
             }
         }
-
         log.info("Map Events Initialized: {}", room.getMapEvents());
     }
 
@@ -1618,9 +1617,10 @@ public class GameService {
         private boolean finished;
     }
 
-    public TileEventResult processTileEvents(Room room, int currentPos, int moveValue) {
+    public TileEventResult processTileEvents(Room room, int currentPos, int initialMoveValue) {
         List<GameDto.MoveAction> actions = new ArrayList<>();
         int nextPos = currentPos;
+        int currentMoveValue = initialMoveValue;
         boolean finished = false;
         Set<Integer> visitedTiles = new HashSet<>();
 
@@ -1632,7 +1632,7 @@ public class GameService {
             int before = nextPos;
 
             if ("TILE_X2".equals(eventType)) {
-                nextPos += moveValue; // 마지막 이동 거리만큼 추가 이동
+                nextPos += currentMoveValue; // 마지막 이동 거리만큼 추가 이동
                 // Boundary Check
                 if (nextPos < START_POSITION)
                     nextPos = START_POSITION;
@@ -1649,6 +1649,8 @@ public class GameService {
                         .build());
             } else if ("BANANA".equals(eventType)) {
                 nextPos -= 3;
+                currentMoveValue = -3; // [MOD] 바나나 미끄러짐은 "뒤로 3칸 이동"으로 간주 -> 이후 *2 발동 시 뒤로 감
+
                 if (nextPos < START_POSITION)
                     nextPos = START_POSITION;
 
