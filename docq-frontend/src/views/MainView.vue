@@ -283,6 +283,13 @@ const handleAction = (action: string) => {
 };
 
 const closeEditNickname = () => { showEditNicknameModal.value = false; };
+const onNicknameInput = () => {
+    if (editNickname.value.length > 10) {
+        editNickname.value = editNickname.value.slice(0, 10);
+    }
+    isEditNicknameChecked.value = false;
+    editCheckMsg.value = '';
+};
 const handleKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && showEditNicknameModal.value) closeEditNickname();
 };
@@ -590,7 +597,7 @@ onUnmounted(() => {
                         maxlength="10"
                         placeholder="닉네임을 입력하세요" 
                         @keyup.enter="saveNickname" 
-                        @input="isEditNicknameChecked = false; editCheckMsg = ''"
+                        @input="onNicknameInput"
                     />
                 </div>
                 <button class="cartoon-btn secondary small-btn" @click="checkEditNicknameDuplicate">확인</button>

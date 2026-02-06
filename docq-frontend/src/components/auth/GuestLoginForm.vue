@@ -39,6 +39,14 @@ const confirmNickname = async () => {
     emit('success');
 };
 
+const onNicknameInput = () => {
+    if (nickname.value.length > 10) {
+        nickname.value = nickname.value.slice(0, 10);
+    }
+    isChecked.value = false;
+};
+
+
 const checkNickname = async () => {
     if (nickname.value.trim().length < 2) {
         checkMsg.value = "닉네임은 두 글자 이상이어야 해요!";
@@ -68,7 +76,8 @@ const checkNickname = async () => {
                             v-model="nickname" 
                             placeholder="닉네임을 입력하세요" 
                             @keyup.enter="confirmNickname" 
-                            @input="isChecked = false"
+                            @input="onNicknameInput"
+                            maxlength="10"
                             autofocus 
                         />
                     </div>
