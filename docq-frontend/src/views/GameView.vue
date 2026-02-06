@@ -810,7 +810,7 @@ onUnmounted(() => {
               </div>
               <div class="corner-card-meta flex gap-2 mt-1">
                 <span v-if="p.hasBuff" class="corner-card-buff" :title="p.hasBuff">⚡</span>
-                <span class="text-lg font-bold text-[#8d6e63]">Score: {{ p.score ?? 0 }}</span>
+                <span class="text-lg font-bold text-[#8d6e63]">맞힌 퀴즈: {{ p.score ?? 0 }}개</span>
               </div>
             </div>
           </template>
@@ -1399,7 +1399,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 40;
+  z-index: 10;
 }
 
 .catch-effect-text {
