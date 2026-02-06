@@ -50,6 +50,15 @@ const checkIdDuplicate = async () => {
     isIdChecked.value = isAvailable;
 };
 
+
+const onNicknameInput = () => {
+    isNicknameChecked.value = false;
+    nicknameCheckMsg.value = '';
+    if (signUpNickname.value.length > 10) {
+        signUpNickname.value = signUpNickname.value.slice(0, 10);
+    }
+};
+
 const checkNicknameDuplicate = async () => {
     if (!signUpNickname.value.trim()) {
         nicknameCheckMsg.value = "닉네임을 입력해주세요.";
@@ -131,7 +140,7 @@ const confirmSignUp = async () => {
             <div class="input-group mb-4">
                 <div class="input-row">
                     <div class="input-wrapper flex-grow">
-                        <input type="text" v-model="signUpNickname" placeholder="닉네임" />
+                        <input type="text" v-model="signUpNickname" placeholder="닉네임" maxlength="10" @input="onNicknameInput" />
                     </div>
                     <button class="cartoon-btn secondary small-btn" @click="checkNicknameDuplicate">확인</button>
                 </div>
