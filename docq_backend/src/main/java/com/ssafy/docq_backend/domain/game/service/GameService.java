@@ -212,7 +212,22 @@ public class GameService {
     }
 
     public void resetQuiz(String roomId) {
-        // [MOD] 퀴즈 리셋 알림 -> "대기 중" 상태로 전환
+        // [MOD] 퀴즈 리셋 알림 & AI 작업 취소 처리
+        try {
+            roomRepository.findById(roomId).ifPresent(room -> {
+                // AI 작업 중이었다면 상태 초기화 -> 이후 콜백이 와도 findByAiJobId에서 찾을 수 없게 됨
+                if (room.getAiStatus() == AiStatus.PROCESSING || room.getAiStatus() == AiStatus.QUEUED) {
+                    log.info("Resetting quiz generation for room {}. Clearing JobId {}", roomId, room.getAiJobId());
+                    room.setAiJobId(null);
+                    room.setAiStatus(AiStatus.IDLE);
+                    roomRepository.save(room);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Error processing resetQuiz for room {}: {}", roomId, e.getMessage());
+        }
+
+        // "대기 중" 상태로 전환 메시지 전송
         Map<String, Object> resetMsg = new HashMap<>();
         resetMsg.put("type", "QUIZ_RESET");
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", resetMsg);

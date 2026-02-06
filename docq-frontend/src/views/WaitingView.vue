@@ -272,6 +272,14 @@ const resetAndUpload = async () => {
   if (roomId.value) { wsStore.resetQuiz(roomId.value) }
 };
 
+const cancelPdfParsing = async () => {
+  isGenerating.value = false
+  isPdfMode.value = false
+  generatedQuizzes.value = []
+  selectedFile.value = null
+  if (roomId.value) { wsStore.resetQuiz(roomId.value) }
+}
+
 const loadQuizzes = async () => {
   try { generatedQuizzes.value = await getQuizzes(roomId.value) }
   catch (error) { console.error('Failed to load quizzes', error) }
@@ -641,6 +649,10 @@ const quickMessages = [
                   <p class="text-xl font-black text-wood-dark px-4 break-keep leading-tight animate-pulse transition-all duration-300 shrink-0 text-center">
                     {{ currentLoadingMessage }}
                   </p>
+                  <button @click.stop="cancelPdfParsing"
+                    class="cartoon-btn secondary h-12 text-lg font-bold w-full mt-2 shrink-0 shadow-md">
+                    취소
+                  </button>
                 </div>
                 <div v-else class="flex flex-col items-center gap-2 group-hover:scale-105 transition-transform">
                   <span class="material-symbols-outlined text-wood-dark text-5xl opacity-40">cloud_upload</span>
@@ -672,6 +684,10 @@ const quickMessages = [
                   <p class="text-xl font-black text-wood-dark px-4 break-keep leading-tight animate-pulse transition-all duration-300 shrink-0 text-center">
                     {{ currentLoadingMessage }}
                   </p>
+                  <button v-if="isPdfMode" @click.stop="cancelPdfParsing"
+                    class="cartoon-btn secondary h-12 text-lg font-bold w-full mt-2 shrink-0 shadow-md">
+                    취소
+                  </button>
                 </div>
                 
                 <div v-else-if="generatedQuizzes.length === 0" class="flex flex-col items-center gap-4 transition-all duration-500 w-full h-full justify-center">
