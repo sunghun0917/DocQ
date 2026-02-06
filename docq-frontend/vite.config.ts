@@ -29,5 +29,11 @@ export default defineConfig({
     // SockJS를 위한 global 객체 정의
     global: 'globalThis',
   },
+  esbuild: {
+    drop: ['console', 'debugger'],
+  },
+  build: {
+    minify: 'esbuild',
+  },
 
 })
