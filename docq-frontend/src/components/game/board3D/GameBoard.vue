@@ -266,13 +266,17 @@ watch(() => players.value, (newPlayers) => {
 }, { immediate: true, deep: true })
 
 watch(
-  () => gameStore.gamePhase,
-  (phase) => {
+  () => [gameStore.gamePhase, players.value.length] as const,
+  ([phase, playerCount]) => {
+    // console.log(`[GameBoard] Phase: ${phase}, Players: ${playerCount}, IntroPlayed: ${introPlayed.value}`)
+
     if (phase === 'WAITING') {
       introPlayed.value = false
     }
 
-    if (phase === 'STARTING' && !introPlayed.value && players.value.length > 0) {
+    // [MOD] players.length 조건 제거 (데이터 로딩 늦어도 인트로 실행/ACK 전송 보장)
+    if (phase === 'STARTING' && !introPlayed.value) {
+      console.log('[GameBoard] Starting Intro Camera Sequence')
       introPlayed.value = true
       setTimeout(() => {
         void runIntroCamera()
