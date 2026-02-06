@@ -521,17 +521,21 @@ public class GameService {
 
         // 맵 특수 효과 배치 (Random 5 tiles with "TILE_X2")
         room.getMapEvents().clear();
+        // [TEST] Force specific tiles for testing PLUS_THREE combo
+        // Legacy Random Logic Disabled
         Random random = new Random();
         Set<Integer> eventTiles = new HashSet<>();
         int eventMinPosition = START_POSITION + 1;
         int eventMaxPosition = TARGET_POSITION - 1;
 
         while (eventTiles.size() < 5) {
-            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) + eventMinPosition;
+            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) +
+                    eventMinPosition;
             if (eventTiles.add(pos)) {
                 room.getMapEvents().put(pos, "TILE_X2");
             }
         }
+
         log.info("Map Events Initialized: {}", room.getMapEvents());
     }
 
@@ -743,6 +747,11 @@ public class GameService {
     }
 
     private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
+        // [MOD] 이미 게임이 끝났다면 ACK 처리 중단
+        if (room.getStatus() == RoomStatus.FINISHED) {
+            log.info("Ignored ACK processing because room {} is FINISHED", room.getId());
+            return;
+        }
         // PLUS_THREE: 첫 ACK에서는 이동만 적용하고 ACK 완료 처리하지 않음.
         // 이동 애니메이션 후 두 번째 BUFF_ROULETTE_COMPLETE에서 완료 처리 → RESUME_AFTER_MINIGAME 스케줄.
         if (resolution.ackType == GameDto.AckType.MINIGAME_COMPLETE) {
@@ -1532,6 +1541,11 @@ public class GameService {
 
             log.info("Resuming Game after MiniGame for Room {}", roomId);
 
+            if (room.getStatus() == RoomStatus.FINISHED) {
+                log.info("Skipping resumeAfterMiniGame because room {} is FINISHED", roomId);
+                return;
+            }
+
             Integer expectedRound = payload != null ? payload.getRound() : room.getRound();
             String roundKeyId = expectedRound == null ? String.valueOf(room.getRound()) : String.valueOf(expectedRound);
             if (!ackStore.tryMarkExecution(roomId, GameEventType.RESUME_AFTER_MINIGAME.name(), roundKeyId)) {
@@ -1587,15 +1601,87 @@ public class GameService {
         }
     }
 
+    public void finishGame(Room room) {
+        room.setStatus(RoomStatus.FINISHED);
+        roomRepository.save(room);
+        messagingTemplate.convertAndSend(
+                "/topic/game/" + room.getId() + "/finish",
+                buildFinishResponse(room));
+        broadcastGameState(room);
+    }
+
+    @lombok.Getter
+    @lombok.Builder
+    public static class TileEventResult {
+        private int finalPosition;
+        private List<GameDto.MoveAction> actions;
+        private boolean finished;
+    }
+
+    public TileEventResult processTileEvents(Room room, int currentPos, int moveValue) {
+        List<GameDto.MoveAction> actions = new ArrayList<>();
+        int nextPos = currentPos;
+        boolean finished = false;
+        Set<Integer> visitedTiles = new HashSet<>();
+
+        // 반복문으로 연쇄 효과 처리
+        while (nextPos < TARGET_POSITION && room.getMapEvents() != null && room.getMapEvents().containsKey(nextPos)
+                && !visitedTiles.contains(nextPos)) {
+            visitedTiles.add(nextPos);
+            String eventType = room.getMapEvents().get(nextPos);
+            int before = nextPos;
+
+            if ("TILE_X2".equals(eventType)) {
+                nextPos += moveValue; // 마지막 이동 거리만큼 추가 이동
+                // Boundary Check
+                if (nextPos < START_POSITION)
+                    nextPos = START_POSITION;
+                if (nextPos >= TARGET_POSITION) {
+                    nextPos = TARGET_POSITION;
+                    finished = true;
+                }
+
+                actions.add(GameDto.MoveAction.builder()
+                        .type("TILE_EFFECT")
+                        .effectType(eventType)
+                        .before(before)
+                        .after(nextPos)
+                        .build());
+            } else if ("BANANA".equals(eventType)) {
+                nextPos -= 3;
+                if (nextPos < START_POSITION)
+                    nextPos = START_POSITION;
+
+                actions.add(GameDto.MoveAction.builder()
+                        .type("TILE_EFFECT")
+                        .effectType("BANANA_SLIP")
+                        .before(before)
+                        .after(nextPos)
+                        .build());
+
+                // 바나나는 밟으면 사라짐 (즉시 반영)
+                room.getMapEvents().remove(before);
+            }
+        }
+
+        // 최종 위치가 결승선 이상이면 종료 (타일 효과 없이 그냥 도착한 경우도 처리하기 위해 외부에서 체크하지만 중복 체크 무방)
+        if (nextPos >= TARGET_POSITION) {
+            nextPos = TARGET_POSITION;
+            finished = true;
+        }
+
+        return TileEventResult.builder()
+                .finalPosition(nextPos)
+                .actions(actions)
+                .finished(finished)
+                .build();
+    }
+
     private GameDto.FinishResponse buildFinishResponse(Room room) {
         List<GameDto.FinishRank> rankings = buildFinishRankings(room);
         String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getPlayerId();
 
-        return GameDto.FinishResponse.builder()
-                .type("FINISH")
-                .winnerPlayerId(winnerUserId)
-                .rankings(rankings)
-                .build();
+        return GameDto.FinishResponse.builder().type("FINISH").winnerPlayerId(winnerUserId).rankings(rankings).build();
     }
 
     private List<GameDto.FinishRank> buildFinishRankings(Room room) {

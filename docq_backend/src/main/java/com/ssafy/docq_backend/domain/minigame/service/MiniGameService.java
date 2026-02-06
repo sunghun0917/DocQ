@@ -310,30 +310,47 @@ public class MiniGameService {
 
         PlayerState ps = room.getPlayerStates().get(playerId);
         int before = ps.getPosition();
-        int after = before + 3;
+        int afterPlusThree = before + 3;
         int maxPosition = 30;
-        if (after >= maxPosition) {
-            after = maxPosition;
+
+        if (afterPlusThree > maxPosition) {
+            afterPlusThree = maxPosition;
         }
 
-        ps.setPosition(after);
-
-        GameDto.MoveAction action = GameDto.MoveAction.builder()
+        List<GameDto.MoveAction> moveActions = new ArrayList<>();
+        moveActions.add(GameDto.MoveAction.builder()
                 .type("BUFF")
                 .buffType("PLUS_THREE")
                 .before(before)
-                .after(after)
-                .build();
+                .after(afterPlusThree)
+                .build());
+
+        // 타일 효과 계산 (PLUS_THREE는 3칸 이동으로 간주하여 처리)
+        GameService.TileEventResult eventResult = gameService.processTileEvents(room, afterPlusThree, 3);
+
+        if (eventResult.getActions() != null) {
+            moveActions.addAll(eventResult.getActions());
+        }
+
+        int finalPos = eventResult.getFinalPosition();
+        boolean isFinished = eventResult.isFinished();
+
+        ps.setPosition(finalPos);
 
         GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
                 .playerId(playerId)
                 .startPosition(before)
-                .endPosition(after)
-                .moveProcess(Collections.singletonList(action))
+                .endPosition(finalPos)
+                .moveProcess(moveActions)
                 .build();
 
         messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/move", moveInfo);
-        roomRepository.save(room);
-        gameService.broadcastGameState(room);
+
+        if (isFinished) {
+            gameService.finishGame(room);
+        } else {
+            roomRepository.save(room);
+            gameService.broadcastGameState(room);
+        }
     }
 }
