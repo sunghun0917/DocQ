@@ -12,7 +12,7 @@ from app.workers.mineru_worker import run_gpu_job
 logger = logging.getLogger(__name__)
 
 QUEUE_KEY = "mineru:queue"
-LOCK_TTL = 600  # GPU 작업 최대 시간
+LOCK_TTL = 200  # GPU 작업 최대 시간
 BACKEND_CALLBACK_URL = os.getenv("BACKEND_CALLBACK_URL", "http://backend:8081/ai/callback")
 
 # MinerU GPU 워커 설정 (포트 → API URL 매핑)
@@ -21,6 +21,7 @@ MINERU_HOST = os.getenv("MINERU_HOST", "localhost")
 WORKERS = {
     18000: f"http://{MINERU_HOST}:18000/file_parse",
     18001: f"http://{MINERU_HOST}:18001/file_parse",
+    18002: f"http://{MINERU_HOST}:18002/file_parse",
     # 포트 추가로 서버 늘리기 가능
 }
 
