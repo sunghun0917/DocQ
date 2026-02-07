@@ -45,7 +45,7 @@ DocQ는 문서를 *처음 학습하기 위한 서비스*가 아니라,
 
 * **메인 페이지**
 
-  <img src="assets/gif13.gif" width="300">
+  <img src="assets/gif13.gif" width="500">
 
 * **PDF 기반 AI 퀴즈 자동 생성**
 
@@ -65,10 +65,10 @@ DocQ는 문서를 *처음 학습하기 위한 서비스*가 아니라,
   퀴즈를 맞힌 플레이어가 룰렛을 돌려 보드를 이동하며 게임을 진행합니다.
 
 <p align="center">
-  <img src="assets/gif9.gif" width="240" />
-  <img src="assets/gif10.gif" width="240" />
-  <img src="assets/gif4.gif" width="240" />
-  <img src="assets/gif3.gif" width="240" />
+  <img src="assets/gif9.gif" width="500" />
+  <img src="assets/gif10.gif" width="500" />
+  <img src="assets/gif4.gif" width="500" />
+  <img src="assets/gif3.gif" width="500" />
 </p>
 
 * **미니게임**
@@ -76,15 +76,15 @@ DocQ는 문서를 *처음 학습하기 위한 서비스*가 아니라,
   미니게임을 통해 아이템을 얻고, 또다른 재미를 느낄 수 있습니다.
 
 <p align="center">
-  <img src="assets/gif5.gif" width="240" />
-  <img src="assets/gif6.gif" width="240" />
+  <img src="assets/gif5.gif" width="500" />
+  <img src="assets/gif6.gif" width="500" />
 </p>  
 
 * **아이템**
 
 <p align="center">
-  <img src="assets/gif7.gif" width="240" />
-  <img src="assets/gif8.gif" width="240" />
+  <img src="assets/gif7.gif" width="500" />
+  <img src="assets/gif8.gif" width="500" />
 </p>  
 
 * **결과**
