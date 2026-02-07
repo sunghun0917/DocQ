@@ -236,7 +236,7 @@ const loadModel = (index: number) => {
           action.clampWhenFinished = clamp
 
           if (props.action === 'lose') {
-            action.timeScale = 0.5; 
+            action.timeScale = 0.2; 
           } else {
             action.timeScale = 1.0; 
           }

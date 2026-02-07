@@ -18,7 +18,7 @@ const teamMembers = [
   },
   {
     name: "안성훈",
-    role: "DevOps/Cloud     Engineer",
+    role: "DevOps/Cloud Engineer",
     email: "a771001o5o@gmail.com",
     photo: "/teamimages/sunghoon.jpg",
     keywords: ["CI/CD Pipeline", "Infrastructure as Code", "Dockerized Architecture", "Zero-downtime"],
@@ -48,7 +48,7 @@ const teamMembers = [
     role: "AI/Security Engineer",
     email: "ghdgusrl3466@gmail.com",
     photo: "/teamimages/hyungi.jpg",
-    keywords: ["LLM Integration", "RAG Pipeline", "OAuth 2.0 / JWT", "API Security"],
+    keywords: ["LLM Integration", "Async Job Coordination", "API Flow Support", "API Security"],
     icon: "security",
     color: "#ffca28"
   },
@@ -110,7 +110,7 @@ onUnmounted(() => {
             
             <div class="absolute top-0 left-0 right-0 h-3" :style="{ backgroundColor: member.color }"></div>
             
-            <div class="w-28 h-28 bg-[#f5f5f5] border-4 border-[#d7ccc8] rounded-2xl !m-3 flex items-center justify-center overflow-hidden shrink-0">
+            <div class="w-30 h-30 bg-[#f5f5f5] border-4 border-[#d7ccc8] rounded-2xl !m-3 flex items-center justify-center overflow-hidden shrink-0">
                <img v-if="member.photo" :src="member.photo" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                <span v-else class="material-symbols-outlined text-5xl text-[#d7ccc8]">person</span>
             </div>
