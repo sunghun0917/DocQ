@@ -720,6 +720,7 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('item-used', handleItemUsedEvent as EventListener)
 })
+
 </script>
 
 <template>
@@ -905,6 +906,8 @@ onUnmounted(() => {
       :confirmLabel="confirmConfig.confirmLabel" :icon="confirmConfig.icon" :variant="confirmConfig.variant"
       @close="closeConfirm" @confirm="handleConfirm" />
   </div>
+
+
 
           <button @click="audioStore.toggleMute" 
           class="fixed top-6 left-6 z-50 w-14 h-14 flex items-center justify-center bg-white/60 hover:bg-white/80 active:scale-90 backdrop-blur-sm rounded-full shadow-lg transition-all">
