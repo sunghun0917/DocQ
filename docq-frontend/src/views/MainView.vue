@@ -15,6 +15,7 @@ import LoginForm from '@/components/auth/LoginForm.vue';
 import SignUpForm from '@/components/auth/SignUpForm.vue';
 import CommunitySystem from '@/components/community/CommunitySystem.vue';
 import ServiceIntroModal from '@/components/common/ServiceIntroModal.vue';
+import TeamIntroModal from '@/components/common/TeamIntroModal.vue';
 
 gsap.registerPlugin(Observer);
 
@@ -66,6 +67,7 @@ const showEditNicknameModal = ref(false);
 const showGuideModal = ref(false);
 const showCommunityModal = ref(false);
 const isIntroModalOpen = ref(false);
+const showTeamModal = ref(false);
 
 const isErrorModalOpen = ref(false);
 const errorMessage = ref('');
@@ -81,7 +83,7 @@ const isSignUpInputVisible = ref(false);
 
 // [핵심 로직 추가] 어떤 모달이라도 열려있는지 감지
 const isAnyModalOpen = computed(() => {
-  return showCreateModal.value || showJoinModal.value || showGuideModal.value || showCommunityModal.value || showEditNicknameModal.value || isIntroModalOpen.value;
+  return showCreateModal.value || showJoinModal.value || showGuideModal.value || showCommunityModal.value || showEditNicknameModal.value || isIntroModalOpen.value || showTeamModal.value;
 });
 
 // --- 2. 룰렛 변수 ---
@@ -146,7 +148,7 @@ const playTickAnimation = (direction: number) => {
 // 메인 루프
 const updateLoop = () => {
   if (!isInteracting) {
-      targetRotation -= 0.1; 
+      targetRotation -= 0.08; 
   }
   const diff = targetRotation - currentRotation;
   currentRotation += diff * 0.08;
@@ -280,6 +282,7 @@ const handleAction = (action: string) => {
   if (action === 'guide') showGuideModal.value = true;
   if (action === 'intro') isIntroModalOpen.value = true;
   if (action === 'community') showCommunityModal.value = true;
+  if (action === 'team') showTeamModal.value = true;
 };
 
 const closeEditNickname = () => { showEditNicknameModal.value = false; };
@@ -530,8 +533,10 @@ onUnmounted(() => {
                                         </button>
                                     </div>
                                     <div v-else class="info-msg">
-                                        <span class="material-symbols-outlined text-4xl text-leaf-green mb-2">touch_app</span>
-                                        <p>Coming Soon!</p>
+                                         <button @click.stop="handleAction('team')" class="cartoon-btn"
+                                            :style="{ backgroundColor: item.color, boxShadow: `0 5px 0 ${item.darkColor}` }">
+                                            <span class="material-symbols-outlined text-3xl">group</span>팀 소개
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -583,6 +588,7 @@ onUnmounted(() => {
     <GameGuideModal v-if="showGuideModal" @close="showGuideModal = false" />
     <CommunitySystem v-if="showCommunityModal" @close="showCommunityModal = false" />
     <ServiceIntroModal v-if="isIntroModalOpen" @close="isIntroModalOpen = false" />
+    <TeamIntroModal v-if="showTeamModal" @close="showTeamModal = false" />
     <transition name="intro-fade">
       <div v-if="showEditNicknameModal" class="edit-nickname-backdrop" @click.self="closeEditNickname">
         <div class="edit-nickname-modal">
