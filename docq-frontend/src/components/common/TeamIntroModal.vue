@@ -39,7 +39,7 @@ const teamMembers = [
     role: "UI/UX Engineer",
     email: "dhckdals1104@gmail.com",
     photo: "/teamimages/changmin.jpeg",
-    keywords: ["UI Engineering", "3D Scene UI", "Responsive Design", "Interactive Motion"],
+    keywords: ["UI Engineering", "UX Direction", "3D Scene UI", "Immersive Design"],
     icon: "palette",
     color: "#42a5f5"
   },
@@ -67,7 +67,7 @@ const copyEmail = (email: string) => {
   if (!email || email === '[EMAIL_ADDRESS]') return;
   
   navigator.clipboard.writeText(email).then(() => {
-    alertMessage.value = `${email}이(가) 복사되었습니다!`;
+    alertMessage.value = `이메일이 복사되었습니다!`;
     alertType.value = 'success';
     showAlert.value = true;
   }).catch(() => {
@@ -96,7 +96,7 @@ onUnmounted(() => {
   <div class="fixed inset-0 z-[100] flex items-center justify-center font-jua">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="$emit('close')"></div>
 
-    <div class="relative w-[95vw] max-w-[1600px] h-[540px] bg-[#fff8e1] border-[6px] border-[#5d4037] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-pop-in">
+    <div class="relative w-[95vw] max-w-[1600px] h-[560px] bg-[#fff8e1] border-[6px] border-[#5d4037] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-pop-in">
       
       <header class="!pt-8 !pb-4 text-center shrink-0">
         <h2 class="text-4xl text-[#5d4037] font-black drop-shadow-sm">TEAM DOCQ</h2>
@@ -110,17 +110,16 @@ onUnmounted(() => {
             
             <div class="absolute top-0 left-0 right-0 h-3" :style="{ backgroundColor: member.color }"></div>
             
-            <div class="w-28 h-28 bg-[#f5f5f5] border-4 border-[#d7ccc8] rounded-2xl mb-3 flex items-center justify-center overflow-hidden shrink-0">
+            <div class="w-28 h-28 bg-[#f5f5f5] border-4 border-[#d7ccc8] rounded-2xl !m-3 flex items-center justify-center overflow-hidden shrink-0">
                <img v-if="member.photo" :src="member.photo" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                <span v-else class="material-symbols-outlined text-5xl text-[#d7ccc8]">person</span>
             </div>
-
             <span class="!px-3 !py-1 rounded-full text-white font-bold text-xs mb-4" :style="{ backgroundColor: member.color }">
               {{ member.role }}
             </span>
             <h3 class="text-2xl font-black text-[#5d4037] !mb-1">{{ member.name }}</h3>
             
-            <div class="w-full flex justify-center !py-1 !mb-4">
+            <div class="w-full flex justify-center !py-1 !mb-2">
                <div class="w-full flex items-center justify-center bg-[#f5f5f5] border border-[#d7ccc8] !py-1 rounded-lg">
                   <span class="text-xs text-[#5d4037] font-bold truncate">{{ member.email }}</span>
                </div>
