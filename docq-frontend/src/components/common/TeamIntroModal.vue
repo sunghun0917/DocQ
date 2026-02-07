@@ -21,7 +21,7 @@ const teamMembers = [
     role: "DevOps/Cloud Engineer",
     email: "a771001o5o@gmail.com",
     photo: "/teamimages/sunghoon.jpg",
-    keywords: ["CI/CD Pipeline", "Infrastructure as Code", "Dockerized Architecture", "Zero-downtime"],
+    keywords: ["GPU-Aware AI Scheduling","CI/CD Pipeline", "Infrastructure as Code", "Dockerized Architecture"],
     icon: "dns",
     color: "#7e57c2"
   },
