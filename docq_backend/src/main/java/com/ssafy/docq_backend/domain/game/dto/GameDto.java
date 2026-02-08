@@ -26,7 +26,7 @@ public class GameDto {
     public static class JoinRequest {
         private String roomId;
         private String nickname;
-        private String userId;
+        private String playerId;
     }
 
     @Getter
@@ -36,7 +36,7 @@ public class GameDto {
     @AllArgsConstructor
     public static class LeaveRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
     }
 
     @Getter
@@ -46,7 +46,7 @@ public class GameDto {
     @AllArgsConstructor
     public static class EndGameRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
     }
 
     @Getter
@@ -56,7 +56,7 @@ public class GameDto {
     @AllArgsConstructor
     public static class RestartRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
     }
 
     @Getter
@@ -66,7 +66,7 @@ public class GameDto {
     @AllArgsConstructor
     public static class ReadyRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
         private boolean isReady;
     }
 
@@ -86,7 +86,7 @@ public class GameDto {
     @AllArgsConstructor
     public static class AckRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
         private AckType ackType;
         private Long quizId;
         private Integer round;
@@ -99,7 +99,7 @@ public class GameDto {
     public static class GameStateResponse {
         private RoomStatus state;
         private Integer round;
-        private String currentTurnUserId;
+        private String currentTurnPlayerId;
         private List<PlayerInfo> players;
         // turnOrder/cardDrawResult can be removed or kept depending on UI needs.
         // Keeping them for "StarGame" transition context.
@@ -115,15 +115,27 @@ public class GameDto {
     @ToString
     public static class AvatarSelectRequest {
         private String roomId;
-        private String userId;
+        private String playerId;
         private Integer avatarId;
+    }
+
+    /** 대기실 퀵 메시지 (채팅) */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class ChatRequest {
+        private String roomId;
+        private String playerId;
+        private String message;
     }
 
     @Getter
     @Builder
     @AllArgsConstructor
     public static class AvatarUpdateResponse {
-        private String userId;
+        private String playerId;
         private Integer avatarId;
     }
 
@@ -132,7 +144,7 @@ public class GameDto {
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class PlayerInfo {
-        private String userId;
+        private String playerId;
         private String nickname;
         private boolean isHost;
         private boolean connected;
@@ -172,6 +184,7 @@ public class GameDto {
         private long timeLimit; // ms
         private OffsetDateTime quizStartTime;
         private Long quizStartTimeMs;
+        private String quizStyle; // e.g. "MIRROR"
     }
 
     @Getter
@@ -198,7 +211,7 @@ public class GameDto {
     @ToString
     public static class SubmitAnswer {
         private String roomId;
-        private String userId;
+        private String playerId;
         private Long quizId;
         private String answer; // or index
 
@@ -213,7 +226,7 @@ public class GameDto {
         private Long quizId;
         private String correctAnswer;
         private boolean isTurnUserCorrect;
-        private String winnerUserId;
+        private String winnerPlayerId;
         private String rouletteType; // BUFF, MOVE, NONE
         private Integer rouletteValue;
     }
@@ -222,7 +235,7 @@ public class GameDto {
     @Builder
     @AllArgsConstructor
     public static class MoveInfo {
-        private String userId;
+        private String playerId;
         private int startPosition;
         private int endPosition;
         private List<MoveAction> moveProcess;
@@ -238,7 +251,7 @@ public class GameDto {
         private String effectType; // for TILE_EFFECT
         private Integer before;
         private Integer after;
-        private String targetUserId; // For CATCH effect
+        private String targetPlayerId; // For CATCH effect
     }
 
     @Getter
@@ -246,7 +259,7 @@ public class GameDto {
     @AllArgsConstructor
     public static class FinishResponse {
         private String type; // "FINISH"
-        private String winnerUserId;
+        private String winnerPlayerId;
         private List<FinishRank> rankings;
     }
 
@@ -254,7 +267,7 @@ public class GameDto {
     @Builder
     @AllArgsConstructor
     public static class FinishRank {
-        private String userId;
+        private String playerId;
         private String nickname;
         private int position;
         private int remaining;

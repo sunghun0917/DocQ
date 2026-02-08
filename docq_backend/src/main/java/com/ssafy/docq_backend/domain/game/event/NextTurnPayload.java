@@ -13,6 +13,6 @@ import lombok.Setter;
 @AllArgsConstructor
 public class NextTurnPayload {
     private Long quizId;
-    private String turnUserId;
+    private String turnPlayerId;
     private boolean finishPlanned;
 }

@@ -23,7 +23,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Room {
     private String id;
-    private String hostId;
+    private String hostPlayerId;
     private String title;
     private int capacity;
     private boolean isPrivate;
@@ -42,7 +42,7 @@ public class Room {
     @Builder.Default
     private Set<String> readyPlayers = ConcurrentHashMap.newKeySet();
 
-    // UserId -> AvatarId
+    // playerId -> AvatarId
     @Builder.Default
     private Map<String, Integer> playerAvatars = new ConcurrentHashMap<>();
 
@@ -53,14 +53,14 @@ public class Room {
     @Builder.Default
     private List<String> turnOrder = new ArrayList<>();
 
-    // userId -> cardValue (1~100)
+    // playerId -> cardValue (1~100)
     @Builder.Default
     private Map<String, Integer> cardDrawResult = new HashMap<>();
 
     @Builder.Default
     private int round = 1;
 
-    private String currentTurnUserId;
+    private String currentTurnPlayerId;
 
     // --- Quiz State ---
     private Long currentQuizId;
@@ -73,7 +73,7 @@ public class Room {
     @Builder.Default
     private boolean ghostPhaseTimerScheduled = false;
 
-    // userId -> PlayerState
+    // playerId -> PlayerState
     @Builder.Default
     private Map<String, PlayerState> playerStates = new ConcurrentHashMap<>();
 
@@ -84,7 +84,7 @@ public class Room {
     @Builder.Default
     private int quizCursor = 0;
 
-    // MiniGame State: UserId -> Score
+    // MiniGame State: playerId -> Score
     @Builder.Default
     private Map<String, Integer> miniGameScores = new ConcurrentHashMap<>();
 
@@ -92,26 +92,38 @@ public class Room {
     @Builder.Default
     private Set<String> playedMiniGames = ConcurrentHashMap.newKeySet();
 
-    public void addPlayer(String userId) {
-        players.add(userId);
+    // Pending PLUS_THREE move (player ID waiting for ACK to apply +3 move)
+    private String pendingPlusThreePlayerId;
+
+    // Quiz Generation State
+    @Builder.Default
+    private volatile boolean isGenerating = false;
+
+    @Builder.Default
+    private AiStatus aiStatus = AiStatus.IDLE;
+
+    private String aiJobId;
+
+    public void addPlayer(String playerId) {
+        players.add(playerId);
         this.currentCount = players.size();
     }
 
-    public void removePlayer(String userId) {
-        players.remove(userId);
-        readyPlayers.remove(userId); // 나가면 준비 상태도 해제
+    public void removePlayer(String playerId) {
+        players.remove(playerId);
+        readyPlayers.remove(playerId); // 나가면 준비 상태도 해제
         this.currentCount = players.size();
     }
 
-    public boolean isReady(String userId) {
-        return userId.equals(hostId) || readyPlayers.contains(userId);
+    public boolean isReady(String playerId) {
+        return playerId.equals(hostPlayerId) || readyPlayers.contains(playerId);
     }
 
-    public void setReady(String userId, boolean ready) {
+    public void setReady(String playerId, boolean ready) {
         if (ready) {
-            readyPlayers.add(userId);
+            readyPlayers.add(playerId);
         } else {
-            readyPlayers.remove(userId);
+            readyPlayers.remove(playerId);
         }
     }
 }

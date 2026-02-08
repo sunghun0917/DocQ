@@ -23,7 +23,7 @@ public class WebSocketEventListener implements ApplicationListener<SessionDiscon
         if (info == null) {
             return;
         }
-        log.info("Disconnect detected. sessionId={}, roomId={}, userId={}", sessionId, info.getRoomId(), info.getUserId());
-        gameService.leaveGame(new GameDto.LeaveRequest(info.getRoomId(), info.getUserId()));
+        log.info("Disconnect detected. sessionId={}, roomId={}, playerId={}", sessionId, info.getRoomId(), info.getPlayerId());
+        gameService.leaveGame(new GameDto.LeaveRequest(info.getRoomId(), info.getPlayerId()));
     }
 }

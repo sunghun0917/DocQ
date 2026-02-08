@@ -51,8 +51,8 @@ testAPI.testFullFlow()
 // 1. 사용자 로그인
 testAPI.testUserLogin()
 
-// 2. 방 생성 (userId 필요)
-testAPI.testCreateRoom('발급받은-userId')
+// 2. 방 생성 (로그인 세션의 playerId로 호스트 지정)
+testAPI.testCreateRoom()
 
 // 3. 방 조회
 testAPI.testGetRoomByInviteCode('A1B2')

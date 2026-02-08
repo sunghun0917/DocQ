@@ -3,10 +3,11 @@ package com.ssafy.docq_backend.domain.game.service;
 import com.ssafy.docq_backend.domain.game.entity.PlayerState;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
+import com.ssafy.docq_backend.domain.room.entity.AiStatus;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.user.entity.User;
-import com.ssafy.docq_backend.domain.user.repository.UserRepository;
+import com.ssafy.docq_backend.domain.player.entity.Player;
+import com.ssafy.docq_backend.domain.player.repository.PlayerRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import com.ssafy.docq_backend.domain.game.dto.QuizDto;
 import com.ssafy.docq_backend.domain.game.entity.Quiz;
 import com.ssafy.docq_backend.domain.minigame.service.MiniGameService;
+import com.ssafy.docq_backend.domain.quiz.dto.QuizApiDto;
+import com.ssafy.docq_backend.domain.quiz.service.QuizService;
 import com.ssafy.docq_backend.global.client.AiClient;
+import com.ssafy.docq_backend.global.client.dto.AiDto;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -45,9 +49,10 @@ import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 public class GameService {
 
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
+    private final PlayerRepository playerRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final AiClient aiClient;
+    private final QuizService quizService;
     private final ObjectProvider<MiniGameService> miniGameServiceProvider;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final GameEventStore gameEventStore;
@@ -58,53 +63,34 @@ public class GameService {
     private static final int DEFAULT_QUIZ_COUNT = 30;
 
     private static final long TURN_PREP_DELAY_MS = 500;
+    private static final long ITEM_USAGE_NOTICE_DELAY_MS = 2000; // 아이템 사용 알림 표시 시간 보장
     private static final long INTRO_CAMERA_DURATION_MS = 10000;
     private static final long ACK_FALLBACK_TIMEOUT_MS = 3000;
-    private static final long MINIGAME_RESUME_FALLBACK_MS = 8000;
+    private static final long MINIGAME_RESUME_FALLBACK_MS = 5000;
+    /** SWAP_POSITION: 즉시 교환 애니메이션 후 다음 퀴즈까지 짧은 delay (알림 1.5초 + 버퍼) */
+    private static final long SWAP_RESUME_DELAY_MS = 3500;
     private static final long ROULETTE_FALLBACK_MS = 7000;
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
-    private static final long QUIZ_TIME_LIMIT_MS = 7000;
+    private static final long QUIZ_TIME_LIMIT_MS = 10000;
 
-    public void generateQuizFromPdf(String roomId, MultipartFile pdfFile) {
-        log.info("Generating Quiz for Room {}: {}", roomId, pdfFile.getOriginalFilename());
-
-        // [ADD] 퀴즈 생성 시작 알림 (프론트엔드 대기 화면 전환용)
-        Map<String, Object> startMsg = new HashMap<>();
-        startMsg.put("type", "QUIZ_GENERATING");
-        startMsg.put("fileName", pdfFile.getOriginalFilename());
-        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+    public void requestQuizGeneration(String roomId, MultipartFile pdfFile) {
 
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+                .orElseThrow();
 
-        // AI Client 호출
-        List<QuizDto.Response> quizResponses = aiClient.generateQuiz(pdfFile);
-        log.info("Received {} quizzes from AI: {}", quizResponses.size(), quizResponses);
-
-        // Quiz 엔티티 로 변환 및 저장
-        // Quiz 엔티티 로 변환 및 저장
-        List<Quiz> quizzes = new ArrayList<>();
-        for (int i = 0; i < quizResponses.size(); i++) {
-            QuizDto.Response dto = quizResponses.get(i);
-            quizzes.add(Quiz.builder()
-                    .quizId((long) (i + 1)) // 1-based sequential ID
-                    .question(dto.getQuestion())
-                    .options(dto.getOptions())
-                    .answerIndex(dto.getAnswerIndex())
-                    .answerText(dto.getAnswerText())
-                    .build());
+        if (room.getAiStatus() == AiStatus.QUEUED ||
+                room.getAiStatus() == AiStatus.PROCESSING) {
+            throw new IllegalStateException("AI already running");
         }
 
-        room.setQuizList(quizzes);
+        AiDto.JobResponse job = aiClient.requestQuizJob(pdfFile);
 
-        // 완료 알림 브로드캐스트
-        Map<String, Object> message = new HashMap<>();
-        message.put("type", "QUIZ_GENERATED");
-        message.put("count", quizzes.size());
+        room.setAiJobId(job.getJobId());
+        room.setAiStatus(AiStatus.QUEUED);
 
-        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+        roomRepository.save(room);
     }
 
     public int setDefaultQuizzes(String roomId, String type) {
@@ -122,14 +108,14 @@ public class GameService {
         if ("common".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("common.json"));
         }
-        if ("nonsense".equals(type) || "mixed".equals(type)) {
-            loadedQuizzes.addAll(loadQuizzesFromJson("nonsense.json"));
-        }
         if ("movie".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("movie.json"));
         }
         if ("sports".equals(type) || "mixed".equals(type)) {
             loadedQuizzes.addAll(loadQuizzesFromJson("sports.json"));
+        }
+        if ("history".equals(type) || "mixed".equals(type)) {
+            loadedQuizzes.addAll(loadQuizzesFromJson("history.json"));
         }
 
         if (loadedQuizzes.isEmpty()) {
@@ -168,8 +154,80 @@ public class GameService {
         return quizzes.size();
     }
 
+    public int setQuizFromDb(String roomId, Long quizId) {
+        // [ADD] 퀴즈 생성 시작 알림
+        Map<String, Object> startMsg = new HashMap<>();
+        startMsg.put("type", "QUIZ_GENERATING");
+        startMsg.put("quizId", quizId);
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", startMsg);
+
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        com.ssafy.docq_backend.domain.quiz.entity.Quiz dbQuiz = quizService.findById(quizId);
+        List<Map<String, Object>> quizList = dbQuiz.getQuizList();
+
+        if (quizList == null || quizList.isEmpty()) {
+            throw new DocqException(ErrorCode.QUIZ_NOT_FOUND); // Or Empty
+        }
+
+        // [MOD] 퀴즈 순서 섞기
+        List<Map<String, Object>> shuffledList = new ArrayList<>(quizList);
+        Collections.shuffle(shuffledList);
+
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < shuffledList.size(); i++) {
+            Map<String, Object> qMap = shuffledList.get(i);
+            String question = (String) qMap.get("question");
+            List<String> options = (List<String>) qMap.get("options");
+            int answerIndex = (int) qMap.getOrDefault("answerIndex", -1);
+            String answerText = (String) qMap.get("answerText"); // nullable
+
+            // answerText가 없으면 옵션에서 추출 (optionally)
+            if (answerText == null && answerIndex >= 0 && answerIndex < options.size()) {
+                answerText = options.get(answerIndex);
+            }
+
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1))
+                    .question(question)
+                    .options(options)
+                    .answerIndex(answerIndex)
+                    .answerText(answerText)
+                    .build());
+        }
+
+        room.setQuizList(quizzes);
+        roomRepository.save(room);
+
+        // Broadcast update
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+        // 제목도 같이 보내주면 좋을 수 있음
+        message.put("quizTitle", dbQuiz.getQuizTitle());
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", message);
+
+        return quizzes.size();
+    }
+
     public void resetQuiz(String roomId) {
-        // [MOD] 퀴즈 리셋 알림 -> "대기 중" 상태로 전환
+        // [MOD] 퀴즈 리셋 알림 & AI 작업 취소 처리
+        try {
+            roomRepository.findById(roomId).ifPresent(room -> {
+                // AI 작업 중이었다면 상태 초기화 -> 이후 콜백이 와도 findByAiJobId에서 찾을 수 없게 됨
+                if (room.getAiStatus() == AiStatus.PROCESSING || room.getAiStatus() == AiStatus.QUEUED) {
+                    log.info("Resetting quiz generation for room {}. Clearing JobId {}", roomId, room.getAiJobId());
+                    room.setAiJobId(null);
+                    room.setAiStatus(AiStatus.IDLE);
+                    roomRepository.save(room);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Error processing resetQuiz for room {}: {}", roomId, e.getMessage());
+        }
+
+        // "대기 중" 상태로 전환 메시지 전송
         Map<String, Object> resetMsg = new HashMap<>();
         resetMsg.put("type", "QUIZ_RESET");
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", resetMsg);
@@ -211,39 +269,38 @@ public class GameService {
     }
 
     public void joinGame(GameDto.JoinRequest request) {
-        log.info("Join Request: roomId={}, userId={}, nickname={}", request.getRoomId(), request.getUserId(),
+        log.info("Join Request: roomId={}, userId={}, nickname={}", request.getRoomId(), request.getPlayerId(),
                 request.getNickname());
 
         try {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new DocqException(ErrorCode.USER_NOT_FOUND));
+            // playerId는 웹소켓 연결 시 세션에서 이미 검증됨 (별도 검증 불필요)
 
-            if (!room.getPlayers().contains(request.getUserId())) {
+            if (!room.getPlayers().contains(request.getPlayerId())) {
                 if (room.getCurrentCount() >= room.getCapacity()) {
-                    sendError(request.getUserId(), ErrorCode.ROOM_FULL);
+                    sendError(request.getPlayerId(), ErrorCode.ROOM_FULL);
                     return;
                 }
                 if (room.getStatus() != RoomStatus.WAITING) {
-                    sendError(request.getUserId(), ErrorCode.GAME_ALREADY_STARTED);
+                    sendError(request.getPlayerId(), ErrorCode.GAME_ALREADY_STARTED);
                     return;
                 }
-                room.addPlayer(request.getUserId());
+                room.addPlayer(request.getPlayerId());
                 roomRepository.save(room); // Persistence Fix
             }
             broadcastGameState(room);
         } catch (DocqException e) {
-            sendError(request.getUserId(), e.getErrorCode());
+            sendError(request.getPlayerId(), e.getErrorCode());
         } catch (Exception e) {
             log.error("Unknown error in joinGame", e);
-            sendError(request.getUserId(), ErrorCode.SERVER_ERROR);
+            sendError(request.getPlayerId(), ErrorCode.SERVER_ERROR);
         }
     }
 
     public void leaveGame(GameDto.LeaveRequest request) {
-        log.info("Leave Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        log.info("Leave Request: roomId={}, userId={}", request.getRoomId(), request.getPlayerId());
 
         try {
             Room room = roomRepository.findById(request.getRoomId())
@@ -252,8 +309,8 @@ public class GameService {
                 return;
             }
 
-            String userId = request.getUserId();
-            boolean wasHost = userId.equals(room.getHostId());
+            String userId = request.getPlayerId();
+            boolean wasHost = userId.equals(room.getHostPlayerId());
             boolean removed = false;
 
             if (room.getPlayers().contains(userId)) {
@@ -266,12 +323,12 @@ public class GameService {
                 room.getQuizAnswers().remove(userId);
                 room.getTurnOrder().remove(userId);
 
-                if (userId.equals(room.getCurrentTurnUserId())) {
+                if (userId.equals(room.getCurrentTurnPlayerId())) {
                     if (!room.getTurnOrder().isEmpty()) {
                         int nextIndex = removedIndex >= room.getTurnOrder().size() ? 0 : Math.max(removedIndex, 0);
-                        room.setCurrentTurnUserId(room.getTurnOrder().get(nextIndex));
+                        room.setCurrentTurnPlayerId(room.getTurnOrder().get(nextIndex));
                     } else {
-                        room.setCurrentTurnUserId(null);
+                        room.setCurrentTurnPlayerId(null);
                     }
                 }
             }
@@ -308,7 +365,7 @@ public class GameService {
     }
 
     public void readyGame(GameDto.ReadyRequest request) {
-        log.info("Ready Request: roomId={}, userId={}, isReady={}", request.getRoomId(), request.getUserId(),
+        log.info("Ready Request: roomId={}, userId={}, isReady={}", request.getRoomId(), request.getPlayerId(),
                 request.isReady());
 
         try {
@@ -316,25 +373,25 @@ public class GameService {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
-            if (!room.getPlayers().contains(request.getUserId())) {
-                log.warn("User {} not found in room {} players: {}", request.getUserId(), request.getRoomId(),
+            if (!room.getPlayers().contains(request.getPlayerId())) {
+                log.warn("User {} not found in room {} players: {}", request.getPlayerId(), request.getRoomId(),
                         room.getPlayers());
-                sendError(request.getUserId(), ErrorCode.USER_NOT_FOUND);
+                sendError(request.getPlayerId(), ErrorCode.USER_NOT_FOUND);
                 return;
             }
-            log.info("Setting ready state for user {} to {}", request.getUserId(), request.isReady());
+            log.info("Setting ready state for user {} to {}", request.getPlayerId(), request.isReady());
 
-            room.setReady(request.getUserId(), request.isReady());
+            room.setReady(request.getPlayerId(), request.isReady());
             roomRepository.save(room); // Persistence Fix
 
             log.info("Broadcasting game state after ready update");
             broadcastGameState(room);
         } catch (DocqException e) {
             log.error("DocqException in readyGame: {}", e.getMessage());
-            sendError(request.getUserId(), e.getErrorCode());
+            sendError(request.getPlayerId(), e.getErrorCode());
         } catch (Exception e) {
             log.error("Unknown error in readyGame", e);
-            sendError(request.getUserId(), ErrorCode.SERVER_ERROR);
+            sendError(request.getPlayerId(), ErrorCode.SERVER_ERROR);
         }
     }
 
@@ -345,7 +402,7 @@ public class GameService {
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
             // 권한 체크: 방장만 시작 가능
-            if (!userId.equals(room.getHostId())) {
+            if (!userId.equals(room.getHostPlayerId())) {
                 sendError(userId, ErrorCode.ACCESS_DENIED);
                 return;
             }
@@ -401,15 +458,15 @@ public class GameService {
     }
 
     public void endGame(GameDto.EndGameRequest request) {
-        log.info("End Game Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        log.info("End Game Request: roomId={}, userId={}", request.getRoomId(), request.getPlayerId());
         try {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElse(null);
             if (room == null)
                 return;
 
-            if (!request.getUserId().equals(room.getHostId())) {
-                sendError(request.getUserId(), ErrorCode.ACCESS_DENIED);
+            if (!request.getPlayerId().equals(room.getHostPlayerId())) {
+                sendError(request.getPlayerId(), ErrorCode.ACCESS_DENIED);
                 return;
             }
 
@@ -420,15 +477,15 @@ public class GameService {
     }
 
     public void restartGame(GameDto.RestartRequest request) {
-        log.info("Restart Request: roomId={}, userId={}", request.getRoomId(), request.getUserId());
+        log.info("Restart Request: roomId={}, userId={}", request.getRoomId(), request.getPlayerId());
         try {
             Room room = roomRepository.findById(request.getRoomId())
                     .orElse(null);
             if (room == null)
                 return;
 
-            if (!request.getUserId().equals(room.getHostId())) {
-                sendError(request.getUserId(), ErrorCode.ACCESS_DENIED);
+            if (!request.getPlayerId().equals(room.getHostPlayerId())) {
+                sendError(request.getPlayerId(), ErrorCode.ACCESS_DENIED);
                 return;
             }
 
@@ -448,13 +505,13 @@ public class GameService {
         room.setRound(1);
         // 첫 번째 턴 유저
         if (!room.getTurnOrder().isEmpty()) {
-            room.setCurrentTurnUserId(room.getTurnOrder().get(0));
+            room.setCurrentTurnPlayerId(room.getTurnOrder().get(0));
         }
 
         // 플레이어별 상태 초기화
         for (String pid : room.getPlayers()) {
             PlayerState ps = PlayerState.builder()
-                    .userId(pid)
+                    .playerId(pid)
                     .score(0)
                     .position(START_POSITION)
                     .hasBuff(null)
@@ -464,13 +521,16 @@ public class GameService {
 
         // 맵 특수 효과 배치 (Random 5 tiles with "TILE_X2")
         room.getMapEvents().clear();
+        // [TEST] Force specific tiles for testing PLUS_THREE combo
+        room.getMapEvents().clear();
         Random random = new Random();
         Set<Integer> eventTiles = new HashSet<>();
         int eventMinPosition = START_POSITION + 1;
         int eventMaxPosition = TARGET_POSITION - 1;
 
         while (eventTiles.size() < 5) {
-            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) + eventMinPosition;
+            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) +
+                    eventMinPosition;
             if (eventTiles.add(pos)) {
                 room.getMapEvents().put(pos, "TILE_X2");
             }
@@ -503,11 +563,11 @@ public class GameService {
         log.info("Turn Order determined: {}", players);
     }
 
-    private void broadcastGameState(Room room) {
+    public void broadcastGameState(Room room) {
         List<GameDto.PlayerInfo> playerInfos = room.getPlayers().stream()
                 .map(userId -> {
-                    User u = userRepository.findById(userId).orElse(null);
-                    if (u == null)
+                    Player p = playerRepository.findById(userId).orElse(null);
+                    if (p == null)
                         return null;
 
                     // 게임 상태 조회 (없으면 null)
@@ -519,11 +579,11 @@ public class GameService {
                     Integer avatarId = room.getPlayerAvatars().get(userId);
 
                     return GameDto.PlayerInfo.builder()
-                            .userId(u.getId())
-                            .nickname(u.getNickname())
-                            .isHost(u.getId().equals(room.getHostId()))
+                            .playerId(p.getPlayerId())
+                            .nickname(p.getNickname())
+                            .isHost(p.getPlayerId().equals(room.getHostPlayerId()))
                             .connected(true)
-                            .isReady(room.isReady(u.getId()))
+                            .isReady(room.isReady(p.getPlayerId()))
                             .score(score)
                             .position(position)
                             .hasBuff(buff)
@@ -534,7 +594,7 @@ public class GameService {
                 .collect(Collectors.toList());
 
         Integer round = room.getStatus() == RoomStatus.WAITING ? null : room.getRound();
-        String currentTurnUserId = room.getStatus() == RoomStatus.WAITING ? null : room.getCurrentTurnUserId();
+        String currentTurnUserId = room.getStatus() == RoomStatus.WAITING ? null : room.getCurrentTurnPlayerId();
         List<String> turnOrder = room.getStatus() == RoomStatus.WAITING ? null : room.getTurnOrder();
         Map<String, Integer> cardDrawResult = room.getStatus() == RoomStatus.WAITING ? null : room.getCardDrawResult();
         Map<Integer, String> mapEvents = room.getStatus() == RoomStatus.WAITING ? null : room.getMapEvents();
@@ -542,7 +602,7 @@ public class GameService {
         GameDto.GameStateResponse response = GameDto.GameStateResponse.builder()
                 .state(room.getStatus())
                 .round(round)
-                .currentTurnUserId(currentTurnUserId)
+                .currentTurnPlayerId(currentTurnUserId)
                 .players(playerInfos)
                 .turnOrder(turnOrder)
                 .cardDrawResult(cardDrawResult)
@@ -568,7 +628,7 @@ public class GameService {
 
     private void resetGameState(Room room) {
         room.setRound(1);
-        room.setCurrentTurnUserId(null);
+        room.setCurrentTurnPlayerId(null);
         room.setCurrentQuizId(null);
         room.setQuizStartTimeMs(null);
         room.setGhostOptionsRevealed(false);
@@ -583,7 +643,7 @@ public class GameService {
 
         for (String pid : room.getPlayers()) {
             PlayerState ps = PlayerState.builder()
-                    .userId(pid)
+                    .playerId(pid)
                     .score(0)
                     .position(START_POSITION)
                     .hasBuff(null)
@@ -608,10 +668,10 @@ public class GameService {
                 return;
             }
             Room room = roomRepository.findById(request.getRoomId()).orElse(null);
-            if (room == null || request.getUserId() == null) {
+            if (room == null || request.getPlayerId() == null) {
                 return;
             }
-            if (!room.getPlayers().contains(request.getUserId())) {
+            if (!room.getPlayers().contains(request.getPlayerId())) {
                 return;
             }
 
@@ -622,7 +682,7 @@ public class GameService {
             }
 
             long count = ackStore.addAckAndCount(room.getId(), resolution.ackType, resolution.keyId,
-                    request.getUserId());
+                    request.getPlayerId());
             int expected = resolveExpectedAckCount(room);
             if (count < expected) {
                 return;
@@ -635,7 +695,7 @@ public class GameService {
 
     private void handlePlayerExitAcks(Room room, String userId) {
         int expected = resolveExpectedAckCount(room);
-        for (AckStore.AckKeyInfo info : ackStore.removeUserFromRoomAcks(room.getId(), userId)) {
+        for (AckStore.AckKeyInfo info : ackStore.removePlayerFromRoomAcks(room.getId(), userId)) {
             if (info.getCount() < expected) {
                 continue;
             }
@@ -686,6 +746,23 @@ public class GameService {
     }
 
     private void advanceAfterAck(Room room, AckResolution resolution, Integer roundOverride) {
+        // [MOD] 이미 게임이 끝났다면 ACK 처리 중단
+        if (room.getStatus() == RoomStatus.FINISHED) {
+            log.info("Ignored ACK processing because room {} is FINISHED", room.getId());
+            return;
+        }
+        // PLUS_THREE: 첫 ACK에서는 이동만 적용하고 ACK 완료 처리하지 않음.
+        // 이동 애니메이션 후 두 번째 BUFF_ROULETTE_COMPLETE에서 완료 처리 → RESUME_AFTER_MINIGAME 스케줄.
+        if (resolution.ackType == GameDto.AckType.MINIGAME_COMPLETE) {
+            String pendingPlayerId = room.getPendingPlusThreePlayerId();
+            if (pendingPlayerId != null) {
+                room.setPendingPlusThreePlayerId(null);
+                roomRepository.save(room);
+                miniGameServiceProvider.getObject().applyPlusThreeMove(room, pendingPlayerId);
+                return;
+            }
+        }
+
         if (!ackStore.tryMarkAckComplete(room.getId(), resolution.ackType, resolution.keyId)) {
             return;
         }
@@ -714,7 +791,11 @@ public class GameService {
                 ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                         .round(roundOverride != null ? roundOverride : room.getRound())
                         .build();
-                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload, 0);
+                // 아이템 사용 알림 표시 시간 보장 (아이템 사용 후 재개 시)
+                // useItem()에서 scheduleResumeAfterMiniGame() 호출 시에도 fallback이 있지만,
+                // ACK로 즉시 재개되는 경우를 대비해 최소 지연 시간 추가
+                gameEventStore.schedule(room.getId(), GameEventType.RESUME_AFTER_MINIGAME, payload,
+                        ITEM_USAGE_NOTICE_DELAY_MS);
             }
             case BUFF_ROULETTE_COMPLETE -> {
                 // handled via MINIGAME_COMPLETE normalization
@@ -766,12 +847,12 @@ public class GameService {
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
             // Update Avatar
-            room.getPlayerAvatars().put(request.getUserId(), request.getAvatarId());
-            log.info("User {} selected avatar {}", request.getUserId(), request.getAvatarId());
+            room.getPlayerAvatars().put(request.getPlayerId(), request.getAvatarId());
+            log.info("User {} selected avatar {}", request.getPlayerId(), request.getAvatarId());
 
             // Broadcast Update (Lightweight)
             GameDto.AvatarUpdateResponse response = GameDto.AvatarUpdateResponse.builder()
-                    .userId(request.getUserId())
+                    .playerId(request.getPlayerId())
                     .avatarId(request.getAvatarId())
                     .build();
 
@@ -780,6 +861,23 @@ public class GameService {
         } catch (Exception e) {
             log.error("Error selecting avatar", e);
         }
+    }
+
+    /**
+     * 대기실 퀵 메시지 브로드캐스트 (채팅)
+     */
+    public void sendChat(GameDto.ChatRequest request) {
+        if (request == null || request.getRoomId() == null || request.getPlayerId() == null
+                || request.getMessage() == null || request.getMessage().isBlank()) {
+            return;
+        }
+        roomRepository.findById(request.getRoomId()).ifPresent(room -> {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("playerId", request.getPlayerId());
+            payload.put("message", request.getMessage().trim());
+            messagingTemplate.convertAndSend("/topic/game/" + request.getRoomId() + "/chat", payload);
+            log.debug("Chat from {} in room {}: {}", request.getPlayerId(), request.getRoomId(), request.getMessage());
+        });
     }
 
     // --- Quiz Logic ---
@@ -848,10 +946,31 @@ public class GameService {
 
             // Broadcast Quiz
             messagingTemplate.convertAndSend("/topic/game/" + roomId + "/quiz", quizForGhosts);
-            if (room.getCurrentTurnUserId() != null) {
+            if (room.getCurrentTurnPlayerId() != null) {
+                // 퀴즈 방해(DEBUFF_MIRROR) 체크
+                String turnPlayerId = room.getCurrentTurnPlayerId();
+                PlayerState turnPlayerState = room.getPlayerStates().get(turnPlayerId);
+                String quizStyle = null;
+
+                if (turnPlayerState != null && "DEBUFF_MIRROR".equals(turnPlayerState.getHasBuff())) {
+                    quizStyle = "MIRROR";
+                    turnPlayerState.setHasBuff(null); // 1회용 디버프 해제
+                    roomRepository.save(room);
+                }
+
+                GameDto.QuizMessage finalQuiz = GameDto.QuizMessage.builder()
+                        .quizId(quizId)
+                        .question(quizEntity.getQuestion())
+                        .options(quizEntity.getOptions())
+                        .timeLimit(QUIZ_TIME_LIMIT_MS)
+                        .quizStartTime(quizStartTime)
+                        .quizStartTimeMs(quizStartTimeMs)
+                        .quizStyle(quizStyle)
+                        .build();
+
                 messagingTemplate.convertAndSend(
-                        "/queue/game/" + room.getCurrentTurnUserId() + "/quiz",
-                        quiz);
+                        "/queue/game/" + room.getCurrentTurnPlayerId() + "/quiz",
+                        finalQuiz);
             }
 
             // Schedule Quiz End
@@ -876,33 +995,33 @@ public class GameService {
             }
 
             // Validate Duplicates
-            if (room.getQuizAnswers().containsKey(request.getUserId())) {
-                sendError(request.getUserId(), ErrorCode.ALREADY_SUBMITTED);
+            if (room.getQuizAnswers().containsKey(request.getPlayerId())) {
+                sendError(request.getPlayerId(), ErrorCode.ALREADY_SUBMITTED);
                 return;
             }
 
-            String turnUserId = room.getCurrentTurnUserId();
+            String turnUserId = room.getCurrentTurnPlayerId();
             if (turnUserId != null
-                    && !turnUserId.equals(request.getUserId())
+                    && !turnUserId.equals(request.getPlayerId())
                     && !room.isGhostOptionsRevealed()) {
-                sendError(request.getUserId(), ErrorCode.GHOST_OPTIONS_HIDDEN);
+                sendError(request.getPlayerId(), ErrorCode.GHOST_OPTIONS_HIDDEN);
                 return;
             }
             if (turnUserId != null
-                    && turnUserId.equals(request.getUserId())
+                    && turnUserId.equals(request.getPlayerId())
                     && room.isGhostOptionsRevealed()) {
-                sendError(request.getUserId(), ErrorCode.TURN_SUBMISSION_CLOSED);
+                sendError(request.getPlayerId(), ErrorCode.TURN_SUBMISSION_CLOSED);
                 return;
             }
             // Save Answer with Timestamp
             request.setSubmitTime(LocalDateTime.now());
-            room.getQuizAnswers().put(request.getUserId(), request);
+            room.getQuizAnswers().put(request.getPlayerId(), request);
             roomRepository.save(room); // Persistence Fix
-            log.info("User {} submitted answer: {} at {}", request.getUserId(), request.getAnswer(),
+            log.info("User {} submitted answer: {} at {}", request.getPlayerId(), request.getAnswer(),
                     request.getSubmitTime());
 
             if (turnUserId != null
-                    && turnUserId.equals(request.getUserId())
+                    && turnUserId.equals(request.getPlayerId())
                     && !room.isGhostOptionsRevealed()) {
                 Quiz quizEntity = room.getQuizList().stream()
                         .filter(q -> q.getQuizId().equals(room.getCurrentQuizId()))
@@ -918,7 +1037,7 @@ public class GameService {
                         GameDto.AnswerFeedbackMessage feedback = GameDto.AnswerFeedbackMessage.builder()
                                 .correct(false)
                                 .build();
-                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getUserId(),
+                        messagingTemplate.convertAndSend("/queue/game/answer-feedback/" + request.getPlayerId(),
                                 feedback);
                         room.setGhostOptionsRevealed(true);
                         long ghostEndAt = System.currentTimeMillis() + QUIZ_TIME_LIMIT_MS;
@@ -941,7 +1060,7 @@ public class GameService {
             }
 
             if (turnUserId != null
-                    && !turnUserId.equals(request.getUserId())
+                    && !turnUserId.equals(request.getPlayerId())
                     && room.isGhostOptionsRevealed()
                     && areAllGhostsSubmitted(room, turnUserId)) {
                 processRoundResult(room.getId(), room.getCurrentQuizId());
@@ -971,7 +1090,7 @@ public class GameService {
             if (!quizId.equals(room.getCurrentQuizId()))
                 return;
 
-            String turnUser = room.getCurrentTurnUserId();
+            String turnUser = room.getCurrentTurnPlayerId();
             long nowMs = System.currentTimeMillis();
             Long ghostEndAt = room.getGhostPhaseEndTimeMs();
             boolean allGhostsSubmitted = turnUser != null && areAllGhostsSubmitted(room, turnUser);
@@ -1036,8 +1155,9 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
-                moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
+                // int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                // moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
+                moveValue = 3; // FOR TESTING: Always 3
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -1049,8 +1169,9 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                    int[] ghostRange = { -1, 1, 2, 3 };
-                    moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
+                    // int[] ghostRange = { -1, 1, 2, 3 };
+                    // moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
+                    moveValue = 3; // FOR TESTING: Always 3
                 }
             }
 
@@ -1116,9 +1237,11 @@ public class GameService {
                             .build());
                 }
 
-                if (room.getMapEvents().containsKey(nextPos)) {
+                // 타일 효과는 목적지에 도착하지 않은 경우에만 처리
+                if (nextPos < TARGET_POSITION && room.getMapEvents().containsKey(nextPos)) {
                     Set<Integer> visitedTiles = new HashSet<>();
-                    while (room.getMapEvents().containsKey(nextPos) && !visitedTiles.contains(nextPos)) {
+                    while (nextPos < TARGET_POSITION && room.getMapEvents().containsKey(nextPos)
+                            && !visitedTiles.contains(nextPos)) {
                         visitedTiles.add(nextPos);
                         String eventType = room.getMapEvents().get(nextPos);
                         int before = nextPos;
@@ -1132,35 +1255,34 @@ public class GameService {
                                 nextPos = TARGET_POSITION;
                                 finishPlanned = true;
                             }
+                            actions.add(GameDto.MoveAction.builder()
+                                    .type("TILE_EFFECT")
+                                    .effectType(eventType)
+                                    .before(before)
+                                    .after(nextPos)
+                                    .build());
+                        } else if ("BANANA".equals(eventType)) {
+                            // 바나나 밟음: 뒤로 3칸
+                            nextPos -= 3;
+                            if (nextPos < START_POSITION)
+                                nextPos = START_POSITION;
+
+                            actions.add(GameDto.MoveAction.builder()
+                                    .type("TILE_EFFECT")
+                                    .effectType("BANANA_SLIP")
+                                    .before(before)
+                                    .after(nextPos)
+                                    .build());
+                            // 바나나 제거는 applyMove에서 (이동 시작 시 프론트에서 보이도록)
                         }
-
-                        actions.add(GameDto.MoveAction.builder()
-                                .type("TILE_EFFECT")
-                                .effectType(eventType)
-                                .before(before)
-                                .after(nextPos)
-                                .build());
                     }
                 }
 
-                for (String pid : room.getPlayers()) {
-                    if (pid.equals(winnerUserId))
-                        continue;
-
-                    PlayerState other = room.getPlayerStates().get(pid);
-                    if (other != null && other.getPosition() == nextPos && nextPos != START_POSITION) {
-                        actions.add(GameDto.MoveAction.builder()
-                                .type("CATCH")
-                                .targetUserId(pid)
-                                .before(other.getPosition())
-                                .after(START_POSITION)
-                                .build());
-                    }
-                }
+                checkForCatch(room, winnerUserId, nextPos, actions);
 
                 List<MoveActionPayload> actionPayloads = toActionPayloads(actions);
                 movePlan = MovePlanPayload.builder()
-                        .winnerUserId(winnerUserId)
+                        .winnerPlayerId(winnerUserId)
                         .startPosition(currentPos)
                         .endPosition(nextPos)
                         .consumeDoubleMove(consumeBuff)
@@ -1183,7 +1305,7 @@ public class GameService {
                     .quizId(room.getCurrentQuizId())
                     .correctAnswer(correctAnswer)
                     .isTurnUserCorrect(isTurnUserCorrect)
-                    .winnerUserId(winnerUserId)
+                    .winnerPlayerId(winnerUserId)
                     .rouletteType(rouletteType)
                     .rouletteValue(rouletteValue)
                     .build();
@@ -1215,7 +1337,7 @@ public class GameService {
 
             NextTurnPayload nextTurnPayload = NextTurnPayload.builder()
                     .quizId(quizId)
-                    .turnUserId(turnUser)
+                    .turnPlayerId(turnUser)
                     .finishPlanned(finishPlanned)
                     .build();
             if (!finishPlanned) {
@@ -1254,7 +1376,7 @@ public class GameService {
             }
 
             MovePlanPayload plannedMove = payload.getMovePlan();
-            PlayerState winnerState = latest.getPlayerStates().get(plannedMove.getWinnerUserId());
+            PlayerState winnerState = latest.getPlayerStates().get(plannedMove.getWinnerPlayerId());
             if (winnerState == null) {
                 return;
             }
@@ -1267,8 +1389,12 @@ public class GameService {
 
             if (plannedMove.getActions() != null) {
                 for (MoveActionPayload action : plannedMove.getActions()) {
+                    if ("TILE_EFFECT".equals(action.getType()) && "BANANA_SLIP".equals(action.getEffectType())
+                            && action.getBefore() != null) {
+                        latest.getMapEvents().remove(action.getBefore());
+                    }
                     if ("CATCH".equals(action.getType())) {
-                        PlayerState other = latest.getPlayerStates().get(action.getTargetUserId());
+                        PlayerState other = latest.getPlayerStates().get(action.getTargetPlayerId());
                         if (other != null) {
                             other.setPosition(action.getAfter());
                         }
@@ -1278,7 +1404,7 @@ public class GameService {
 
             List<GameDto.MoveAction> moveActions = toMoveActions(plannedMove.getActions());
             GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
-                    .userId(plannedMove.getWinnerUserId())
+                    .playerId(plannedMove.getWinnerPlayerId())
                     .startPosition(plannedMove.getStartPosition())
                     .endPosition(plannedMove.getEndPosition())
                     .moveProcess(moveActions)
@@ -1330,7 +1456,7 @@ public class GameService {
             }
 
             List<String> order = latest.getTurnOrder();
-            int idx = order.indexOf(payload.getTurnUserId()) + 1;
+            int idx = order.indexOf(payload.getTurnPlayerId()) + 1;
 
             if (idx >= order.size()) {
                 if (latest.getRound() % 2 != 0) {
@@ -1341,7 +1467,7 @@ public class GameService {
                 latest.setRound(latest.getRound() + 1);
             }
 
-            latest.setCurrentTurnUserId(order.get(idx));
+            latest.setCurrentTurnPlayerId(order.get(idx));
             latest.setStatus(RoomStatus.STARTING);
             roomRepository.save(latest);
             broadcastGameState(latest);
@@ -1364,7 +1490,7 @@ public class GameService {
                         .effectType(action.getEffectType())
                         .before(action.getBefore())
                         .after(action.getAfter())
-                        .targetUserId(action.getTargetUserId())
+                        .targetPlayerId(action.getTargetPlayerId())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -1381,7 +1507,7 @@ public class GameService {
                         .effectType(action.getEffectType())
                         .before(action.getBefore())
                         .after(action.getAfter())
-                        .targetUserId(action.getTargetUserId())
+                        .targetPlayerId(action.getTargetPlayerId())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -1403,6 +1529,11 @@ public class GameService {
 
             log.info("Resuming Game after MiniGame for Room {}", roomId);
 
+            if (room.getStatus() == RoomStatus.FINISHED) {
+                log.info("Skipping resumeAfterMiniGame because room {} is FINISHED", roomId);
+                return;
+            }
+
             Integer expectedRound = payload != null ? payload.getRound() : room.getRound();
             String roundKeyId = expectedRound == null ? String.valueOf(room.getRound()) : String.valueOf(expectedRound);
             if (!ackStore.tryMarkExecution(roomId, GameEventType.RESUME_AFTER_MINIGAME.name(), roundKeyId)) {
@@ -1414,7 +1545,7 @@ public class GameService {
 
             if (!room.getTurnOrder().isEmpty()) {
                 room.setRound(room.getRound() + 1);
-                room.setCurrentTurnUserId(room.getTurnOrder().get(0));
+                room.setCurrentTurnPlayerId(room.getTurnOrder().get(0));
             }
 
             room.setStatus(RoomStatus.QUIZ_TIME);
@@ -1431,6 +1562,18 @@ public class GameService {
     }
 
     public void scheduleResumeAfterMiniGame(String roomId) {
+        scheduleResumeAfterMiniGame(roomId, MINIGAME_RESUME_FALLBACK_MS);
+    }
+
+    /** SWAP_POSITION 시 짧은 delay로 다음 퀴즈 예약 (즉시 교환 애니메이션 후 ~3초 뒤 퀴즈). */
+    public void scheduleResumeAfterMiniGameForSwap(String roomId) {
+        scheduleResumeAfterMiniGame(roomId, SWAP_RESUME_DELAY_MS);
+    }
+
+    /**
+     * SWAP_POSITION 등 즉시 이동인 경우 짧은 delay로 다음 퀴즈 시작 예약.
+     */
+    public void scheduleResumeAfterMiniGame(String roomId, long delayMs) {
         try {
             Room room = roomRepository.findById(roomId)
                     .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
@@ -1438,7 +1581,7 @@ public class GameService {
             ResumeAfterMiniGamePayload payload = ResumeAfterMiniGamePayload.builder()
                     .round(room.getRound())
                     .build();
-            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, MINIGAME_RESUME_FALLBACK_MS);
+            gameEventStore.schedule(roomId, GameEventType.RESUME_AFTER_MINIGAME, payload, delayMs);
             ackStore.clearAck(roomId, GameDto.AckType.MINIGAME_COMPLETE, roundKeyId);
             ackStore.clearAck(roomId, GameDto.AckType.BUFF_ROULETTE_COMPLETE, roundKeyId);
         } catch (Exception e) {
@@ -1446,26 +1589,125 @@ public class GameService {
         }
     }
 
+    public void finishGame(Room room) {
+        room.setStatus(RoomStatus.FINISHED);
+        roomRepository.save(room);
+        messagingTemplate.convertAndSend(
+                "/topic/game/" + room.getId() + "/finish",
+                buildFinishResponse(room));
+        broadcastGameState(room);
+    }
+
+    @lombok.Getter
+    @lombok.Builder
+    public static class TileEventResult {
+        private int finalPosition;
+        private List<GameDto.MoveAction> actions;
+        private boolean finished;
+    }
+
+    public TileEventResult processTileEvents(Room room, int currentPos, int initialMoveValue) {
+        List<GameDto.MoveAction> actions = new ArrayList<>();
+        int nextPos = currentPos;
+        int currentMoveValue = initialMoveValue;
+        boolean finished = false;
+        Set<Integer> visitedTiles = new HashSet<>();
+
+        // 반복문으로 연쇄 효과 처리
+        while (nextPos < TARGET_POSITION && room.getMapEvents() != null && room.getMapEvents().containsKey(nextPos)
+                && !visitedTiles.contains(nextPos)) {
+            visitedTiles.add(nextPos);
+            String eventType = room.getMapEvents().get(nextPos);
+            int before = nextPos;
+
+            if ("TILE_X2".equals(eventType)) {
+                nextPos += currentMoveValue; // 마지막 이동 거리만큼 추가 이동
+                // Boundary Check
+                if (nextPos < START_POSITION)
+                    nextPos = START_POSITION;
+                if (nextPos >= TARGET_POSITION) {
+                    nextPos = TARGET_POSITION;
+                    finished = true;
+                }
+
+                actions.add(GameDto.MoveAction.builder()
+                        .type("TILE_EFFECT")
+                        .effectType(eventType)
+                        .before(before)
+                        .after(nextPos)
+                        .build());
+            } else if ("BANANA".equals(eventType)) {
+                nextPos -= 3;
+                currentMoveValue = -3; // [MOD] 바나나 미끄러짐은 "뒤로 3칸 이동"으로 간주 -> 이후 *2 발동 시 뒤로 감
+
+                if (nextPos < START_POSITION)
+                    nextPos = START_POSITION;
+
+                actions.add(GameDto.MoveAction.builder()
+                        .type("TILE_EFFECT")
+                        .effectType("BANANA_SLIP")
+                        .before(before)
+                        .after(nextPos)
+                        .build());
+
+                // 바나나는 밟으면 사라짐 (즉시 반영)
+                room.getMapEvents().remove(before);
+            }
+        }
+
+        // 최종 위치가 결승선 이상이면 종료 (타일 효과 없이 그냥 도착한 경우도 처리하기 위해 외부에서 체크하지만 중복 체크 무방)
+        if (nextPos >= TARGET_POSITION) {
+            nextPos = TARGET_POSITION;
+            finished = true;
+        }
+
+        return TileEventResult.builder()
+                .finalPosition(nextPos)
+                .actions(actions)
+                .finished(finished)
+                .build();
+    }
+
+    public void checkForCatch(Room room, String moverPlayerId, int nextPos, List<GameDto.MoveAction> actions) {
+        if (room == null || moverPlayerId == null || actions == null) {
+            return;
+        }
+        if (nextPos == START_POSITION) {
+            return;
+        }
+
+        for (String pid : room.getPlayers()) {
+            if (pid.equals(moverPlayerId))
+                continue;
+
+            PlayerState other = room.getPlayerStates().get(pid);
+            if (other != null && other.getPosition() == nextPos) {
+                actions.add(GameDto.MoveAction.builder()
+                        .type("CATCH")
+                        .targetPlayerId(pid)
+                        .before(other.getPosition())
+                        .after(START_POSITION)
+                        .build());
+            }
+        }
+    }
+
     private GameDto.FinishResponse buildFinishResponse(Room room) {
         List<GameDto.FinishRank> rankings = buildFinishRankings(room);
-        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getUserId();
+        String winnerUserId = rankings.isEmpty() ? null : rankings.get(0).getPlayerId();
 
-        return GameDto.FinishResponse.builder()
-                .type("FINISH")
-                .winnerUserId(winnerUserId)
-                .rankings(rankings)
-                .build();
+        return GameDto.FinishResponse.builder().type("FINISH").winnerPlayerId(winnerUserId).rankings(rankings).build();
     }
 
     private List<GameDto.FinishRank> buildFinishRankings(Room room) {
         return room.getPlayerStates().values().stream()
                 .map(state -> {
-                    User user = userRepository.findById(state.getUserId()).orElse(null);
-                    String nickname = user != null ? user.getNickname() : "Unknown";
+                    Player player = playerRepository.findById(state.getPlayerId()).orElse(null);
+                    String nickname = player != null ? player.getNickname() : "Unknown";
                     int position = state.getPosition();
                     int remaining = Math.max(TARGET_POSITION - position, 0);
                     int score = state.getScore();
-                    return new Object[] { state.getUserId(), nickname, position, remaining, score };
+                    return new Object[] { state.getPlayerId(), nickname, position, remaining, score };
                 })
                 .sorted((a, b) -> {
                     int remainingA = (int) a[3];
@@ -1482,7 +1724,7 @@ public class GameService {
                     for (int i = 0; i < list.size(); i++) {
                         Object[] item = list.get(i);
                         ranks.add(GameDto.FinishRank.builder()
-                                .userId((String) item[0])
+                                .playerId((String) item[0])
                                 .nickname((String) item[1])
                                 .position((int) item[2])
                                 .remaining((int) item[3])
@@ -1516,5 +1758,63 @@ public class GameService {
                     .build());
         }
         return quizzes;
+    }
+    // ========== AI Callback Handlers ==========
+
+    public void handleAiQuizResult(String jobId, List<AiDto.QuizItem> quizItems) {
+        Room room = roomRepository.findByAiJobId(jobId)
+                .orElseThrow(() -> {
+                    log.error("Room not found for jobId: {}", jobId);
+                    return new DocqException(ErrorCode.ROOM_NOT_FOUND);
+                });
+
+        // Convert AiDto.QuizItem to Quiz entity
+        List<Quiz> quizzes = new ArrayList<>();
+        for (int i = 0; i < quizItems.size(); i++) {
+            AiDto.QuizItem item = quizItems.get(i);
+            quizzes.add(Quiz.builder()
+                    .quizId((long) (i + 1))
+                    .question(item.getQuestion())
+                    .options(item.getOptions())
+                    .answerIndex(item.getAnswerIndex())
+                    .answerText(item.getAnswerText())
+                    .explanation(item.getExplanation())
+                    .build());
+        }
+
+        room.setQuizList(quizzes);
+        room.setAiStatus(AiStatus.DONE);
+        roomRepository.save(room);
+
+        log.info("AI quizzes loaded for room {}: {} quizzes", room.getId(), quizzes.size());
+
+        // Broadcast update to room
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATED");
+        message.put("count", quizzes.size());
+        message.put("status", "completed");
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/quiz", message);
+    }
+
+    public void handleAiJobFailed(String jobId, String error) {
+        Room room = roomRepository.findByAiJobId(jobId)
+                .orElse(null);
+
+        if (room == null) {
+            log.error("Room not found for failed jobId: {}", jobId);
+            return;
+        }
+
+        room.setAiStatus(AiStatus.FAILED);
+        roomRepository.save(room);
+
+        log.error("AI job failed for room {}: {}", room.getId(), error);
+
+        // Broadcast failure to room
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "QUIZ_GENERATION_FAILED");
+        message.put("error", error);
+        message.put("status", "failed");
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/quiz", message);
     }
 }

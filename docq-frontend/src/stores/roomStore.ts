@@ -11,7 +11,7 @@ import { ref, computed } from 'vue'
 
 // 타입 정의
 export interface User {
-    id: string
+    playerId: string
     nickname: string
     avatar?: string
     isReady: boolean
@@ -91,8 +91,8 @@ export const useRoomStore = defineStore('room', () => {
         isHost.value = false
     }
 
-    const updateUser = (userId: string, data: Partial<User>) => {
-        const userIndex = users.value.findIndex(u => u.id === userId)
+    const updateUser = (playerId: string, data: Partial<User>) => {
+        const userIndex = users.value.findIndex(u => u.playerId === playerId)
         if (userIndex !== -1) {
             users.value[userIndex] = {
                 ...users.value[userIndex],
@@ -105,8 +105,8 @@ export const useRoomStore = defineStore('room', () => {
         users.value.push(user)
     }
 
-    const removeUser = (userId: string) => {
-        users.value = users.value.filter(u => u.id !== userId)
+    const removeUser = (playerId: string) => {
+        users.value = users.value.filter(u => u.playerId !== playerId)
     }
 
     return {

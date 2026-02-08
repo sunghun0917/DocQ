@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PlayerState {
-    private String userId;
+    private String playerId;
 
     @Builder.Default
     private int score = 0;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
@@ -15,12 +15,17 @@ const roomStore = useRoomStore()
 const wsStore = useWebSocketStore()
 const isSubmitting = ref(false)
 
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') emit('close');
+};
+
+onMounted(() => window.addEventListener('keydown', handleKeydown));
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
+
 const roomCode = ref('');
-const password = ref('');
-const isPrivateRoom = ref(false);
 const resolvedRoom = ref<RoomResponse | null>(null)
 const lastCheckedCode = ref('')
-const isNicknameSet = computed(() => !!userStore.userId);
+const isNicknameSet = computed(() => !!userStore.playerId);
 
 // 알림 상태
 const isAlertOpen = ref(false);
@@ -44,7 +49,7 @@ const triggerAlert = (message: string, type: 'success' | 'error' = 'error') => {
 const joinRoom = async () => {
   const inviteCode = roomCode.value.trim().toUpperCase()
   if (!inviteCode) { triggerAlert("입장 코드를 입력해주세요!"); return; }
-  if (!userStore.userId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
+  if (!userStore.playerId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
   if (isSubmitting.value) return
   
   isSubmitting.value = true
@@ -53,16 +58,9 @@ const joinRoom = async () => {
     const room = await getRoomByInviteCode(inviteCode)
     resolvedRoom.value = room
     lastCheckedCode.value = inviteCode
-    isPrivateRoom.value = room.isPrivate
-
-    if (room.isPrivate && !password.value.trim()) {
-      triggerAlert("비밀번호를 입력해주세요!");
-      return;
-    }
 
     await verifyJoinRoom({
-      roomId: room.roomId,
-      password: room.isPrivate ? password.value.trim() : undefined
+      roomId: room.roomId
     })
 
     roomStore.joinRoom({
@@ -77,10 +75,10 @@ const joinRoom = async () => {
     })
 
     await wsStore.connect()
-    wsStore.subscribeErrors(userStore.userId)
+    wsStore.subscribeErrors(userStore.playerId)
     wsStore.subscribeGameState(room.roomId)
     wsStore.subscribeMiniGame(room.roomId)
-    wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
+    wsStore.joinGame(room.roomId, userStore.playerId, userStore.username)
 
     router.push(`/waiting/${room.roomId}`);
     emit('close');
@@ -99,10 +97,8 @@ const checkRoomType = async () => {
     const room = await getRoomByInviteCode(inviteCode)
     resolvedRoom.value = room
     lastCheckedCode.value = inviteCode
-    isPrivateRoom.value = room.isPrivate
   } catch (error) {
     resolvedRoom.value = null
-    isPrivateRoom.value = false
   }
 };
 </script>
@@ -147,23 +143,6 @@ const checkRoomType = async () => {
             />
           </div>
 
-          <div v-if="isPrivateRoom" class="animate-slide-down w-full">
-            <label class="block text-[#8d6e63] text-xl font-bold mb-3 ml-1 flex items-center gap-2">
-              <span class="material-symbols-outlined text-2xl">lock</span>
-              비밀번호
-            </label>
-            <input 
-              v-model="password"
-              type="password" 
-              placeholder="비밀번호 4자리" 
-              maxlength="4"
-              class="w-full h-14 px-6 rounded-2xl border-4 border-[#ef5350] bg-[#fff1f2] 
-                     focus:border-[#e53935] focus:bg-[#ffebee] outline-none 
-                     font-black text-2xl text-center text-[#c62828] tracking-widest 
-                     placeholder:text-[#ef9a9a] placeholder:font-normal placeholder:tracking-normal placeholder:text-xl transition-all"
-              @keyup.enter="joinRoom"
-            />
-          </div>
 
         </div>
 

@@ -24,7 +24,7 @@ watch(() => props.isOpen, (newVal) => {
     <Transition name="slide-down">
       <div 
         v-if="isOpen" 
-        class="fixed top-0 left-0 w-full z-[100] flex justify-center items-center gap-2 
+        class="fixed top-0 left-0 w-full z-[9999] flex justify-center items-center gap-2 
                py-4 shadow-xl"
         :class="type === 'success' ? 'bg-[#20c997]' : 'bg-[#e11d48]'"
         role="alert"
