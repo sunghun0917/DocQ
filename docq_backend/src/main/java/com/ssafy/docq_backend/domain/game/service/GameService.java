@@ -1155,8 +1155,8 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                 int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
-                 moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
+                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -1168,8 +1168,8 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                     int[] ghostRange = { -1, 1, 2, 3 };
-                     moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
+                    int[] ghostRange = { -1, 1, 2, 3 };
+                    moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
                 }
             }
 
@@ -1765,6 +1765,38 @@ public class GameService {
                     log.error("Room not found for jobId: {}", jobId);
                     return new DocqException(ErrorCode.ROOM_NOT_FOUND);
                 });
+
+        // [MOD] Save quiz to DB if host is a member
+        try {
+            String hostId = room.getHostPlayerId();
+            if (hostId != null) {
+                Player hostPlayer = playerRepository.findById(hostId).orElse(null);
+                if (hostPlayer != null && hostPlayer.getUserId() != null) {
+                    log.info("Saving generated quiz for host user: {}", hostPlayer.getUserId());
+
+                    List<QuizApiDto.QuizItemRequest> quizRequests = new ArrayList<>();
+                    for (AiDto.QuizItem item : quizItems) {
+                        quizRequests.add(new QuizApiDto.QuizItemRequest(
+                                item.getQuestion(),
+                                item.getOptions(),
+                                item.getAnswerIndex(),
+                                item.getAnswerText()));
+                    }
+
+                    String title = "AI Generated Quiz - " + LocalDateTime.now()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                    QuizApiDto.CreateQuizRequest createRequest = new QuizApiDto.CreateQuizRequest(quizRequests, title);
+
+                    quizService.create(hostPlayer.getUserId(), createRequest);
+                    log.info("Successfully saved generated quiz for user {}", hostPlayer.getUserId());
+                } else {
+                    log.info("Host player {} is not a member or not found, skipping quiz save", hostId);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to save generated quiz to DB", e);
+            // Continue execution to not block game flow
+        }
 
         // Convert AiDto.QuizItem to Quiz entity
         List<Quiz> quizzes = new ArrayList<>();
