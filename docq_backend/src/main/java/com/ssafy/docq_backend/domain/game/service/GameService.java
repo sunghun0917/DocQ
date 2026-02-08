@@ -73,7 +73,7 @@ public class GameService {
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
-    private static final long QUIZ_TIME_LIMIT_MS = 7000;
+    private static final long QUIZ_TIME_LIMIT_MS = 10000;
 
     public void requestQuizGeneration(String roomId, MultipartFile pdfFile) {
 
@@ -1155,8 +1155,9 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
-                moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
+                // int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                // moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
+                moveValue = 3; // FOR TESTING: Always 3
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -1168,8 +1169,9 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                    int[] ghostRange = { -1, 1, 2, 3 };
-                    moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
+                    // int[] ghostRange = { -1, 1, 2, 3 };
+                    // moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
+                    moveValue = 3; // FOR TESTING: Always 3
                 }
             }
 
@@ -1276,20 +1278,7 @@ public class GameService {
                     }
                 }
 
-                for (String pid : room.getPlayers()) {
-                    if (pid.equals(winnerUserId))
-                        continue;
-
-                    PlayerState other = room.getPlayerStates().get(pid);
-                    if (other != null && other.getPosition() == nextPos && nextPos != START_POSITION) {
-                        actions.add(GameDto.MoveAction.builder()
-                                .type("CATCH")
-                                .targetPlayerId(pid)
-                                .before(other.getPosition())
-                                .after(START_POSITION)
-                                .build());
-                    }
-                }
+                checkForCatch(room, winnerUserId, nextPos, actions);
 
                 List<MoveActionPayload> actionPayloads = toActionPayloads(actions);
                 movePlan = MovePlanPayload.builder()
@@ -1677,6 +1666,30 @@ public class GameService {
                 .actions(actions)
                 .finished(finished)
                 .build();
+    }
+
+    public void checkForCatch(Room room, String moverPlayerId, int nextPos, List<GameDto.MoveAction> actions) {
+        if (room == null || moverPlayerId == null || actions == null) {
+            return;
+        }
+        if (nextPos == START_POSITION) {
+            return;
+        }
+
+        for (String pid : room.getPlayers()) {
+            if (pid.equals(moverPlayerId))
+                continue;
+
+            PlayerState other = room.getPlayerStates().get(pid);
+            if (other != null && other.getPosition() == nextPos) {
+                actions.add(GameDto.MoveAction.builder()
+                        .type("CATCH")
+                        .targetPlayerId(pid)
+                        .before(other.getPosition())
+                        .after(START_POSITION)
+                        .build());
+            }
+        }
     }
 
     private GameDto.FinishResponse buildFinishResponse(Room room) {

@@ -136,8 +136,9 @@ public class MiniGameService {
             winnerPlayerId = winner.getPlayerId();
 
             // 랜덤 버프 선택 (Enum 활용)
-            BuffType[] augments = BuffType.values();
-            BuffType selectedBuff = augments[new Random().nextInt(augments.length)];
+            // BuffType[] augments = BuffType.values();
+            // BuffType selectedBuff = augments[new Random().nextInt(augments.length)];
+            BuffType selectedBuff = BuffType.PLUS_THREE; // FOR TESTING: Always PLUS_THREE
             rewardBuff = selectedBuff.getCode();
 
             // 인터랙션이 필요한 아이템인지 확인
@@ -334,6 +335,17 @@ public class MiniGameService {
 
         int finalPos = eventResult.getFinalPosition();
         boolean isFinished = eventResult.isFinished();
+
+        // [ADD] 잡기 체크 및 적용
+        gameService.checkForCatch(room, playerId, finalPos, moveActions);
+        for (GameDto.MoveAction action : moveActions) {
+            if ("CATCH".equals(action.getType()) && action.getTargetPlayerId() != null) {
+                PlayerState caught = room.getPlayerStates().get(action.getTargetPlayerId());
+                if (caught != null && action.getAfter() != null) {
+                    caught.setPosition(action.getAfter());
+                }
+            }
+        }
 
         ps.setPosition(finalPos);
 
