@@ -89,6 +89,7 @@ public class GameService {
 
         room.setAiJobId(job.getJobId());
         room.setAiStatus(AiStatus.QUEUED);
+        room.setQuizSourceFilename(pdfFile.getOriginalFilename()); // Store filename
 
         roomRepository.save(room);
     }
@@ -1783,8 +1784,12 @@ public class GameService {
                                 item.getAnswerText()));
                     }
 
-                    String title = "AI Generated Quiz - " + LocalDateTime.now()
-                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                    String originalFilename = room.getQuizSourceFilename();
+                    String title = (originalFilename != null && !originalFilename.isBlank())
+                            ? originalFilename
+                            : "AI Generated Quiz - " + LocalDateTime.now()
+                                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
                     QuizApiDto.CreateQuizRequest createRequest = new QuizApiDto.CreateQuizRequest(quizRequests, title);
 
                     quizService.create(hostPlayer.getUserId(), createRequest);

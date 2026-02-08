@@ -104,6 +104,9 @@ public class Room {
 
     private String aiJobId;
 
+    // Original PDF Filename for Quiz Title
+    private String quizSourceFilename;
+
     public void addPlayer(String playerId) {
         players.add(playerId);
         this.currentCount = players.size();
