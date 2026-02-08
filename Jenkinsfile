@@ -95,6 +95,7 @@ EOF
                     sh '''
                         set -e
                         docker-compose down --remove-orphans || true
+                        docker volume prune -f || true
                         docker-compose up -d --build
                     '''
                 }

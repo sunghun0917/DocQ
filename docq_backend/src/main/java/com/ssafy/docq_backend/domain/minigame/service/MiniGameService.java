@@ -136,9 +136,8 @@ public class MiniGameService {
             winnerPlayerId = winner.getPlayerId();
 
             // 랜덤 버프 선택 (Enum 활용)
-            // BuffType[] augments = BuffType.values();
-            // BuffType selectedBuff = augments[new Random().nextInt(augments.length)];
-            BuffType selectedBuff = BuffType.PLUS_THREE; // FOR TESTING: Always PLUS_THREE
+            BuffType[] augments = BuffType.values();
+            BuffType selectedBuff = augments[new Random().nextInt(augments.length)];
             rewardBuff = selectedBuff.getCode();
 
             // 인터랙션이 필요한 아이템인지 확인
