@@ -1155,9 +1155,8 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                // int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
-                // moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
-                moveValue = 3; // FOR TESTING: Always 3
+                 int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
+                 moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -1169,9 +1168,8 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                    // int[] ghostRange = { -1, 1, 2, 3 };
-                    // moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
-                    moveValue = 3; // FOR TESTING: Always 3
+                     int[] ghostRange = { -1, 1, 2, 3 };
+                     moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
                 }
             }
 
