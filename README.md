@@ -1,29 +1,36 @@
 # 📄🎲 DocQ (Document + Quiz)
 
-### 1️⃣ 프로젝트 개요
+## 1️⃣ 프로젝트 개요
 
 🎲 **개발 기간**
 
 | 개발기간 | 2026.01.06 ~ 2026.02.13 (6주) |
 | --- | --- |
 
+<br>
+
 🎲 **팀원 소개**
 
 | 팀원 | 역할 |
 | --- | --- |
-| 김현수 | 팀장, BE팀장 |
-| 임보경 | FE |
-| 오창민 | FE, 디자인 |
-| 안성훈 | Infra(CI/CD), BE |
-| 정인호 | FE팀장 |
-| 홍현기 | AI, BE |
+| 김현수(팀장, BE) | 실시간 게임 서버 구조 설계, Redis 기반 이벤트 처리, 핵심 게임 로직 |
+| 안성훈(Infra) | AWS 인프라 구축, CI/CD 파이프라인, Nginx 설정, AI 서버 스케일아웃 |
+| 홍현기(AI) | PDF 분석 파이프라인, MinerU OCR·레이아웃 파싱, AI 퀴즈 생성 |
+| 정인호(FE) | 프론트엔드 구조 설계, 게임 씬 전환 및 상호작용, 성능 최적화 |
+| 오창민(FE) | UI/UX 엔지니어링, 반응성 디자인, 3D 모델링·애니메이션 |
+| 임보경(FE) | UI 컴포넌트 구현, 프론트엔드 유지보수, UX 개선 |
+
+<br>
 
 🎲 **기획 의도**
-
 
 | 많은 학습 및 업무 환경에서 PDF 문서는 필수적인 매체이지만, 내용이 방대하고 정적인 특성으로 인해 **집중력 저하와 피로감**을 유발하는 경우가 많습니다. |
 | --- |
 |“문서를 읽고 잘 이해했는지를 하나의 게임 경험으로 만들 수는 없을까? 라는 질문에서 출발한 서비스입니다. |
+
+<br>
+<br>
+<br>
 
 ## 2️⃣ 서비스 소개
 
@@ -39,7 +46,9 @@ DocQ는 문서를 *처음 학습하기 위한 서비스*가 아니라,
 
 퀴즈와 게임 요소를 통해 **이해도를 점검하고 기억을 환기하는 경험**을 제공합니다.
 
----
+<br>
+<br>
+<br>
 
 ## 🎮 서비스 기능 소개
 
@@ -97,6 +106,28 @@ DocQ는 문서를 *처음 학습하기 위한 서비스*가 아니라,
 
   <img src="assets/gif12.gif" width="500" />
 
----
+<br>
+<br>
+<br>
 
+## 3️⃣ 개발 환경
 
+**FE** | `Vue.js` `TypeScript` `Pinia` `TailwindCSS` `Three.js` `Blender`
+
+**BE - API** | `Java` `SpringBoot` `JPA` `SpringSecurity` `MySQL`
+
+**AI** | `Python` `FastAPI` `MinerU` `OpenAI`
+
+**BE-GAME** | `Websocket` `STOMP` `Redis`
+
+**CI/CD** | `AWS` `EC2` `RDS` `Docker` `Jenkins` `Nginx` `Docker Compose`
+
+**협업 및 형상관리** | `GitLab` `Jira` `Mattermost`
+
+<br>
+<br>
+<br>
+
+## 4️⃣ 아키텍처
+
+  <img src="assets/gif14.png" width="800" />
