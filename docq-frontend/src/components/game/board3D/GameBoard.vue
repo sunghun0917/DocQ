@@ -31,11 +31,38 @@
 />
 
       <TresGroup :rotation="[0, 0, 0]" :position="[0, 1.5, 0]">
+        <BananaTileRaycaster
+          v-if="props.bananaPlacementMode"
+          :enabled="props.bananaPlacementMode"
+          :tiles="bananaSelectableTiles"
+          :plane-y-offset="1.5"
+          @hover="setHoveredBananaTile"
+        />
         <primitive v-if="boardScene" :object="boardScene" />
 
-        <!-- Special tile markers (from backend mapEvents) -->
+        <!-- 바나나 설치: 타일 단위 규격(1x1), 호버는 BananaTileRaycaster로 감지 -->
+        <TresGroup
+          v-for="item in bananaSelectableTiles"
+          :key="`banana-sel-${item.position}`"
+          :position="[item.x, item.y + (hoveredBananaTile === item.position ? 0.15 : 0.01), item.z]"
+          :rotation="[-Math.PI / 2, 0, 0]"
+        >
+          <TresMesh @click="emit('tile-selected', item.position)">
+            <TresPlaneGeometry :args="[BANANA_TILE_SIZE, BANANA_TILE_SIZE]" />
+            <TresMeshBasicMaterial
+              color="#64b5f6"
+              :opacity="hoveredBananaTile === item.position ? 0.5 : 0.35"
+              :transparent="true"
+              :depthWrite="false"
+            />
+          </TresMesh>
+          <!-- 테두리만 강조 (호버 시 더 밝게) -->
+          <primitive v-if="bananaTileOutlines.get(item.position)" :object="bananaTileOutlines.get(item.position)!" />
+        </TresGroup>
+
+        <!-- Special tile markers (from backend mapEvents) - Non-banana events -->
         <TresMesh
-          v-for="marker in specialTileMarkers"
+          v-for="marker in nonBananaMarkers"
           :key="marker.key"
           :position="[marker.x, marker.y + 0.05, marker.z]"
           :scale="[0.25, 0.25, 0.25]"
@@ -44,13 +71,24 @@
           <TresMeshStandardMaterial color="#8b5cf6" />
         </TresMesh>
 
+        <!-- Banana 3D models -->
+        <primitive
+          v-for="marker in bananaMarkers"
+          :key="marker.key"
+          v-if="bananaScene"
+          :object="bananaScene.clone()"
+          :position="[marker.x, marker.y + 0.05, marker.z]"
+          :scale="[1.5, 1.5, 1.5]"
+        />
+
         <!-- Players -->
         <GameCharacter
           v-for="p in players"
-          :key="p.userId"
-          :modelUrl="getPlayerModelUrl(p.userId)"
+          :key="p.playerId"
+          :modelUrl="getPlayerModelUrl(p.playerId)"
           :position="getPlayerWorldPos(p)"
-          :isMoving="isPlayerMoving(p.userId)"
+          :isMoving="isPlayerMoving(p.playerId)"
+          :isBananaHit="activeSpecificEffects[p.playerId] === 'BANANA_SLIP'"
           :lookTarget="getPlayerLookTarget(p)"
         />
       </TresGroup>
@@ -74,8 +112,10 @@ import * as THREE from 'three'
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import GameCharacter from '@/components/game/board3D/GameCharacter.vue'
+import BananaTileRaycaster from '@/components/game/board3D/BananaTileRaycaster.vue'
 
 import { useGameStore } from '@/stores/gameStore'
+import { useUserStore } from '@/stores/userStore'
 import { useWebSocketStore } from '@/stores/websocketStore'
 import type { PlayerInfo } from '@/types/docq-api'
 
@@ -91,6 +131,9 @@ type MapTile = {
 
 const MAP_START_POSITION = 1
 const MAP_GOAL_POSITION = 30
+
+/** 바나나 선택 타일 크기 (맵 타일 간격 ~1에 맞춤) */
+const BANANA_TILE_SIZE = 1.0
 
 const parseTileNumber = (name: string): number => {
   const match = /Tile_(\d+)_/i.exec(name)
@@ -130,12 +173,21 @@ const computeMapCenter = (): [number, number, number] => {
 
 const MAP_CENTER = computeMapCenter()
 
+const props = defineProps<{
+  /** 바나나 설치 시 맵 타일 클릭 선택 모드 */
+  bananaPlacementMode?: boolean
+}>()
+
 const emit = defineEmits<{
   (e: 'movement-change', moving: boolean): void
+  (e: 'banana-placement-done'): void
+  (e: 'tile-selected', position: number): void
 }>()
 
 const gameStore = useGameStore()
+const userStore = useUserStore()
 const wsStore = useWebSocketStore()
+const myPlayerId = computed(() => userStore.playerId)
 
 const cameraPosition = ref<[number, number, number]>([MAP_CENTER[0] + 10, MAP_CENTER[1] + 20, MAP_CENTER[2] + 10])
 // 실제 카메라가 보는 지점을 변경 필요
@@ -146,6 +198,8 @@ const cameraTarget = ref<[number, number, number]>([
     MAP_CENTER[2] // Z축 오프셋 (카메라가 아래쪽을 봄 -> 맵은 위쪽으로 이동)
 ])
 const cameraZoom = ref(0.12)
+const DEFAULT_ZOOM = 0.12
+const BANANA_SELECT_ZOOM = 0.10 // 바나나 선택 시 더 멀리서 맵 전체 보기
 const introPlayed = ref(false)
 
 const aspect = ref(window.innerWidth / window.innerHeight)
@@ -174,6 +228,7 @@ type PointerEventsObject3D = THREE.Object3D & {
 }
 
 const boardScene = shallowRef<PointerEventsObject3D | null>(null)
+const bananaScene = shallowRef<THREE.Group | null>(null)
 
 const players = computed(() => gameStore.gameState.players)
 const currentTurnPlayer = computed(() => gameStore.currentTurnPlayer)
@@ -181,6 +236,7 @@ const mapEvents = computed(() => gameStore.gameState.mapEvents as Record<string,
 
 const animatingPlayers = ref<Record<string, number>>({})
 const lastStablePositions = ref<Record<string, number>>({})
+const activeSpecificEffects = ref<Record<string, string>>({})
 const isMovingGlobal = ref(false)
 const actionNotice = ref<string | null>(null)
 let actionNoticeTimer: number | null = null
@@ -192,31 +248,35 @@ watch(() => players.value, (newPlayers) => {
     return
   }
 
-  const movingUserId = gameStore.currentMove?.userId || null
+  const movingPlayerId = gameStore.currentMove?.playerId || null
   newPlayers.forEach(p => {
     const safePosition = p.position ?? MAP_START_POSITION
 
-    if (movingUserId && isMovingGlobal.value && p.userId === movingUserId) {
+    if (movingPlayerId && isMovingGlobal.value && p.playerId === movingPlayerId) {
       return
     }
 
-    lastStablePositions.value[p.userId] = safePosition
-    if (animatingPlayers.value[p.userId] === undefined) {
-      animatingPlayers.value[p.userId] = safePosition
+    lastStablePositions.value[p.playerId] = safePosition
+    if (animatingPlayers.value[p.playerId] === undefined) {
+      animatingPlayers.value[p.playerId] = safePosition
     } else if (!isMovingGlobal.value) {
-      animatingPlayers.value[p.userId] = safePosition
+      animatingPlayers.value[p.playerId] = safePosition
     }
   })
 }, { immediate: true, deep: true })
 
 watch(
-  () => gameStore.gamePhase,
-  (phase) => {
+  () => [gameStore.gamePhase, players.value.length] as const,
+  ([phase, playerCount]) => {
+    // console.log(`[GameBoard] Phase: ${phase}, Players: ${playerCount}, IntroPlayed: ${introPlayed.value}`)
+
     if (phase === 'WAITING') {
       introPlayed.value = false
     }
 
-    if (phase === 'STARTING' && !introPlayed.value && players.value.length > 0) {
+    // [MOD] players.length 조건 제거 (데이터 로딩 늦어도 인트로 실행/ACK 전송 보장)
+    if (phase === 'STARTING' && !introPlayed.value) {
+      console.log('[GameBoard] Starting Intro Camera Sequence')
       introPlayed.value = true
       setTimeout(() => {
         void runIntroCamera()
@@ -237,10 +297,10 @@ const CHARACTER_MODELS = [
 
 const START_SPREAD_RADIUS = 0.35
 
-const playerOrderIds = computed(() => players.value.map(p => p.userId).slice().sort())
+const playerOrderIds = computed(() => players.value.map(p => p.playerId).slice().sort())
 
-const getPlayerSlotIndex = (userId: string) => {
-  const idx = playerOrderIds.value.indexOf(userId)
+const getPlayerSlotIndex = (playerId: string) => {
+  const idx = playerOrderIds.value.indexOf(playerId)
   return idx >= 0 ? idx : 0
 }
 
@@ -249,18 +309,18 @@ const getPlayerSlotIndex = (userId: string) => {
 //   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
 // }
 
-const getPlayerModelUrl = (userId: string): string => {
-  const p = players.value.find(player => player.userId === userId)
+const getPlayerModelUrl = (playerId: string): string => {
+  const p = players.value.find(player => player.playerId === playerId)
   // [MOD] 아바타 선택 ID를 우선 사용 (없으면 슬롯 순서)
-  const idx = (p && typeof p.avatarId === 'number') ? p.avatarId : getPlayerSlotIndex(userId)
+  const idx = (p && typeof p.avatarId === 'number') ? p.avatarId : getPlayerSlotIndex(playerId)
   return CHARACTER_MODELS[idx % CHARACTER_MODELS.length] ?? DEFAULT_MODEL_URL
 }
 
-  const applyStartSpread = (base: Vec3, userId: string): Vec3 => {
+  const applyStartSpread = (base: Vec3, playerId: string): Vec3 => {
   const count = Math.min(playerOrderIds.value.length, CHARACTER_MODELS.length)
   if (count <= 1) return base
 
-  const slot = getPlayerSlotIndex(userId) % count
+  const slot = getPlayerSlotIndex(playerId) % count
   const angle = (2 * Math.PI * slot) / count
 
   return {
@@ -271,10 +331,10 @@ const getPlayerModelUrl = (userId: string): string => {
 }
 
 const getDisplayPosition = (p: PlayerInfo): number => {
-  const userId = p.userId
+  const playerId = p.playerId
   return (
-    animatingPlayers.value[userId]
-    ?? lastStablePositions.value[userId]
+    animatingPlayers.value[playerId]
+    ?? lastStablePositions.value[playerId]
     ?? p.position
     ?? MAP_START_POSITION
   )
@@ -288,7 +348,7 @@ const getPlayerWorldPos = (p: PlayerInfo): Vec3 => {
   if (posNumber === MAP_START_POSITION) {
     const startCount = players.value.filter(other => getDisplayPosition(other) === MAP_START_POSITION).length
     if (startCount > 1) {
-      return applyStartSpread(base, p.userId)
+      return applyStartSpread(base, p.playerId)
     }
   }
 
@@ -300,7 +360,7 @@ const getPlayerLookTarget = (p: PlayerInfo): Vec3 => {
 
   let nextPos = posNumber
 
-  if (isMovingGlobal.value && gameStore.currentMove?.userId === p.userId) {
+  if (isMovingGlobal.value && gameStore.currentMove?.playerId === p.playerId) {
     const start = gameStore.currentMove.startPosition
     const end = gameStore.currentMove.endPosition
     const step = end > start ? 1 : (end < start ? -1 : 0)
@@ -315,7 +375,88 @@ const getPlayerLookTarget = (p: PlayerInfo): Vec3 => {
   return tile?.position ?? getPlayerWorldPos(p)
 }
 
-const isPlayerMoving = (userId: string) => isMovingGlobal.value && gameStore.currentMove?.userId === userId
+const isPlayerMoving = (userId: string) => isMovingGlobal.value && gameStore.currentMove?.playerId === userId
+
+/** 바나나 설치: 호버 중인 타일 (BananaTileRaycaster가 감지) */
+const hoveredBananaTile = ref<number | null>(null)
+const setHoveredBananaTile = (pos: number | null) => { hoveredBananaTile.value = pos }
+
+/** 바나나 설치 모드일 때 클릭 가능한 타일 1~30 (위치 + 월드 좌표) */
+const bananaSelectableTiles = computed(() => {
+  if (!props.bananaPlacementMode) return []
+  return Array.from({ length: 30 }, (_, i) => i + 1)
+    .map(pos => {
+      const tile = getTileByPosition(pos)
+      if (!tile) return null
+      return {
+        position: pos,
+        x: tile.position.x,
+        y: tile.position.y,
+        z: tile.position.z
+      }
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null)
+})
+
+watch(() => props.bananaPlacementMode, (on) => {
+  if (!on) {
+    hoveredBananaTile.value = null
+    cameraZoom.value = DEFAULT_ZOOM
+  } else {
+    cameraZoom.value = BANANA_SELECT_ZOOM // 멀리서 맵 전체 보기
+  }
+})
+
+/** 바나나 타일 테두리 (LineSegments) - 타일 단위 규격, 호버 시 테두리만 강조 */
+const bananaTileOutlineGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(BANANA_TILE_SIZE, BANANA_TILE_SIZE))
+const bananaTileOutlines = shallowRef<Map<number, THREE.LineSegments>>(new Map())
+watch(
+  bananaSelectableTiles,
+  (tiles) => {
+    const map = new Map<number, THREE.LineSegments>()
+    for (const t of tiles) {
+      const mat = new THREE.LineBasicMaterial({
+        color: 0xffeb3b,
+        transparent: true,
+        opacity: 0.65
+      })
+      map.set(t.position, new THREE.LineSegments(bananaTileOutlineGeo, mat))
+    }
+    bananaTileOutlines.value = map
+  },
+  { immediate: true }
+)
+watch(hoveredBananaTile, (hovered) => {
+  bananaTileOutlines.value.forEach((line, pos) => {
+    const mat = line.material as THREE.LineBasicMaterial
+    mat.color.setHex(hovered === pos ? 0xdd0000 : 0xffeb3b) // 호버: 진한 빨간색
+    mat.opacity = hovered === pos ? 1 : 0.65
+  })
+})
+
+/** 바나나 모드일 때 보드 씬이 레이캐스트를 막지 않도록 raycast 비활성화 → 타일 호버/클릭만 감지 */
+const boardRaycastBackup = new Map<THREE.Object3D, (raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) => void>()
+watch(
+  () => [props.bananaPlacementMode, boardScene.value] as const,
+  ([mode, scene]) => {
+    if (!scene) return
+    scene.traverse((obj) => {
+      if (!('raycast' in obj) || typeof (obj as THREE.Mesh).raycast !== 'function') return
+      const mesh = obj as THREE.Mesh
+      if (mode) {
+        if (!boardRaycastBackup.has(mesh)) boardRaycastBackup.set(mesh, mesh.raycast.bind(mesh))
+        mesh.raycast = () => {}
+      } else {
+        const orig = boardRaycastBackup.get(mesh)
+        if (orig) {
+          mesh.raycast = orig
+        }
+      }
+    })
+    if (!mode) boardRaycastBackup.clear()
+  },
+  { immediate: true }
+)
 
 const specialTileMarkers = computed(() => {
   const events = mapEvents.value
@@ -329,6 +470,7 @@ const specialTileMarkers = computed(() => {
       if (!tile) return null
       return {
         key: `${key}-${eventType}`,
+        eventType,
         x: tile.position.x,
         y: tile.position.y,
         z: tile.position.z
@@ -336,6 +478,13 @@ const specialTileMarkers = computed(() => {
     })
     .filter((v): v is NonNullable<typeof v> => v !== null)
 })
+
+const bananaMarkers = computed(() => 
+  specialTileMarkers.value.filter(m => m.eventType === 'BANANA')
+)
+const nonBananaMarkers = computed(() => 
+  specialTileMarkers.value.filter(m => m.eventType !== 'BANANA')
+)
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t)
@@ -491,6 +640,8 @@ const MOVE_FOCUS_ZOOM = 0.22
 const MOVE_FOCUS_IN_MS = 350
 const MOVE_FOCUS_FOLLOW_MS = 220
 const MOVE_FOCUS_OUT_MS = 450
+const BANANA_FOCUS_ZOOM = 0.28
+const BANANA_FOCUS_HOLD_MS = 1500
 
 const lastMoveKey = ref<string | null>(null)
 
@@ -499,6 +650,44 @@ const waitForMoveUnlock = async () => {
     await sleep(100)
   }
 }
+
+// 바나나 설치: 해당 타일 확대 → 잠시 유지 → 축소 후 ACK 전송
+watch(() => gameStore.bananaPlacementPosition, async (pos) => {
+  if (pos == null || typeof pos !== 'number') return
+  const tile = getTileByPosition(pos)
+  if (!tile) {
+    gameStore.bananaPlacementPosition = null
+    emit('banana-placement-done')
+    return
+  }
+  const target: [number, number, number] = [tile.position.x, tile.position.y, tile.position.z]
+  const snapshotTarget = [...cameraTarget.value] as [number, number, number]
+  const snapshotPos = [...cameraPosition.value] as [number, number, number]
+  const snapshotZoom = cameraZoom.value
+  const baseOffset: [number, number, number] = [
+    snapshotPos[0] - snapshotTarget[0],
+    snapshotPos[1] - snapshotTarget[1],
+    snapshotPos[2] - snapshotTarget[2]
+  ]
+  await animateCameraTo({
+    target,
+    zoom: BANANA_FOCUS_ZOOM,
+    duration: MOVE_FOCUS_IN_MS,
+    offset: baseOffset
+  })
+  await sleep(BANANA_FOCUS_HOLD_MS)
+  await animateCameraTo({
+    target: snapshotTarget,
+    zoom: snapshotZoom,
+    duration: MOVE_FOCUS_OUT_MS,
+    offset: baseOffset
+  })
+  cameraTarget.value = snapshotTarget
+  cameraPosition.value = snapshotPos
+  cameraZoom.value = snapshotZoom
+  gameStore.bananaPlacementPosition = null
+  emit('banana-placement-done')
+})
 
 const showActionNotice = (text: string, duration = 1500) => {
   if (actionNoticeTimer !== null) {
@@ -567,7 +756,7 @@ watch(() => gameStore.currentMove, async (move) => {
   if (!move) return
 
   const moveKey = JSON.stringify({
-    userId: move.userId,
+    playerId: move.playerId,
     start: move.startPosition,
     end: move.endPosition,
     process: move.moveProcess
@@ -577,7 +766,7 @@ watch(() => gameStore.currentMove, async (move) => {
   lastMoveKey.value = moveKey
 
   // 이동 애니메이션 전에 즉시 출발지로 고정 → gameState가 먼저 도착지로 와도 깜빡임/점프 방지
-  animatingPlayers.value[move.userId] = move.startPosition
+  animatingPlayers.value[move.playerId] = move.startPosition
 
   await waitForMoveUnlock()
 
@@ -585,7 +774,7 @@ watch(() => gameStore.currentMove, async (move) => {
   gameStore.setMovementInProgress(true)
   emit('movement-change', true)
 
-  const userId = move.userId
+  const playerId = move.playerId
 
   // 이동 시작 시점 카메라 스냅샷 저장
   const cameraSnapshotPos = [...cameraPosition.value] as [number, number, number]
@@ -599,7 +788,7 @@ watch(() => gameStore.currentMove, async (move) => {
 
   // 이동 중 카메라가 해당 플레이어를 따라가도록 step마다 타겟을 갱신
   const followCameraStep = async (_position: number) => {
-    const movingPlayer = players.value.find(p => p.userId === userId)
+    const movingPlayer = players.value.find(p => p.playerId === playerId)
     if (!movingPlayer) return
 
     const targetPos = getPlayerWorldPos(movingPlayer)
@@ -611,7 +800,7 @@ watch(() => gameStore.currentMove, async (move) => {
   }
 
   // 이동 시작 시 줌인 + 타겟 이동
-  const movingPlayer = players.value.find(p => p.userId === userId)
+  const movingPlayer = players.value.find(p => p.playerId === playerId)
   if (movingPlayer) {
     const targetPos = getPlayerWorldPos(movingPlayer)
     await animateCameraTo({
@@ -626,7 +815,7 @@ watch(() => gameStore.currentMove, async (move) => {
   const actions = Array.isArray(move.moveProcess) ? move.moveProcess : []
 
   if (actions.length === 0) {
-    await moveStep(userId, currentPos, move.endPosition, followCameraStep)
+    await moveStep(playerId, currentPos, move.endPosition, followCameraStep)
     currentPos = move.endPosition
   } else {
     for (const action of actions) {
@@ -638,28 +827,65 @@ watch(() => gameStore.currentMove, async (move) => {
       const after = action.after ?? currentPos
 
       if (before !== currentPos) {
-        await moveStep(userId, currentPos, before, followCameraStep)
+        await moveStep(playerId, currentPos, before, followCameraStep)
         currentPos = before
       }
 
       if (action.type === 'BUFF') {
-        await showActionNotice(`아이템 '${getBuffLabel(action.buffType)}'이 적용됩니다.`, 1500)
+        // PLUS_THREE는 버프 룰렛 완료 시 이미 알림 표시됨 → 중복 방지
+        if (action.buffType !== 'PLUS_THREE') {
+          await showActionNotice(`아이템 '${getBuffLabel(action.buffType)}'이 적용됩니다.`, 1500)
+        }
       }
 
-      if (action.type === 'TILE_EFFECT') {
-        const label = getEffectLabel(action.effectType)
-        await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
+      if (action.type === 'SWAP_POSITION' && action.targetPlayerId != null) {
+        // 자리바꾸기: 알림이 사라진 뒤 한 번에 위치 교환 (한 칸씩 이동 없음)
+        // 본인 관점에서 "상대방" 이름 표시 (아이템 사용자/대상 모두 상대 이름이 보이도록)
+        const otherId = myPlayerId.value === move.playerId ? action.targetPlayerId : move.playerId
+        const otherPlayer = players.value.find(p => p.playerId === otherId)
+        const otherName = otherPlayer?.nickname || '알 수 없음'
+        await showActionNotice(`${otherName}님과 자리를 바꿉니다.`, 1500)
+        animatingPlayers.value[playerId] = after
+        animatingPlayers.value[action.targetPlayerId] = before
+        currentPos = after
+      } else if (action.type === 'TILE_EFFECT') {
+        if (action.effectType === 'BANANA_SLIP') {
+          const events = { ...(gameStore.gameState.mapEvents || {}) }
+          delete events[String(before)]
+          gameStore.setGameState({ ...gameStore.gameState, mapEvents: events })
+          
+          await showActionNotice(`바나나를 밟아 미끄러집니다!`, 1500)
+          
+          // [MOD] 바나나 애니메이션 적용 (w/ GameCharacter.vue)
+          // 1. 상태 설정: GameCharacter에게 바나나 효과임을 알림
+          activeSpecificEffects.value[playerId] = 'BANANA_SLIP'
+          
+          // 2. 위치 즉시 이동 (GameCharacter가 내부적으로 1080도 회전 + 점프하며 이동)
+          animatingPlayers.value[playerId] = after
+          currentPos = after
+          
+          // 3. 애니메이션 시간 대기 (GameCharacter BANANA_DURATION_S=1.0s + 여유 0.1s)
+          await sleep(1100)
+          
+          // 4. 상태 해제
+          activeSpecificEffects.value[playerId] = ''
+        } else {
+            const label = getEffectLabel(action.effectType)
+            await showActionNotice(`특수칸 '${label}'을 밟아서 ${formatMoveDelta(before, after)}`, 1500)
+            await moveStep(playerId, currentPos, after, followCameraStep)
+            currentPos = after
+        }
+      } else {
+        await moveStep(playerId, currentPos, after, followCameraStep)
+        currentPos = after
       }
-
-      await moveStep(userId, currentPos, after, followCameraStep)
-      currentPos = after
     }
   }
 
   const catchActions = move.moveProcess?.filter((item: any) => item.type === 'CATCH') || []
   catchActions.forEach((action: any) => {
-    if (action.targetUserId !== undefined && action.after !== undefined) {
-      animatingPlayers.value[action.targetUserId] = action.after
+    if (action.targetPlayerId !== undefined && action.after !== undefined) {
+      animatingPlayers.value[action.targetPlayerId] = action.after
     }
   })
 
@@ -679,7 +905,23 @@ watch(() => gameStore.currentMove, async (move) => {
   isMovingGlobal.value = false
   gameStore.setMovementInProgress(false)
   emit('movement-change', false)
-  wsStore.sendAck('MOVE_COMPLETE', gameStore.currentQuiz?.quizId, gameStore.gameState.round ?? undefined)
+  
+  // SWAP_POSITION인 경우: 미니게임 후 아이템 사용이므로 BUFF_ROULETTE_COMPLETE ACK 전송
+  const isSwapPositionMove = move.moveProcess?.some((a: any) => a.type === 'SWAP_POSITION')
+  if (isSwapPositionMove) {
+    await sleep(1500) // 이동 완료 후 1.5초 대기
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+  } else {
+    // 일반 이동 완료: MOVE_COMPLETE ACK 전송
+    wsStore.sendAck('MOVE_COMPLETE', gameStore.lastMoveQuizId ?? undefined, gameStore.gameState.round ?? undefined)
+  }
+  
+  // 미니게임 +3칸 이동: 전원 ACK 필요 → 이번 이동이 +3 버프면 모든 클라이언트가 BUFF_ROULETTE_COMPLETE 전송
+  const isPlusThreeMove = move.moveProcess?.some((a: any) => a.type === 'BUFF' && a.buffType === 'PLUS_THREE')
+  if (gameStore.pendingPlusThreeAck || isPlusThreeMove) {
+    wsStore.sendAck('BUFF_ROULETTE_COMPLETE', undefined, gameStore.gameState.round ?? undefined)
+    gameStore.setPendingPlusThreeAck(false)
+  }
 })
 
 function sleep(ms: number) {
@@ -689,6 +931,8 @@ function sleep(ms: number) {
 // script setup 내부
 onMounted(async () => {
   const loader = new GLTFLoader()
+  
+  // 게임 맵 로드
   const gltf: GLTF = await loader.loadAsync('/assets/models/game_map.glb')
   
   const model = gltf.scene
@@ -698,14 +942,18 @@ onMounted(async () => {
     if (child.isMesh) {
       child.castShadow = true    // 이 물체는 그림자를 만듦 (ex: 나무, 배)
       child.receiveShadow = true // 이 물체 위에 그림자가 생김 (ex: 바닥 타일)
-      
-      // (선택사항) 재질이 빛에 더 잘 반응하도록 설정
-      // child.material.roughness = 1
-      // child.material.metalness = 0
     }
   })
 
   boardScene.value = model as unknown as PointerEventsObject3D
+  
+  // 바나나 모델 로드
+  try {
+    const bananaGltf: GLTF = await loader.loadAsync('/assets/models/banana.glb')
+    bananaScene.value = bananaGltf.scene
+  } catch (e) {
+    console.warn('Failed to load banana model:', e)
+  }
 })
 </script>
 

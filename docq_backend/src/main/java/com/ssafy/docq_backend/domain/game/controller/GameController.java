@@ -3,8 +3,10 @@ package com.ssafy.docq_backend.domain.game.controller;
 import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.game.dto.QuizDto;
 import com.ssafy.docq_backend.domain.game.service.GameService;
+import com.ssafy.docq_backend.global.security.CustomUserDetails;
 import com.ssafy.docq_backend.global.websocket.SessionRegistry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -28,14 +30,14 @@ public class GameController {
     public void joinGame(GameDto.JoinRequest request, SimpMessageHeaderAccessor headerAccessor) {
         gameService.joinGame(request);
         if (headerAccessor != null) {
-            sessionRegistry.register(headerAccessor.getSessionId(), request.getRoomId(), request.getUserId());
+            sessionRegistry.register(headerAccessor.getSessionId(), request.getRoomId(), request.getPlayerId());
         }
     }
 
     @MessageMapping("/game/leave")
     public void leaveGame(GameDto.LeaveRequest request) {
         gameService.leaveGame(request);
-        sessionRegistry.removeByUserId(request.getUserId());
+        sessionRegistry.removeByPlayerId(request.getPlayerId());
     }
 
     @MessageMapping("/game/ready")
@@ -45,10 +47,10 @@ public class GameController {
 
     @MessageMapping("/game/start")
     public void startGame(Map<String, String> payload) {
-        // Payload: { "roomId": "...", "userId": "..." }
+        // Payload: { "roomId": "...", "playerId": "..." }
         String roomId = payload.get("roomId");
-        String userId = payload.get("userId");
-        gameService.startGame(roomId, userId);
+        String playerId = payload.get("playerId");
+        gameService.startGame(roomId, playerId);
     }
 
     @MessageMapping("/game/end")
@@ -63,25 +65,19 @@ public class GameController {
 
     @ResponseBody
     @PostMapping("/game/{roomId}/quiz/generate")
-    public ResponseEntity<?> generateQuiz(@PathVariable String roomId, @RequestParam("file") MultipartFile file) {
-        try {
-            // TODO: userId 검증 (방장인지 등)
-            gameService.generateQuizFromPdf(roomId, file);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Quiz generation started",
-                    "roomId", roomId));
-        } catch (com.ssafy.docq_backend.global.exception.DocqException e) {
-            log.error("Quiz generation failed (Managed): {}", e.getMessage());
-            return ResponseEntity
-                    .status(e.getErrorCode().getStatus())
-                    .body(Map.of("message", e.getMessage()));
-        } catch (Exception e) {
-            log.error("Quiz generation failed", e);
-            return ResponseEntity
-                    .status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("message", e.getMessage()));
-        }
+    public ResponseEntity<Map<String, Object>> generateQuiz(
+            @PathVariable String roomId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        // TODO: 방장 검증
+        gameService.requestQuizGeneration(roomId, file);
 
+        return ResponseEntity.accepted().body(
+                Map.of(
+                        "message", "Quiz generation started",
+                        "roomId", roomId
+                )
+        );
     }
 
     @ResponseBody
@@ -98,6 +94,14 @@ public class GameController {
         return Map.of("count", count);
     }
 
+    @ResponseBody
+    @PostMapping("/game/{roomId}/quiz/{quizId}")
+    public Map<String, Object> setQuizFromDb(@PathVariable String roomId,
+            @PathVariable Long quizId) {
+        int count = gameService.setQuizFromDb(roomId, quizId);
+        return Map.of("count", count);
+    }
+
     @MessageMapping("/game/submit")
     public void submitAnswer(GameDto.SubmitAnswer request) {
         gameService.submitAnswer(request);
@@ -106,6 +110,11 @@ public class GameController {
     @MessageMapping("/game/avatar")
     public void selectAvatar(GameDto.AvatarSelectRequest request) {
         gameService.selectAvatar(request);
+    }
+
+    @MessageMapping("/game/chat")
+    public void sendChat(GameDto.ChatRequest request) {
+        gameService.sendChat(request);
     }
 
     @MessageMapping("/game/ack")

@@ -1,17 +1,19 @@
 package com.ssafy.docq_backend.domain.minigame.service;
 
 import com.ssafy.docq_backend.domain.game.service.GameService;
+import com.ssafy.docq_backend.domain.game.dto.GameDto;
 import com.ssafy.docq_backend.domain.minigame.dto.BuffType;
 import com.ssafy.docq_backend.domain.minigame.dto.MiniGameDto;
 import com.ssafy.docq_backend.domain.room.entity.Room;
 import com.ssafy.docq_backend.domain.room.entity.RoomStatus;
 import com.ssafy.docq_backend.domain.room.repository.RoomRepository;
-import com.ssafy.docq_backend.domain.user.entity.User;
-import com.ssafy.docq_backend.domain.user.repository.UserRepository;
+import com.ssafy.docq_backend.domain.player.entity.Player;
+import com.ssafy.docq_backend.domain.player.repository.PlayerRepository;
 import com.ssafy.docq_backend.global.exception.DocqException;
 import com.ssafy.docq_backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ssafy.docq_backend.domain.game.entity.PlayerState;
 import com.ssafy.docq_backend.domain.minigame.dto.MiniGameType;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -26,7 +28,7 @@ import java.util.stream.Collectors;
 public class MiniGameService {
 
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
+    private final PlayerRepository playerRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Lazy
@@ -79,14 +81,14 @@ public class MiniGameService {
 
     public void submitResult(MiniGameDto.SubmissionRequest request) {
         String roomId = request.getRoomId();
-        String userId = request.getUserId();
+        String playerId = request.getPlayerId();
         int score = request.getResultValue();
 
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
 
         if (room.getStatus() != RoomStatus.MINIGAME) {
-            log.warn("Ignored minigame result from {} in room {} (Status: {})", userId, roomId, room.getStatus());
+            log.warn("Ignored minigame result from {} in room {} (Status: {})", playerId, roomId, room.getStatus());
             return;
         }
 
@@ -94,10 +96,10 @@ public class MiniGameService {
         if (room.getMiniGameScores() == null) {
             room.setMiniGameScores(new HashMap<>());
         }
-        room.getMiniGameScores().put(userId, score);
+        room.getMiniGameScores().put(playerId, score);
         roomRepository.save(room);
 
-        log.info("Stored MiniGame Score: User {} = {}", userId, score);
+        log.info("Stored MiniGame Score: Player {} = {}", playerId, score);
 
         // 모든 플레이어 제출 여부 확인
         if (room.getMiniGameScores().size() >= room.getPlayers().size()) {
@@ -118,40 +120,153 @@ public class MiniGameService {
         // 1. 순위 계산
         List<MiniGameDto.RankInfo> rankings = calculateRankings(room);
 
-        String winnerUserId = null;
+        String winnerPlayerId = null;
         String rewardBuff = "NONE";
+        String resultType = "RESULT";
+        boolean requiresInteraction = false;
 
-        // 2. 보상 적용
-        if (!rankings.isEmpty()) {
+        // 2. 승자 결정 및 보상 처리
+        // 무승부 체크 (1, 2등 동점 시)
+        if (rankings.size() >= 2 && rankings.get(0).getValue() == rankings.get(1).getValue()) {
+            resultType = "DRAW";
+            log.info("MiniGame Draw in Room {} - No rewards distributed", roomId);
+        } else if (!rankings.isEmpty()) {
+            // 승자 존재
             MiniGameDto.RankInfo winner = rankings.get(0);
-            winnerUserId = winner.getUserId();
+            winnerPlayerId = winner.getPlayerId();
 
             // 랜덤 버프 선택 (Enum 활용)
-            BuffType[] augments = BuffType.values();
-            BuffType selectedBuff = augments[new Random().nextInt(augments.length)];
+            // BuffType[] augments = BuffType.values();
+            // BuffType selectedBuff = augments[new Random().nextInt(augments.length)];
+            BuffType selectedBuff = BuffType.PLUS_THREE; // FOR TESTING: Always PLUS_THREE
             rewardBuff = selectedBuff.getCode();
 
-            // Apply to PlayerState
-            if (room.getPlayerStates().containsKey(winnerUserId)) {
-                room.getPlayerStates().get(winnerUserId).setHasBuff(rewardBuff);
+            // 인터랙션이 필요한 아이템인지 확인
+            if (selectedBuff == BuffType.BANANA ||
+                    selectedBuff == BuffType.SWAP_POSITION ||
+                    selectedBuff == BuffType.QUIZ_INTERFERENCE) {
+                requiresInteraction = true;
+            } else if (selectedBuff == BuffType.PLUS_THREE) {
+                // ACK 기반 처리: 버프 룰렛 완료 후 이동 적용
+                requiresInteraction = true;
+                room.setPendingPlusThreePlayerId(winnerPlayerId);
             }
+            // BOOM은 아무 효과 없음
         }
 
         roomRepository.save(room);
 
         // 3. 결과 브로드캐스트
         MiniGameDto.ResultResponse response = MiniGameDto.ResultResponse.builder()
-                .type("RESULT")
-                .gameType("MINIGAME_END") // 종료 시에는 구체적인 타입보다는 종료되었음을 알림 (Room에 저장을 안하므로)
-                .winnerUserId(winnerUserId)
+                .type(resultType)
+                .gameType("MINIGAME_END") // 종료 시에는 구체적인 타입보다는 종료되었음을 알림
+                .winnerPlayerId(winnerPlayerId)
                 .rewardBuff(rewardBuff)
                 .rankings(rankings)
                 .build();
 
         messagingTemplate.convertAndSend("/topic/game/" + roomId + "/minigame", response);
 
-        // 4. 메인 게임 재개 (ACK 기반 진행 + 폴백 예약)
-        gameService.scheduleResumeAfterMiniGame(roomId);
+        // 4. 메인 게임 재개 (인터랙션이 필요없는 경우에만 자동 재개)
+        if (!requiresInteraction) {
+            gameService.scheduleResumeAfterMiniGame(roomId);
+        } else {
+            log.info("Waiting for item interaction from player {}", winnerPlayerId);
+            // 클라이언트에게 인터랙션 요청 메시지 전송 (옵션)
+            // 이미 RESULT 메시지에 rewardBuff가 포함되어 있으므로 클라이언트가 이를 보고 판단 가능
+        }
+    }
+
+    public void useItem(MiniGameDto.ItemUsageRequest request) {
+        String roomId = request.getRoomId();
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new DocqException(ErrorCode.ROOM_NOT_FOUND));
+
+        // 유효성 검증 (미니게임 상태인지, 요청자가 승자인지 등은 생략하거나 추가 가능)
+
+        BuffType itemType;
+        try {
+            itemType = BuffType.valueOf(request.getItemType());
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid item type: {}", request.getItemType());
+            return;
+        }
+
+        log.info("Player {} using item {}", request.getPlayerId(), itemType);
+
+        switch (itemType) {
+            case BANANA:
+                if (request.getTargetPosition() != null) {
+                    room.getMapEvents().put(request.getTargetPosition(), "BANANA");
+                    roomRepository.save(room);
+                    gameService.broadcastGameState(room);
+                }
+                break;
+            case SWAP_POSITION:
+                if (request.getTargetPlayerId() != null) {
+                    String p1 = request.getPlayerId();
+                    String p2 = request.getTargetPlayerId();
+                    if (room.getPlayerStates().containsKey(p1) && room.getPlayerStates().containsKey(p2)) {
+                        int pos1 = room.getPlayerStates().get(p1).getPosition();
+                        int pos2 = room.getPlayerStates().get(p2).getPosition();
+                        room.getPlayerStates().get(p1).setPosition(pos2);
+                        room.getPlayerStates().get(p2).setPosition(pos1);
+                        roomRepository.save(room);
+
+                        // MoveInfo 1회 전송 (아이템 사용자 기준, targetPlayerId로 상대 포함 → 프론트에서 두 플레이어 위치 동시 갱신)
+                        GameDto.MoveAction swapAction = GameDto.MoveAction.builder()
+                                .type("SWAP_POSITION")
+                                .before(pos1)
+                                .after(pos2)
+                                .targetPlayerId(p2)
+                                .build();
+                        GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                                .playerId(p1)
+                                .startPosition(pos1)
+                                .endPosition(pos2)
+                                .moveProcess(Collections.singletonList(swapAction))
+                                .build();
+
+                        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/move", moveInfo);
+                        gameService.broadcastGameState(room);
+                        // SWAP은 즉시 교환이므로 다음 퀴즈까지 짧은 delay만 사용
+                        gameService.scheduleResumeAfterMiniGameForSwap(roomId);
+                    }
+                }
+                break;
+            case QUIZ_INTERFERENCE:
+                if (request.getTargetPlayerId() != null) {
+                    if (room.getPlayerStates().containsKey(request.getTargetPlayerId())) {
+                        // 디버프 저장 (PlayerState에 디버프 필드가 없으므로 hasBuff를 임시 활용하거나 별도 관리 필요)
+                        // 현재 hasBuff는 String이므로 여기에 "DEBUFF_MIRROR" 저장 가능 (기존 버프 덮어씀 주의)
+                        room.getPlayerStates().get(request.getTargetPlayerId()).setHasBuff("DEBUFF_MIRROR");
+                    }
+                }
+                break;
+            default:
+                break; // 다른 아이템은 즉시 적용되었거나 별도 처리 없음
+        }
+
+        roomRepository.save(room);
+
+        // 아이템 사용 완료 브로드캐스트
+        Player player = playerRepository.findById(request.getPlayerId()).orElse(null);
+        String nickname = player != null ? player.getNickname() : "알 수 없음";
+
+        Map<String, Object> itemUsedNotice = new HashMap<>();
+        itemUsedNotice.put("type", "ITEM_USED");
+        itemUsedNotice.put("playerId", request.getPlayerId());
+        itemUsedNotice.put("playerName", nickname);
+        itemUsedNotice.put("itemType", request.getItemType());
+        itemUsedNotice.put("targetPlayerId", request.getTargetPlayerId());
+        itemUsedNotice.put("targetPosition", request.getTargetPosition());
+
+        messagingTemplate.convertAndSend("/topic/game/" + roomId + "/notice", itemUsedNotice);
+
+        // SWAP_POSITION은 위 case에서 이미 scheduleResumeAfterMiniGameForSwap 호출
+        if (!"SWAP_POSITION".equals(request.getItemType())) {
+            gameService.scheduleResumeAfterMiniGame(roomId);
+        }
     }
 
     private List<MiniGameDto.RankInfo> calculateRankings(Room room) {
@@ -159,12 +274,12 @@ public class MiniGameService {
                 .map(entry -> {
                     String uid = entry.getKey();
                     String nickname = "Unknown";
-                    User user = userRepository.findById(uid).orElse(null);
-                    if (user != null)
-                        nickname = user.getNickname();
+                    Player player = playerRepository.findById(uid).orElse(null);
+                    if (player != null)
+                        nickname = player.getNickname();
 
                     return MiniGameDto.RankInfo.builder()
-                            .userId(uid)
+                            .playerId(uid)
                             .nickname(nickname)
                             .value(entry.getValue())
                             .build();
@@ -176,7 +291,7 @@ public class MiniGameService {
                         // 순위 정보 재생성
                         MiniGameDto.RankInfo original = list.get(i);
                         list.set(i, MiniGameDto.RankInfo.builder()
-                                .userId(original.getUserId())
+                                .playerId(original.getPlayerId())
                                 .nickname(original.getNickname())
                                 .value(original.getValue())
                                 .rank(i + 1)
@@ -184,5 +299,70 @@ public class MiniGameService {
                     }
                     return list;
                 }));
+    }
+
+    public void applyPlusThreeMove(Room room, String playerId) {
+        if (room == null || playerId == null) {
+            return;
+        }
+        if (room.getPlayerStates() == null || !room.getPlayerStates().containsKey(playerId)) {
+            return;
+        }
+
+        PlayerState ps = room.getPlayerStates().get(playerId);
+        int before = ps.getPosition();
+        int afterPlusThree = before + 3;
+        int maxPosition = 30;
+
+        if (afterPlusThree > maxPosition) {
+            afterPlusThree = maxPosition;
+        }
+
+        List<GameDto.MoveAction> moveActions = new ArrayList<>();
+        moveActions.add(GameDto.MoveAction.builder()
+                .type("BUFF")
+                .buffType("PLUS_THREE")
+                .before(before)
+                .after(afterPlusThree)
+                .build());
+
+        // 타일 효과 계산 (PLUS_THREE는 3칸 이동으로 간주하여 처리)
+        GameService.TileEventResult eventResult = gameService.processTileEvents(room, afterPlusThree, 3);
+
+        if (eventResult.getActions() != null) {
+            moveActions.addAll(eventResult.getActions());
+        }
+
+        int finalPos = eventResult.getFinalPosition();
+        boolean isFinished = eventResult.isFinished();
+
+        // [ADD] 잡기 체크 및 적용
+        gameService.checkForCatch(room, playerId, finalPos, moveActions);
+        for (GameDto.MoveAction action : moveActions) {
+            if ("CATCH".equals(action.getType()) && action.getTargetPlayerId() != null) {
+                PlayerState caught = room.getPlayerStates().get(action.getTargetPlayerId());
+                if (caught != null && action.getAfter() != null) {
+                    caught.setPosition(action.getAfter());
+                }
+            }
+        }
+
+        ps.setPosition(finalPos);
+
+        GameDto.MoveInfo moveInfo = GameDto.MoveInfo.builder()
+                .playerId(playerId)
+                .startPosition(before)
+                .endPosition(finalPos)
+                .moveProcess(moveActions)
+                .build();
+
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId() + "/move", moveInfo);
+
+        if (isFinished) {
+            gameService.finishGame(room);
+        } else {
+            roomRepository.save(room);
+            gameService.broadcastGameState(room);
+        }
     }
 }

@@ -1,21 +1,28 @@
 // 현재 사용자 정보 관리
-/*
-1. 사용자 인증 상태
-2. 사용자 프로필 정보
-3. 로그인/로그아웃
-4. 닉네임 및 아바타 설정
-*/
-
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { userLogin } from '@/services/api'
+import {
+    guestLogin,
+    updateGuestNickname,
+    checkNicknameAvailability,
+    checkUserIdAvailability as checkIdApi,
+    signUp as signUpApi,
+    login as loginApi,
+    logout as logoutApi,
+    getMyInfo,
+    updateMemberNickname
+} from '@/services/api'
 
-// 타입 정의
+// 통합 사용자 프로필 타입
 export interface UserProfile {
-    id: string
+    /** 로그인(회원) 시 RDS 사용자 ID. 로그인 유저만 값 있음 */
+    userId?: string
+    /** 게임 참여자 ID. 방/게임/웹소켓 API용 (게스트·로그인 공통) */
+    playerId: string
     username: string
     avatar: string
-    email?: string
+    isGuest: boolean
+    loginId?: string
     createdAt?: Date
 }
 
@@ -24,58 +31,32 @@ export const useUserStore = defineStore('user', () => {
     const currentUser = ref<UserProfile | null>(null)
     const isAuthenticated = ref(false)
     const isLoading = ref(false)
+    /** 앱 시작 시 세션 복구(restoreUser) 완료 여부. 이게 true가 된 후에 로그인 UI 표시 여부 결정 */
+    const authChecked = ref(false)
 
     // Getters
-    const userId = computed(() => currentUser.value?.id || '')
+    /** 로그인(회원) 시 RDS 사용자 ID. 로그인 유저만 값 있음, 게스트는 빈 문자열 */
+    const userId = computed(() => currentUser.value?.userId ?? '')
+    /** 게임 참여자 ID. 방/게임/웹소켓 API에는 이 값 사용 */
+    const playerId = computed(() => currentUser.value?.playerId ?? '')
     const username = computed(() => currentUser.value?.username || 'Guest')
     const avatar = computed(() => currentUser.value?.avatar || '👤')
+    const isGuest = computed(() => currentUser.value?.isGuest || false)
 
     // Actions
 
     /**
-     * 사용자 로그인
-     * @param username - 사용자 이름
-     * @param password - 비밀번호 (실제 구현 시 사용)
-     */
-    const login = async (username: string, password?: string) => {
-        isLoading.value = true
-        try {
-            // TODO: 실제 API 호출로 대체
-            // const response = await api.login({ username, password })
-
-            // 임시 로그인 처리
-            currentUser.value = {
-                id: Math.random().toString(36).substring(7),
-                username: username,
-                avatar: getRandomAvatar(),
-                createdAt: new Date()
-            }
-
-            isAuthenticated.value = true
-
-            // 세션 스토리지에 저장
-            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-
-            return { success: true }
-        } catch (error) {
-            console.error('Login failed:', error)
-            return { success: false, error }
-        } finally {
-            isLoading.value = false
-        }
-    }
-
-    /**
-     * API 기반 로그인 (닉네임으로 userId 발급)
+     * API 기반 게스트 로그인 (닉네임으로 playerId 발급)
      */
     const loginWithApi = async (nickname: string) => {
         isLoading.value = true
         try {
-            const response = await userLogin(nickname)
+            const response = await guestLogin(nickname)
             currentUser.value = {
-                id: response.userId,
+                playerId: response.playerId,
                 username: response.nickname,
                 avatar: getRandomAvatar(),
+                isGuest: true,
                 createdAt: new Date()
             }
 
@@ -92,68 +73,189 @@ export const useUserStore = defineStore('user', () => {
     }
 
     /**
-     * 게스트로 입장 (닉네임만 설정)
-     * @param username - 사용자 이름
+     * 게스트로 입장 (닉네임으로 백엔드에서 playerId 발급받음)
+     * playerId는 반드시 백엔드에서 발급받아야 방/게임 API가 동작함
      */
-    const loginAsGuest = (username: string) => {
-        currentUser.value = {
-            id: Math.random().toString(36).substring(7),
-            username: username,
-            avatar: getRandomAvatar(),
-            createdAt: new Date()
-        }
-
-        isAuthenticated.value = true
-
-        // 세션 스토리지에 저장 (게스트는 세션만 유지)
-        sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
+    const loginAsGuest = async (nickname: string) => {
+        return loginWithApi(nickname)
     }
 
     /**
-     * 사용자 로그아웃
+     * 2. 회원 로그인 (Mock)
      */
-    const logout = () => {
-        currentUser.value = null
-        isAuthenticated.value = false
-
-        // 스토리지 정리
-        sessionStorage.removeItem('user')
-        sessionStorage.removeItem('guestUser')
-    }
-
-    /**
-     * 닉네임 변경
-     * @param newUsername - 새 닉네임
-     */
-    const updateUsername = (newUsername: string) => {
-        if (currentUser.value) {
-            currentUser.value.username = newUsername
-
-            // 스토리지 업데이트
-            if (sessionStorage.getItem('user')) {
-                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-            }
-            if (sessionStorage.getItem('guestUser')) {
-                sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
-            }
+    const login = async (loginId: string, password?: string) => {
+        if (!password) return { success: false, error: 'Password is required' }
+        isLoading.value = true
+        try {
+            await loginApi({ loginId, password })
+            // 로그인 성공 시 쿠키가 발급됨. restoreUser를 통해 playerId 포함 전체 정보를 가져옴
+            const success = await restoreUser()
+            return { success }
+        } catch (error) {
+            console.error('Login failed:', error)
+            return { success: false, error: error ?? '로그인에 실패했습니다.' }
+        } finally {
+            isLoading.value = false
         }
     }
 
     /**
-     * 아바타 변경
-     * @param newAvatar - 새 아바타 (이모지 또는 URL)
+     * 3. 회원가입 (Mock)
      */
+    const signUp = async (loginId: string, password: string, nickname: string) => {
+        isLoading.value = true
+        try {
+            await signUpApi({ loginId, password, nickname })
+            // 회원가입 성공 (로그인은 별도 호출)
+            return { success: true }
+        } catch (error) {
+            console.error('Signup failed:', error)
+            return { success: false, error }
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    /**
+     * 4. 로그아웃 (백엔드 세션 무효화 + 프론트 상태 초기화)
+     */
+    const logout = async () => {
+        try {
+            await logoutApi()  // 백엔드 세션 무효화
+        } catch (error) {
+            console.error('Logout API failed:', error)
+        } finally {
+            // 프론트엔드 상태 초기화 (API 실패해도 무조건 초기화)
+            currentUser.value = null
+            isAuthenticated.value = false
+            sessionStorage.removeItem('user')
+            sessionStorage.removeItem('guestUser')
+        }
+    }
+
+    /**
+     * 닉네임 중복 확인
+     */
+    const checkNickname = async (nickname: string) => {
+        try {
+            const { exists, message } = await checkNicknameAvailability(nickname)
+            return {
+                isAvailable: !exists,
+                message: message
+            }
+        } catch (error) {
+            console.error('Nickname check failed:', error)
+            return {
+                isAvailable: false,
+                message: "닉네임 확인 중 오류가 발생했습니다."
+            }
+        }
+    }
+
+    /**
+     * 아이디 중복 확인
+     */
+    /**
+     * 세션 복구 및 내 정보 조회 (새로고침 시)
+     * - 게스트: sessionStorage에서만 복구 (API 호출 없음, 403 방지)
+     * - 회원: getMyInfo API 호출
+     */
+    const restoreUser = async () => {
+        isLoading.value = true
+        try {
+            const stored = sessionStorage.getItem('user')
+            if (stored) {
+                const parsed = JSON.parse(stored) as UserProfile
+                if (parsed?.playerId && parsed?.username && parsed.isGuest) {
+                    currentUser.value = parsed
+                    isAuthenticated.value = true
+                    return true
+                }
+            }
+            const response = await getMyInfo()
+            currentUser.value = {
+                userId: 'id' in response ? String(response.id) : undefined,
+                playerId: response.playerId,
+                username: response.nickname,
+                avatar: getRandomAvatar(),
+                isGuest: response.isGuest,
+                loginId: 'loginId' in response ? response.loginId : undefined
+            }
+            isAuthenticated.value = true
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+            return true
+        } catch {
+            const stored = sessionStorage.getItem('user')
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored) as UserProfile
+                    if (parsed?.playerId && parsed?.username) {
+                        currentUser.value = parsed
+                        isAuthenticated.value = true
+                        return true
+                    }
+                } catch { /* ignore */ }
+            }
+            currentUser.value = null
+            isAuthenticated.value = false
+            sessionStorage.removeItem('user')
+            return false
+        } finally {
+            isLoading.value = false
+            authChecked.value = true
+        }
+    }
+
+    const checkId = async (userId: string) => {
+        try {
+            const { available, message } = await checkIdApi(userId)
+            return {
+                isAvailable: available,
+                message: message
+            }
+        } catch (error) {
+            console.error('ID check failed:', error)
+            return {
+                isAvailable: false,
+                message: "아이디 확인 중 오류가 발생했습니다."
+            }
+        }
+    }
+
+    /**
+     * 6. 닉네임 변경 (Mock)
+     */
+    /**
+     * 6. 닉네임 변경 (API 연동)
+     */
+    const updateUsername = async (newNickname: string) => {
+        if (!currentUser.value) return false
+
+        try {
+            if (isGuest.value) {
+                // 게스트: playerId 필요
+                await updateGuestNickname(playerId.value, newNickname)
+            } else {
+                // 회원: 세션 기반
+                await updateMemberNickname(newNickname)
+            }
+
+            // 성공 시 로컬 상태 업데이트
+            currentUser.value.username = newNickname
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
+            return true
+        } catch (error) {
+            console.error('Nickname update failed:', error)
+            return false
+        }
+    }
+
+
+
     const updateAvatar = (newAvatar: string) => {
         if (currentUser.value) {
             currentUser.value.avatar = newAvatar
-
-            // 스토리지 업데이트
-            if (sessionStorage.getItem('user')) {
-                sessionStorage.setItem('user', JSON.stringify(currentUser.value))
-            }
-            if (sessionStorage.getItem('guestUser')) {
-                sessionStorage.setItem('guestUser', JSON.stringify(currentUser.value))
-            }
+            sessionStorage.setItem('user', JSON.stringify(currentUser.value))
         }
     }
 
@@ -178,77 +280,35 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
-    /**
-     * 저장된 사용자 정보 복원
-     */
-    const restoreUser = () => {
-        // 세션 스토리지에서 복원 시도
-        const savedUser = sessionStorage.getItem('user')
-        if (savedUser) {
-            try {
-                currentUser.value = JSON.parse(savedUser)
-                isAuthenticated.value = true
-                return true
-            } catch (error) {
-                console.error('Failed to restore user from sessionStorage:', error)
-            }
-        }
 
-        // 세션 스토리지에서 게스트 복원 시도
-        const guestUser = sessionStorage.getItem('guestUser')
-        if (guestUser) {
-            try {
-                currentUser.value = JSON.parse(guestUser)
-                isAuthenticated.value = true
-                return true
-            } catch (error) {
-                console.error('Failed to restore guest user from sessionStorage:', error)
-            }
-        }
-
-        return false
-    }
 
     /**
      * 랜덤 아바타 생성 (이모지)
      */
     const getRandomAvatar = (): string => {
-        const avatars = ['❓']
+        const avatars = ['😊', '😎', '🐱', '🐶', '🦊', '🐸', '🐼', '🐵', '🐣', '🦄']
         return avatars[Math.floor(Math.random() * avatars.length)] || '👤'
     }
 
-    /**
-     * 사용자 초기화 (개발/테스트용)
-     */
-    const reset = () => {
-        currentUser.value = null
-        isAuthenticated.value = false
-        isLoading.value = false
-        sessionStorage.removeItem('user')
-        sessionStorage.removeItem('guestUser')
-    }
-
     return {
-        // State
         currentUser,
         isAuthenticated,
         isLoading,
-
-        // Getters
+        authChecked,
         userId,
+        playerId,
         username,
         avatar,
-
-        // Actions
+        isGuest,
         login,
-        loginWithApi,
         loginAsGuest,
+        signUp,
         logout,
+        checkNickname,
+        checkId,
         updateUsername,
         updateAvatar,
-        updateProfile,
         restoreUser,
-        getRandomAvatar,
-        reset
+        getRandomAvatar
     }
 })

@@ -35,6 +35,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const isConnecting = ref(false)
     const lastError = ref<string | null>(null)
     const quizGeneratedNotice = ref<QuizGeneratedNotice | null>(null)
+    /** 대기실/인게임 퀵메시지 (playerId -> message), 2초 후 자동 삭제 */
+    const userMessages = ref<Record<string, string>>({})
+    const chatHideTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
     // Getters
     const connectionStatus = computed(() => {
@@ -126,7 +129,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
             // 2. RoomStore 업데이트 (로비/유저 목록 상태)
             const players = Array.isArray(data.players) ? data.players : []
             const nextUsers = players.map((player: PlayerInfo) => {
-                const isMe = player.userId === userStore.userId
+                const isMe = player.playerId === userStore.playerId
 
                 // 백엔드 naming 이슈(isReady vs ready, isHost vs host)를 방어적으로 처리
                 const isReady = player.isReady !== undefined ? player.isReady : (player.ready !== undefined ? player.ready : false)
@@ -136,21 +139,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 let avatar = '❓'
                 if (player.avatarId !== null && player.avatarId !== undefined) {
                     avatar = AVATAR_MAP[player.avatarId] || '❓'
-                    avatarCache.value[player.userId] = avatar
+                    avatarCache.value[player.playerId] = avatar
                 } else {
                     if (isMe) {
                         // 서버에 avatarId 없음(재입장 등) → 클라이언트도 ❓로 맞춰서 이전 캐릭터 안 보이게
                         avatar = '❓'
                         userStore.updateAvatar('❓')
-                        avatarCache.value[player.userId] = avatar
+                        avatarCache.value[player.playerId] = avatar
                     } else {
                         avatar = '❓'
-                        delete avatarCache.value[player.userId]
+                        delete avatarCache.value[player.playerId]
                     }
                 }
 
                 return {
-                    id: player.userId,
+                    playerId: player.playerId,
                     nickname: player.nickname,
                     avatar: avatar,
                     isReady: !!isReady,
@@ -159,25 +162,25 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 }
             })
 
-            const userById = new Map(nextUsers.map((user: any) => [user.id, user]))
-            const hostUserId = nextUsers.find((user: any) => user.isHost)?.id
+            const userByPlayerId = new Map(nextUsers.map((user: any) => [user.playerId, user]))
+            const hostPlayerId = nextUsers.find((user: any) => user.isHost)?.playerId
             const orderedIds: string[] = []
 
-            if (hostUserId) {
-                orderedIds.push(hostUserId)
+            if (hostPlayerId) {
+                orderedIds.push(hostPlayerId)
             }
 
             const turnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : []
             turnOrder.forEach((id: string) => {
-                if (id && id !== hostUserId) orderedIds.push(id)
+                if (id && id !== hostPlayerId) orderedIds.push(id)
             })
 
             nextUsers.forEach((user: any) => {
-                if (!orderedIds.includes(user.id)) orderedIds.push(user.id)
+                if (!orderedIds.includes(user.playerId)) orderedIds.push(user.playerId)
             })
 
             const orderedUsers = orderedIds
-                .map(id => userById.get(id))
+                .map(id => userByPlayerId.get(id))
                 .filter((user): user is typeof nextUsers[number] => !!user)
 
             roomStore.setUsers(orderedUsers)
@@ -193,12 +196,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
             const emoji = AVATAR_MAP[data.avatarId] || '❓'
 
             // 캐시 먼저 업데이트
-            avatarCache.value[data.userId] = emoji
+            avatarCache.value[data.playerId] = emoji
 
             // 스토어 업데이트
-            roomStore.updateUser(data.userId, { avatar: emoji })
+            roomStore.updateUser(data.playerId, { avatar: emoji })
 
-            if (data.userId === userStore.userId) {
+            if (data.playerId === userStore.playerId) {
                 userStore.updateAvatar(emoji)
             }
         })
@@ -228,8 +231,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
             }
         })
 
-        if (userStore.userId) {
-            wsService.value.subscribe(`/queue/game/${userStore.userId}/quiz`, (data: QuizMessage) => {
+        if (userStore.playerId) {
+            wsService.value.subscribe(`/queue/game/${userStore.playerId}/quiz`, (data: QuizMessage) => {
                 console.log('📨 Private Quiz Received:', data)
                 if (data?.question) {
                     gameStore.onQuizReceived(data)
@@ -244,8 +247,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
             }
         })
 
-        if (userStore.userId) {
-            wsService.value.subscribe(`/queue/game/answer-feedback/${userStore.userId}`, (data: { correct?: boolean }) => {
+        if (userStore.playerId) {
+            wsService.value.subscribe(`/queue/game/answer-feedback/${userStore.playerId}`, (data: { correct?: boolean }) => {
                 console.log('📨 Answer Feedback:', data)
                 if (data && typeof data.correct === 'boolean') {
                     gameStore.setTurnPlayerFeedback(data.correct)
@@ -277,6 +280,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
             gameStore.reset()
             router.push('/')
         })
+
+        // 대기실 퀵메시지(채팅) 구독 - 새 메시지 시 기존 타이머 취소 후 2초 재시작
+        wsService.value.subscribe(`/topic/game/${roomId}/chat`, (data: { playerId: string; message: string }) => {
+            if (!data?.playerId || !data?.message) return
+            const pid = data.playerId
+            const existing = chatHideTimeouts.get(pid)
+            if (existing) clearTimeout(existing)
+            userMessages.value = { ...userMessages.value, [pid]: data.message }
+            chatHideTimeouts.set(pid, setTimeout(() => {
+                chatHideTimeouts.delete(pid)
+                const next = { ...userMessages.value }
+                delete next[pid]
+                userMessages.value = next
+            }, 2000))
+        })
     }
 
     /**
@@ -303,12 +321,31 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 return
             }
 
-            if (data?.type === 'RESULT') {
+            if (data?.type === 'RESULT' || data?.type === 'DRAW') {
                 gameStore.setMiniGameResult({
-                    winnerUserId: data.winnerUserId,
+                    type: data.type, // [ADD]
+                    winnerPlayerId: data.winnerPlayerId,
                     rewardBuff: data.rewardBuff,
                     rankings: data.rankings || []
                 })
+            }
+        })
+
+        // 아이템 사용 완료 알림 구독
+        wsService.value.subscribe(`/topic/game/${roomId}/notice`, (data: any) => {
+            console.log('📨 Game Notice:', data)
+
+            if (data?.type === 'ITEM_USED') {
+                // 아이템 사용 완료 이벤트 발행
+                window.dispatchEvent(new CustomEvent('item-used', {
+                    detail: {
+                        playerId: data.playerId,
+                        playerName: data.playerName,
+                        itemType: data.itemType,
+                        targetPlayerId: data.targetPlayerId,
+                        targetPosition: data.targetPosition
+                    }
+                }))
             }
         })
     }
@@ -316,12 +353,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 정답 제출
      */
-    const submitAnswer = (roomId: string, userId: string, quizId: number, answer: string) => {
+    const submitAnswer = (roomId: string, playerId: string, quizId: number, answer: string) => {
         if (!wsService.value) return
 
         wsService.value.publish('/app/game/submit', {
             roomId,
-            userId,
+            playerId,
             quizId,
             answer
         })
@@ -331,13 +368,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
      * 에러 메시지 구독
      * @param userId - 사용자 ID
      */
-    const subscribeErrors = (userId: string) => {
+    const subscribeErrors = (playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
         }
 
-        wsService.value.subscribe(`/queue/errors/${userId}`, (data: ErrorResponse) => {
+        wsService.value.subscribe(`/queue/errors/${playerId}`, (data: ErrorResponse) => {
             console.error('❌ Server Error:', data)
             lastError.value = `[${data.code}] ${data.message}`
 
@@ -357,7 +394,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 게임 참가
      */
-    const joinGame = (roomId: string, userId: string, nickname: string) => {
+    const joinGame = (roomId: string, playerId: string, nickname: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -365,7 +402,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/join', {
             roomId,
-            userId,
+            playerId,
             nickname
         })
     }
@@ -373,7 +410,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 게임 나가기
      */
-    const leaveGame = (roomId: string, userId: string) => {
+    const leaveGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -381,14 +418,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/leave', {
             roomId,
-            userId
+            playerId
         })
     }
 
     /**
      * 준비 상태 변경
      */
-    const setReady = (roomId: string, userId: string, isReady: boolean) => {
+    const setReady = (roomId: string, playerId: string, isReady: boolean) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -397,16 +434,24 @@ export const useWebSocketStore = defineStore('websocket', () => {
         // 서버의 Jackson 매핑 이슈를 고려하여 둘 다 전송
         wsService.value.publish('/app/game/ready', {
             roomId,
-            userId,
+            playerId,
             isReady: isReady, // Java 필드명
             ready: isReady   // Jackson 기본 매핑용 키
         })
     }
 
     /**
+     * 대기실 퀵메시지 전송 (WebSocket)
+     */
+    const sendQuickMessage = (roomId: string, playerId: string, message: string) => {
+        if (!wsService.value || !message?.trim()) return
+        wsService.value.publish('/app/game/chat', { roomId, playerId, message: message.trim() })
+    }
+
+    /**
      * 아바타 설정
      */
-    const setAvatar = (roomId: string, userId: string, avatarId: number) => {
+    const setAvatar = (roomId: string, playerId: string, avatarId: number) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -414,7 +459,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/avatar', {
             roomId,
-            userId,
+            playerId,
             avatarId
         })
     }
@@ -422,7 +467,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     /**
      * 게임 시작 (Host Only)
      */
-    const startGame = (roomId: string, userId: string) => {
+    const startGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -430,14 +475,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/start', {
             roomId,
-            userId
+            playerId
         })
     }
 
     /**
      * 게임 종료 (Host Only)
      */
-    const endGame = (roomId: string, userId: string) => {
+    const endGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -445,14 +490,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/end', {
             roomId,
-            userId
+            playerId
         })
     }
 
     /**
      * 게임 재시작 (Host Only)
      */
-    const restartGame = (roomId: string, userId: string) => {
+    const restartGame = (roomId: string, playerId: string) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -460,14 +505,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/restart', {
             roomId,
-            userId
+            playerId
         })
     }
 
     /**
      * 미니게임 결과 제출
      */
-    const submitMiniGameResult = (roomId: string, userId: string, gameType: string, resultValue: number) => {
+    const submitMiniGameResult = (roomId: string, playerId: string, gameType: string, resultValue: number) => {
         if (!wsService.value) {
             console.error('WebSocket not connected')
             return
@@ -475,7 +520,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
         wsService.value.publish('/app/game/minigame/submit', {
             roomId,
-            userId,
+            playerId,
             gameType,
             resultValue
         })
@@ -490,6 +535,35 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     /**
+     * 아이템 사용
+     * @param roomId - 방 ID
+     * @param playerId - 플레이어 ID
+     * @param itemType - 아이템 타입 (BANANA, SWAP_POSITION, QUIZ_INTERFERENCE 등)
+     * @param targetPlayerId - 타겟 플레이어 ID (SWAP_POSITION, QUIZ_INTERFERENCE용)
+     * @param targetPosition - 타겟 위치 (BANANA용)
+     */
+    const useItem = (
+        roomId: string,
+        playerId: string,
+        itemType: string,
+        targetPlayerId?: string,
+        targetPosition?: number
+    ) => {
+        if (!wsService.value) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsService.value.publish('/app/game/minigame/item', {
+            roomId,
+            playerId,
+            itemType,
+            targetPlayerId,
+            targetPosition
+        })
+    }
+
+    /**
      * ACK 전송
      */
     const sendAck = (ackType: 'RESULT_DISPLAYED' | 'ROULETTE_COMPLETE' | 'MOVE_COMPLETE' | 'MINIGAME_COMPLETE' | 'BUFF_ROULETTE_COMPLETE' | 'CAMERA_END', quizId?: number, round?: number) => {
@@ -500,15 +574,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
         const roomStore = useRoomStore()
         const userStore = useUserStore()
         const roomId = roomStore.roomInfo.roomId
-        const userId = userStore.userId
+        const playerId = userStore.playerId
 
-        if (!roomId || !userId) {
+        if (!roomId || !playerId) {
             return
         }
 
         wsService.value.publish('/app/game/ack', {
             roomId,
-            userId,
+            playerId,
             ackType,
             quizId,
             round
@@ -528,10 +602,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
      * 모든 구독 해제 및 연결 종료 (방 나갈 때 아바타 캐시도 초기화)
      */
     const cleanup = () => {
+        chatHideTimeouts.forEach((t) => clearTimeout(t))
+        chatHideTimeouts.clear()
         disconnect()
         lastError.value = null
         quizGeneratedNotice.value = null
         avatarCache.value = {}
+        userMessages.value = {}
     }
 
     const clearQuizGeneratedNotice = () => {
@@ -544,12 +621,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
         isConnecting,
         lastError,
         quizGeneratedNotice,
+        userMessages,
 
         // Getters
         connectionStatus,
 
         // Actions
         connect,
+        sendQuickMessage,
         disconnect,
         subscribeGameState,
         subscribeMiniGame,
@@ -564,6 +643,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         restartGame,
         submitMiniGameResult,
         resetQuiz, // [ADD]
+        useItem, // [ADD]
         sendAck,
         unsubscribe,
         cleanup,

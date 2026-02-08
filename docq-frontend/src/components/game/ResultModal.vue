@@ -14,7 +14,7 @@ interface RankingResult {
   score?: number;
   isMe: boolean;
   avatar?: string | number;
-  userId?: string;
+  playerId: string; // 게임 참여자 ID (GameView에서 전달)
 }
 
 const props = defineProps<{
@@ -160,8 +160,10 @@ onMounted(() => {
 
             </div>
 
-            <h2 class="text-3xl font-black text-[#5d4037] truncate max-w-full mb-1 z-10">{{ winner?.nickname }}</h2>
-
+            <h2 class="text-3xl font-black text-[#5d4037] truncate max-w-full mb-1 z-10">
+              {{ winner?.nickname }} 
+            </h2>
+            <span class="font-bold text-xl text-[#5d4037]">맞힌 퀴즈: {{ winner?.score }}개</span>
 
           </div>
 
@@ -229,10 +231,11 @@ onMounted(() => {
 
               <div class="font-bold text-[#5d4037] text-base truncate w-full text-center mb-1 z-10">
 
-                {{ player.nickname }}
+                {{ player.nickname }} 
 
               </div>
 
+              <span class="font-bold text-sm text-[#5d4037]">맞힌 퀴즈: {{ player.score }}개</span>
 
             </div>
 

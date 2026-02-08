@@ -38,7 +38,7 @@ export const useGameStore = defineStore('game', () => {
     const gameState = ref<GameStateResponse>({
         state: 'WAITING',
         players: [],
-        currentTurnUserId: null,
+        currentTurnPlayerId: null,
         round: 1,
         turnOrder: [],
         cardDrawResult: {},
@@ -47,6 +47,8 @@ export const useGameStore = defineStore('game', () => {
 
     const currentMove = ref<MoveInfo | null>(null)
     const currentRoundResult = ref<RoundResult | null>(null)
+    /** MOVE_COMPLETE ACK에 사용할 퀴즈 ID (라운드 결과 수신 시 설정, 이동 완료 후 사용) */
+    const lastMoveQuizId = ref<number | null>(null)
     const movementInProgress = ref(false)
     const pendingQuiz = ref<QuizMessage | null>(null)
     const miniGame = ref<{
@@ -55,10 +57,11 @@ export const useGameStore = defineStore('game', () => {
         timeLimitMs: number | null
         description: string | null
         result: null | {
-            winnerUserId?: string | null
+            type?: string
+            winnerPlayerId?: string | null
             rewardBuff?: string | null
             rankings?: Array<{
-                userId: string
+                playerId: string
                 nickname: string
                 value: number
                 rank: number
@@ -71,6 +74,10 @@ export const useGameStore = defineStore('game', () => {
         description: null,
         result: null
     })
+    /** +3칸 즉시 이동 후 미니게임 재개 ACK 대기 */
+    const pendingPlusThreeAck = ref(false)
+    /** 바나나 설치 위치: 설정 시 GameBoard에서 해당 타일 확대→축소 후 전원 ACK 전송 */
+    const bananaPlacementPosition = ref<number | null>(null)
 
     // Getters
     const totalQuizCount = computed(() => quizzes.value.length)
@@ -93,21 +100,27 @@ export const useGameStore = defineStore('game', () => {
     const isGameFinished = computed(() => gameStatus.value === 'finished')
 
     const currentTurnPlayer = computed(() => {
-        if (!gameState.value.currentTurnUserId) return null
-        return gameState.value.players.find(p => p.userId === gameState.value.currentTurnUserId)
+        if (!gameState.value.currentTurnPlayerId) return null
+        return gameState.value.players.find(p => p.playerId === gameState.value.currentTurnPlayerId)
     })
 
     // Actions
     const setGameState = (newState: GameStateResponse) => {
+        const hasBananaSlipMove = movementInProgress.value && currentMove.value?.moveProcess?.some(
+            (a: { type?: string; effectType?: string }) => a.type === 'TILE_EFFECT' && a.effectType === 'BANANA_SLIP'
+        )
+        const mergeState = { ...newState, players: newState.players || [] }
+        if (hasBananaSlipMove && newState.mapEvents != null) {
+            delete (mergeState as Record<string, unknown>).mapEvents
+        }
         gameState.value = {
             ...gameState.value,
-            ...newState,
-            players: newState.players || []
+            ...mergeState
         }
 
         if (newState.players) {
             newState.players.forEach((p: PlayerInfo) => {
-                scores.value[p.userId] = p.score ?? 0
+                scores.value[p.playerId] = p.score ?? 0
             })
         }
 
@@ -163,7 +176,8 @@ export const useGameStore = defineStore('game', () => {
             question: quizData.question,
             options,
             timeLimit: Math.max(1, Math.ceil(remainingMs / 1000)),
-            answer: -1
+            answer: -1,
+            quizStyle: quizData.quizStyle ?? null
         }
 
         currentQuizIndex.value = 0
@@ -180,14 +194,23 @@ export const useGameStore = defineStore('game', () => {
 
     const onQuizReceived = (quizData: QuizMessage) => {
         const incomingOptions = Array.isArray(quizData.options) ? quizData.options : []
+        const hasIncomingStyle = quizData.quizStyle !== undefined && quizData.quizStyle !== null
         if (movementInProgress.value) {
             if (pendingQuiz.value && pendingQuiz.value.quizId === quizData.quizId) {
+                let nextPending = pendingQuiz.value
                 if (incomingOptions.length > 0) {
-                    pendingQuiz.value = {
-                        ...pendingQuiz.value,
+                    nextPending = {
+                        ...nextPending,
                         options: incomingOptions
                     }
                 }
+                if (hasIncomingStyle) {
+                    nextPending = {
+                        ...nextPending,
+                        quizStyle: quizData.quizStyle
+                    }
+                }
+                pendingQuiz.value = nextPending
                 return
             }
             pendingQuiz.value = quizData
@@ -196,6 +219,9 @@ export const useGameStore = defineStore('game', () => {
         if (currentQuiz.value && currentQuiz.value.quizId === quizData.quizId) {
             if (incomingOptions.length > 0 && currentQuiz.value.options.length === 0) {
                 currentQuiz.value.options = incomingOptions
+            }
+            if (hasIncomingStyle) {
+                currentQuiz.value.quizStyle = quizData.quizStyle
             }
             return
         }
@@ -230,13 +256,17 @@ export const useGameStore = defineStore('game', () => {
         turnPlayerFeedback.value = null
     }
 
+
     const onRoundResultReceived = (resultData: RoundResult) => {
         stopTimer()
         currentRoundResult.value = resultData
         ghostPhaseActive.value = false
+        if (resultData.quizId != null) {
+            lastMoveQuizId.value = resultData.quizId
+        }
 
-        const winnerUserId = resultData.winnerUserId ?? null
-        if (winnerUserId && resultData.rouletteValue != null) {
+        const winnerPlayerId = resultData.winnerPlayerId ?? null
+        if (winnerPlayerId && resultData.rouletteValue != null) {
             roulettePending.value = true
         }
         // rouletteTargetId는 GameView에서 결과 2초 표시 후 설정
@@ -255,12 +285,12 @@ export const useGameStore = defineStore('game', () => {
         roulettePending.value = false
     }
 
-    const submitAnswer = (userId: string, answerText: string) => {
+    const submitAnswer = (playerId: string, answerText: string) => {
         // WebSocket logic handled in View
     }
 
-    const updateScore = (userId: string, score: number) => {
-        scores.value[userId] = score
+    const updateScore = (playerId: string, score: number) => {
+        scores.value[playerId] = score
     }
 
     const endGame = () => {
@@ -299,13 +329,14 @@ export const useGameStore = defineStore('game', () => {
         gameState.value = {
             state: 'WAITING',
             players: [],
-            currentTurnUserId: null,
+            currentTurnPlayerId: null,
             round: 1,
             turnOrder: [],
             cardDrawResult: {},
             mapEvents: null
         }
         currentMove.value = null
+        lastMoveQuizId.value = null
         rouletteTargetId.value = null
         rouletteResult.value = null
         moveLocked.value = false
@@ -365,9 +396,10 @@ export const useGameStore = defineStore('game', () => {
     }
 
     const setMiniGameResult = (result: {
-        winnerUserId?: string | null
+        type?: string
+        winnerPlayerId?: string | null
         rewardBuff?: string | null
-        rankings?: Array<{ userId: string; nickname: string; value: number; rank: number }>
+        rankings?: Array<{ playerId: string; nickname: string; value: number; rank: number }>
     }) => {
         miniGame.value = {
             ...miniGame.value,
@@ -384,6 +416,10 @@ export const useGameStore = defineStore('game', () => {
             description: null,
             result: null
         }
+    }
+
+    const setPendingPlusThreeAck = (value: boolean) => {
+        pendingPlusThreeAck.value = value
     }
 
     const clearQuiz = () => {
@@ -410,6 +446,7 @@ export const useGameStore = defineStore('game', () => {
         gameState,
         currentMove,
         currentRoundResult,
+        lastMoveQuizId,
         gamePhase,
         miniGame,
         moveLocked,
@@ -450,6 +487,9 @@ export const useGameStore = defineStore('game', () => {
         startMiniGame,
         setMiniGameResult,
         clearMiniGame,
-        clearQuiz
+        clearQuiz,
+        pendingPlusThreeAck,
+        setPendingPlusThreeAck,
+        bananaPlacementPosition
     }
 })

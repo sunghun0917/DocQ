@@ -24,35 +24,70 @@ export type RoomStatus =
  * ----------------------------------------------------------------------------
  */
 
-// 사용자 로그인
-export interface UserLoginRequest {
+// 회원가입
+export interface SignUpRequest {
+    loginId: string
+    password: string
     nickname: string
 }
-export interface UserLoginResponse {
-    userId: string
+export interface SignUpResponse {
+    id: number
+    loginId: string
+    nickname: string
+    createdAt: string
+}
+
+// 회원 로그인
+export interface LoginRequest {
+    loginId: string
+    password: string
+}
+export interface LoginResponse {
+    id: number
+    loginId: string
     nickname: string
 }
 
-export interface UserNicknameUpdateRequest {
+// 게스트 로그인 (Phase 1)
+export interface GuestLoginRequest {
     nickname: string
 }
-export interface UserNicknameUpdateResponse {
-    userId: string
+export interface GuestLoginResponse {
+    playerId: string
     nickname: string
+}
+export interface GuestNicknameUpdateRequest {
+    nickname: string
+}
+export interface GuestNicknameUpdateResponse {
+    playerId: string
+    nickname: string
+}
+
+/**
+ * 닉네임 중복 확인
+ * GET /users/nickname/exists
+ */
+export interface CheckNicknameResponse {
+    exists: boolean
+    message: string
+}
+
+export interface CheckIdResponse {
+    available: boolean
+    message: string
 }
 
 // 방 생성
 export interface CreateRoomRequest {
-    userId: string
     capacity: number
     title: string
     isPrivate?: boolean
-    password?: string
 }
 export interface CreateRoomResponse {
     roomId: string
     inviteCode: string
-    hostId: string
+    hostPlayerId: string
     isPrivate: boolean
 }
 
@@ -65,10 +100,10 @@ export interface RoomResponse {
     currentCount: number
     capacity: number
     quizCount: number
+    isGenerating: boolean
 }
 export interface JoinRoomRequest {
     roomId: string
-    password?: string
 }
 export interface JoinRoomResponse {
     roomId: string
@@ -99,7 +134,7 @@ export interface QuizGenerateResponse {
  * 플레이어 상세 정보
  */
 export interface PlayerInfo {
-    userId: string
+    playerId: string
     nickname: string
     isHost: boolean
     connected: boolean
@@ -127,6 +162,7 @@ export interface Quiz {
     answer?: number
     answerText?: string
     answerIndex?: number
+    quizStyle?: 'MIRROR' | null  // 문제 방해하기 효과
 }
 
 /**
@@ -135,7 +171,7 @@ export interface Quiz {
 export interface GameStateResponse {
     state: RoomStatus
     round?: number | null
-    currentTurnUserId?: string | null
+    currentTurnPlayerId?: string | null
     players: PlayerInfo[]
     turnOrder?: string[]
     cardDrawResult?: Record<string, number>
@@ -153,6 +189,7 @@ export interface QuizMessage {
     timeLimit: number
     quizStartTime?: string
     quizStartTimeMs?: number
+    quizStyle?: 'MIRROR' | null  // 문제 방해하기 효과 (글자 반전)
     type?: 'QUIZ_GENERATING' | 'QUIZ_GENERATED' | 'QUIZ_RESET' // 알림용
     count?: number          // 알림용
 }
@@ -170,7 +207,7 @@ export interface RoundResult {
     quizId: number
     correctAnswer: string
     isTurnUserCorrect: boolean
-    winnerUserId?: string | null
+    winnerPlayerId?: string | null
     rouletteType?: 'BUFF' | 'MOVE' | 'NONE' | string
     rouletteValue?: number
 }
@@ -185,14 +222,14 @@ export interface MoveAction {
     effectType?: string
     before?: number
     after?: number
-    targetUserId?: string
+    targetPlayerId?: string
 }
 
 /**
  * 전체 이동 정보
  */
 export interface MoveInfo {
-    userId: string
+    playerId: string
     startPosition: number
     endPosition: number
     moveProcess: MoveAction[]
@@ -202,7 +239,7 @@ export interface MoveInfo {
  * 최종 순위 정보
  */
 export interface FinishRank {
-    userId: string
+    playerId: string
     nickname: string
     position: number
     remaining: number
@@ -215,6 +252,26 @@ export interface FinishRank {
  */
 export interface FinishResponse {
     type: 'FINISH'
-    winnerUserId: string
+    winnerPlayerId: string
     rankings: FinishRank[]
+}
+
+/**
+ * 내 정보 조회 응답 (Member)
+ */
+export interface MemberMeResponse {
+    id: number
+    playerId: string
+    loginId: string
+    nickname: string
+    isGuest: boolean
+}
+
+/**
+ * 내 정보 조회 응답 (Guest)
+ */
+export interface GuestMeResponse {
+    playerId: string
+    nickname: string
+    isGuest: boolean
 }

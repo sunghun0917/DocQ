@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
@@ -14,11 +14,16 @@ const roomStore = useRoomStore()
 const wsStore = useWebSocketStore()
 const isSubmitting = ref(false)
 
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') emit('close');
+};
+
+onMounted(() => window.addEventListener('keydown', handleKeydown));
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
+
 // 방 정보 상태
 const roomName = ref('');
 const maxUsers = ref(4);
-const isSecret = ref(false);
-const password = ref('');
 
 // 알림 상태
 const isAlertOpen = ref(false);
@@ -42,23 +47,20 @@ const isReadyToCreate = computed(() => roomName.value.trim().length > 0);
 
 const createRoom = async () => {
   if (!isReadyToCreate.value || isSubmitting.value) return;
-  if (!userStore.userId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
+  if (!userStore.playerId) { triggerAlert('닉네임을 먼저 설정해주세요.'); return }
   
   isSubmitting.value = true
 
   try {
     const room = await createRoomApi({
-      userId: userStore.userId,
       capacity: maxUsers.value,
-      title: roomName.value.trim(),
-      isPrivate: isSecret.value,
-      password: isSecret.value ? password.value.trim() : undefined
+      title: roomName.value.trim()
     })
 
     roomStore.createRoom({
       roomId: room.roomId,
       inviteCode: room.inviteCode,
-      hostId: room.hostId,
+      hostId: room.hostPlayerId,
       title: roomName.value.trim(),
       capacity: maxUsers.value,
       isPrivate: room.isPrivate,
@@ -68,10 +70,10 @@ const createRoom = async () => {
     })
 
     await wsStore.connect()
-    wsStore.subscribeErrors(userStore.userId)
+    wsStore.subscribeErrors(userStore.playerId)
     wsStore.subscribeGameState(room.roomId)
     wsStore.subscribeMiniGame(room.roomId)
-    wsStore.joinGame(room.roomId, userStore.userId, userStore.username)
+    wsStore.joinGame(room.roomId, userStore.playerId, userStore.username)
 
     router.push(`/waiting/${room.roomId}`);
     emit('close');
@@ -113,7 +115,7 @@ const createRoom = async () => {
             v-model="roomName"
             type="text" 
             placeholder="예: 다 드루와" 
-            class="w-full h-14 px-6 rounded-2xl border-4 border-[#d7ccc8] bg-white 
+            class="w-full h-14 !px-6 rounded-2xl border-4 border-[#d7ccc8] bg-white 
                    focus:border-[#7cb342] focus:bg-[#f1f8e9] outline-none 
                    font-bold text-xl text-[#5d4037] placeholder:text-[#d7ccc8] transition-all"
           />

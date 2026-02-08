@@ -2,6 +2,7 @@ package com.ssafy.docq_backend.domain.room.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,9 +14,6 @@ public class RoomDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RoomCreateRequest {
-        @NotBlank(message = "userId는 필수입니다.")
-        private String userId;
-
         @Min(value = 2, message = "최소 인원은 2명입니다.")
         private int capacity;
 
@@ -32,7 +30,7 @@ public class RoomDto {
     public static class RoomCreateResponse {
         private String roomId;
         private String inviteCode;
-        private String hostId;
+        private String hostPlayerId;
         private Boolean isPrivate;
     }
 
@@ -47,6 +45,8 @@ public class RoomDto {
         private int currentCount;
         private int capacity;
         private int quizCount; // 퀴즈 개수 확인용
+        @JsonProperty("isGenerating")
+        private boolean isGenerating;
     }
 
     @Getter

@@ -1,0 +1,182 @@
+[
+  {
+    "question": "고조선을 건국한 인물은 누구인가?",
+    "options": ["주몽", "단군 왕검", "박혁거세", "김수로"],
+    "answerIndex": 1,
+    "answerText": "단군 왕검"
+  },
+  {
+    "question": "삼국 중 가장 먼저 멸망한 나라는?",
+    "options": ["고구려", "백제", "신라", "가야"],
+    "answerIndex": 1,
+    "answerText": "백제"
+  },
+  {
+    "question": "훈민정음을 창제한 조선의 왕은?",
+    "options": ["세종", "태종", "정조", "영조"],
+    "answerIndex": 0,
+    "answerText": "세종"
+  },
+  {
+    "question": "임진왜란이 발생한 연도는?",
+    "options": ["1592년", "1600년", "1588년", "1610년"],
+    "answerIndex": 0,
+    "answerText": "1592년"
+  },
+  {
+    "question": "고려를 건국한 인물은?",
+    "options": ["이성계", "왕건", "궁예", "견훤"],
+    "answerIndex": 1,
+    "answerText": "왕건"
+  },
+  {
+    "question": "조선의 수도 한양의 현재 이름은?",
+    "options": ["개성", "서울", "평양", "수원"],
+    "answerIndex": 1,
+    "answerText": "서울"
+  },
+  {
+    "question": "신라의 전성기를 이끈 왕은?",
+    "options": ["진흥왕", "선덕여왕", "무열왕", "문무왕"],
+    "answerIndex": 0,
+    "answerText": "진흥왕"
+  },
+  {
+    "question": "고구려 멸망 후, 평양성을 점령하고 지배한 나라는?",
+    "options": ["백제", "발해", "당나라", "나당연합"],
+    "answerIndex": 2,
+    "answerText": "당나라"
+  },
+  {
+    "question": "조선 시대 과거 시험의 목적은?",
+    "options": ["세금 징수", "군인 선발", "관리 선발", "왕위 계승"],
+    "answerIndex": 2,
+    "answerText": "관리 선발"
+  },
+  {
+    "question": "갑오개혁이 추진된 시기는?",
+    "options": ["조선 후기", "고려 말", "일제 강점기", "대한제국"],
+    "answerIndex": 0,
+    "answerText": "조선 후기"
+  },
+  {
+    "question": "프랑스 혁명의 상징적인 감옥은?",
+    "options": ["루브르", "바스티유", "베르사유", "노트르담"],
+    "answerIndex": 1,
+    "answerText": "바스티유"
+  },
+  {
+    "question": "조선 시대의 왕 중에서 가장 오랜 기간 동안 재위한 왕은?",
+    "options": ["태조", "세종", "영조", "정조"],
+    "answerIndex": 2,
+    "answerText": "영조"
+  },
+  {
+    "question": "산업혁명이 처음 시작된 국가는?",
+    "options": ["프랑스", "독일", "영국", "미국"],
+    "answerIndex": 2,
+    "answerText": "영국"
+  },
+  {
+    "question": "제1차 세계대전의 직접적인 원인은?",
+    "options": ["독일 통일", "사라예보 사건", "러시아 혁명", "대공황"],
+    "answerIndex": 1,
+    "answerText": "사라예보 사건"
+  },
+  {
+    "question": "로마 제국의 공용어로 사용된 언어는?",
+    "options": ["그리스어", "라틴어", "히브리어", "아랍어"],
+    "answerIndex": 1,
+    "answerText": "라틴어"
+  },
+  {
+    "question": "임진왜란 당시 조선을 지킨 명장 이순신 장군의 대표적인 해전은?",
+    "options": ["살수대첩", "한산도대첩", "황산대첩", "대마도정벌"],
+    "answerIndex": 1,
+    "answerText": "한산도대첩"
+  },
+  {
+    "question": "이집트의 피라미드는 주로 무엇을 위해 건설되었는가?",
+    "options": ["신전", "무덤", "궁전", "요새"],
+    "answerIndex": 1,
+    "answerText": "무덤"
+  },
+  {
+    "question": "알렉산더 대왕의 출신 국가는?",
+    "options": ["로마", "마케도니아", "페르시아", "그리스"],
+    "answerIndex": 1,
+    "answerText": "마케도니아"
+  },
+  {
+    "question": "중국 최초의 통일 왕조는?",
+    "options": ["한", "진", "수", "상"],
+    "answerIndex": 1,
+    "answerText": "진"
+  },
+  {
+    "question": "일제 강점기 독립운동가 안중근이 처단한 일본인은?",
+    "options": ["이토 히로부미", "도요토미 히데요시", "아베 신조", "요시다 쇼인"],
+    "answerIndex": 0,
+    "answerText": "이토 히로부미"
+  },
+  {
+    "question": "르네상스가 시작된 도시는?",
+    "options": ["로마", "베네치아", "피렌체", "파리"],
+    "answerIndex": 2,
+    "answerText": "피렌체"
+  },
+  {
+    "question": "최초의 한글 소설로 알려진 작품은?",
+    "options": ["춘향전", "홍길동전", "심청전", "구운몽"],
+    "answerIndex": 1,
+    "answerText": "홍길동전"
+  },
+  {
+    "question": "일제강점기가 시작된 해는?",
+    "options": ["1905년", "1910년", "1919년", "1945년"],
+    "answerIndex": 1,
+    "answerText": "1910년"
+  },
+  {
+    "question": "3·1 운동이 일어난 해는?",
+    "options": ["1910년", "1915년", "1919년", "1925년"],
+    "answerIndex": 2,
+    "answerText": "1919년"
+  },
+  {
+    "question": "대한민국 정부가 수립된 해는?",
+    "options": ["1945년", "1948년", "1950년", "1953년"],
+    "answerIndex": 1,
+    "answerText": "1948년"
+  },
+  {
+    "question": "한국 전쟁이 발발한 해는?",
+    "options": ["1948년", "1949년", "1950년", "1953년"],
+    "answerIndex": 2,
+    "answerText": "1950년"
+  },
+  {
+    "question": "1919년 3월 1일, 민족대표 33인의 이름으로 독립선언서를 낭독했던 이 장소는 어디인가?",
+    "options": ["서울대공원", "탑골공원", "효창공원", "사직공원"],
+    "answerIndex": 1,
+    "answerText": "서울대공원"
+  },
+  {
+    "question": "1919년 4월 13일, 조선이 주권을 일본에 빼앗기고 독립운동가들이 임시정부를 세운 도시는?",
+    "options": ["하얼빈", "상하이", "부산", "대만"],
+    "answerIndex": 1,
+    "answerText": "상하이"
+  },
+  {
+    "question": "세종대왕의 이름은?",
+    "options": ["이도", "이방원", "이성계", "이순신"],
+    "answerIndex": 0,
+    "answerText": "이도"
+  },
+  {
+    "question": "우리나라 광복 연도는?",
+    "options": ["1942년", "1943년", "1944년", "1945년"],
+    "answerIndex": 3,
+    "answerText": "1945년"
+  }
+]

@@ -33,10 +33,21 @@ public enum ErrorCode {
     GHOST_OPTIONS_HIDDEN(HttpStatus.BAD_REQUEST, "G003", "고스트 보기 공개 전입니다."),
     TURN_SUBMISSION_CLOSED(HttpStatus.BAD_REQUEST, "G004", "턴 응답 시간이 종료되었습니다."),
 
+    /* B001 ~ B004 : 게시판 (Board) */
+    QUIZ_NOT_FOUND(HttpStatus.NOT_FOUND, "B001", "존재하지 않는 퀴즈입니다."),
+    BOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "B002", "존재하지 않는 게시글입니다."),
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "B003", "존재하지 않는 댓글입니다."),
+    DUPLICATE_QUIZ(HttpStatus.CONFLICT, "B004", "중복된 퀴즈입니다."),
+
     /* D001 ~ D003 : 문서/AI (Document) */
     FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "D001", "파일 업로드 실패"),
     AI_PROCESSING_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "D002", "AI 처리 실패"),
-    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "D003", "파일 형식 오류");
+    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "D003", "파일 형식 오류"),
+
+    /* A001 ~ A003 : 인증 (Auth) */
+    DUPLICATE_LOGIN_ID(HttpStatus.CONFLICT, "A001", "이미 사용중인 로그인 ID입니다."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "A002", "로그인 ID 또는 비밀번호가 올바르지 않습니다."),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "A003", "로그인이 필요합니다.");
 
     private final HttpStatus status;
     private final String code;
