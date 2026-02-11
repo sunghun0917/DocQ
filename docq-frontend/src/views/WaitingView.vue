@@ -630,7 +630,7 @@ const quickMessages = [
                   </div>
                 </div>
                 <button @click="resetAndUpload"
-                  class="text-sm bg-white px-4 py-2 rounded-full shadow-sm hover:bg-gray-100 text-gray-600 flex items-center gap-1 font-bold">
+                  class="text-lg bg-white !px-3 py-5 rounded-full shadow-sm hover:bg-gray-100 text-gray-600 flex items-center gap-1 font-bold">
                   <span class="material-symbols-outlined text-base">refresh</span> 다시하기
                 </button>
               </div>
