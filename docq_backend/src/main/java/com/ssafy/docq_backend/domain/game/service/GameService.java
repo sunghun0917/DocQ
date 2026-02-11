@@ -172,13 +172,13 @@ public class GameService {
             throw new DocqException(ErrorCode.QUIZ_NOT_FOUND); // Or Empty
         }
 
-        // [MOD] 퀴즈 순서 섞기
-        List<Map<String, Object>> shuffledList = new ArrayList<>(quizList);
-        Collections.shuffle(shuffledList);
+        // [MOD] 퀴즈 순서 유지 (DB 저장 순서) - 재적용
+        // List<Map<String, Object>> shuffledList = new ArrayList<>(quizList);
+        // Collections.shuffle(shuffledList);
 
         List<Quiz> quizzes = new ArrayList<>();
-        for (int i = 0; i < shuffledList.size(); i++) {
-            Map<String, Object> qMap = shuffledList.get(i);
+        for (int i = 0; i < quizList.size(); i++) {
+            Map<String, Object> qMap = quizList.get(i);
             String question = (String) qMap.get("question");
             List<String> options = (List<String>) qMap.get("options");
             int answerIndex = (int) qMap.getOrDefault("answerIndex", -1);
@@ -520,48 +520,36 @@ public class GameService {
             room.getPlayerStates().put(pid, ps);
         }
 
-        // 맵 특수 효과 배치 (Random 5 tiles with "TILE_X2")
+        // 맵 특수 효과 배치 (Fixed 5 tiles with "TILE_X2" as per user request)
         room.getMapEvents().clear();
-        // [TEST] Force specific tiles for testing PLUS_THREE combo
-        room.getMapEvents().clear();
-        Random random = new Random();
-        Set<Integer> eventTiles = new HashSet<>();
-        int eventMinPosition = START_POSITION + 1;
-        int eventMaxPosition = TARGET_POSITION - 1;
 
-        while (eventTiles.size() < 5) {
-            int pos = random.nextInt(eventMaxPosition - eventMinPosition + 1) +
-                    eventMinPosition;
-            if (eventTiles.add(pos)) {
-                room.getMapEvents().put(pos, "TILE_X2");
-            }
+        // Fixed positions: 4, 7, 17, 20, 24
+        int[] fixedTilePositions = { 4, 7, 17, 20, 24 };
+        for (int pos : fixedTilePositions) {
+            room.getMapEvents().put(pos, "TILE_X2");
         }
-        log.info("Map Events Initialized: {}", room.getMapEvents());
+
+        log.info("Map Events Initialized (Fixed): {}", room.getMapEvents());
     }
 
     private void determineTurnOrder(Room room) {
+        // [MOD] Use player join order (insertion order preserved by CopyOnWriteArraySet
+        // in Room)
         List<String> players = new ArrayList<>(room.getPlayers());
+        room.setTurnOrder(players);
+
+        // Card draw result is no longer needed for ordering, but if frontend expects
+        // it, we can assign dummy or random values.
+        // For now, assigning random values just for display if needed, but order is
+        // fixed.
         Map<String, Integer> cardResults = new HashMap<>();
         Random random = new Random();
-
-        // 1~100 랜덤 값 부여 (중복 방지 로직은 간단히 생략하거나 재시도)
-        Set<Integer> usedValues = new HashSet<>();
         for (String pid : players) {
-            int val;
-            do {
-                val = random.nextInt(100) + 1;
-            } while (usedValues.contains(val));
-            usedValues.add(val);
-            cardResults.put(pid, val);
+            cardResults.put(pid, random.nextInt(100) + 1);
         }
-
-        // 값 기준 내림차순 정렬
-        players.sort((p1, p2) -> cardResults.get(p2) - cardResults.get(p1));
-
-        room.setTurnOrder(players);
         room.setCardDrawResult(cardResults);
 
-        log.info("Turn Order determined: {}", players);
+        log.info("Turn Order determined (Join Order): {}", players);
     }
 
     public void broadcastGameState(Room room) {
@@ -1156,8 +1144,11 @@ public class GameService {
             if (isTurnUserCorrect) {
                 winnerUserId = turnUser;
                 rouletteType = "MOVE";
-                int[] turnPlayerRange = { -1, 1, 2, 3, 4, 5, 6, 7 };
-                moveValue = turnPlayerRange[new Random().nextInt(turnPlayerRange.length)];
+                // Fixed Turn Player Range: 2 -> 5 -> 1 -> 3
+                int[] turnPlayerRange = { 2, 5, 1, 3 };
+                int cursor = room.getTurnRouletteCursor();
+                moveValue = turnPlayerRange[cursor % turnPlayerRange.length];
+                room.setTurnRouletteCursor(cursor + 1);
             } else {
                 Optional<String> fastestGhost = room.getQuizAnswers().entrySet().stream()
                         .filter(e -> !e.getKey().equals(turnUser))
@@ -1169,8 +1160,11 @@ public class GameService {
                 if (fastestGhost.isPresent()) {
                     winnerUserId = fastestGhost.get();
                     rouletteType = "MOVE";
-                    int[] ghostRange = { -1, 1, 2, 3 };
-                    moveValue = ghostRange[new Random().nextInt(ghostRange.length)];
+                    // Fixed Ghost Range: 2 -> 1
+                    int[] ghostRange = { 2, 1 };
+                    int cursor = room.getGhostRouletteCursor();
+                    moveValue = ghostRange[cursor % ghostRange.length];
+                    room.setGhostRouletteCursor(cursor + 1);
                 }
             }
 
@@ -1458,12 +1452,13 @@ public class GameService {
             int idx = order.indexOf(payload.getTurnPlayerId()) + 1;
 
             if (idx >= order.size()) {
-                if (latest.getRound() % 2 != 0) {
-                    miniGameServiceProvider.getObject().startMiniGame(roomId);
-                    return;
-                }
-                idx = 0;
-                latest.setRound(latest.getRound() + 1);
+                // [MOD] Every round triggers a minigame
+                // if (latest.getRound() % 2 != 0) {
+                miniGameServiceProvider.getObject().startMiniGame(roomId);
+                return;
+                // }
+                // idx = 0;
+                // latest.setRound(latest.getRound() + 1);
             }
 
             latest.setCurrentTurnPlayerId(order.get(idx));

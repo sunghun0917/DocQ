@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,7 +38,7 @@ public class Room {
     private int currentCount = 1;
 
     @Builder.Default
-    private Set<String> players = ConcurrentHashMap.newKeySet();
+    private Set<String> players = new CopyOnWriteArraySet<>();
 
     @Builder.Default
     private Set<String> readyPlayers = ConcurrentHashMap.newKeySet();
@@ -106,6 +107,15 @@ public class Room {
 
     // Original PDF Filename for Quiz Title
     private String quizSourceFilename;
+
+    @Builder.Default
+    private int itemCursor = 0;
+
+    @Builder.Default
+    private int turnRouletteCursor = 0;
+
+    @Builder.Default
+    private int ghostRouletteCursor = 0;
 
     public void addPlayer(String playerId) {
         players.add(playerId);
