@@ -73,7 +73,7 @@ public class GameService {
     private static final long MOVE_FALLBACK_STEP_MS = 350;
     private static final long MOVE_FALLBACK_BUFFER_MS = 500;
     private static final long MOVE_FALLBACK_MAX_MS = 12000;
-    private static final long QUIZ_TIME_LIMIT_MS = 10000;
+    private static final long QUIZ_TIME_LIMIT_MS = 20000;
 
     public void requestQuizGeneration(String roomId, MultipartFile pdfFile) {
 
