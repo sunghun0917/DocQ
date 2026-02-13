@@ -135,15 +135,14 @@ public class MiniGameService {
             MiniGameDto.RankInfo winner = rankings.get(0);
             winnerPlayerId = winner.getPlayerId();
 
-            // Fixed Item Order: QUIZ_INTERFERENCE -> BANANA -> SWAP_POSITION
-            List<BuffType> fixedOrder = Arrays.asList(
-                    BuffType.QUIZ_INTERFERENCE,
-                    BuffType.BANANA,
-                    BuffType.SWAP_POSITION);
+            // 랜덤 버프 선택 (Enum 활용)
+            // 랜덤 버프 선택 (BOOM 제외)
+            List<BuffType> augmentList = Arrays.stream(BuffType.values())
+                    .filter(type -> type != BuffType.BOOM)
+                    .collect(Collectors.toList());
 
-            int cursor = room.getItemCursor();
-            BuffType selectedBuff = fixedOrder.get(cursor % fixedOrder.size());
-            room.setItemCursor(cursor + 1);
+            BuffType selectedBuff = augmentList.get(new Random().nextInt(augmentList.size()));
+
             rewardBuff = selectedBuff.getCode();
 
             // 인터랙션이 필요한 아이템인지 확인

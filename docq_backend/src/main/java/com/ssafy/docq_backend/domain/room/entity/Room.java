@@ -38,7 +38,7 @@ public class Room {
     private int currentCount = 1;
 
     @Builder.Default
-    private Set<String> players = new CopyOnWriteArraySet<>();
+    private Set<String> players = ConcurrentHashMap.newKeySet();
 
     @Builder.Default
     private Set<String> readyPlayers = ConcurrentHashMap.newKeySet();
